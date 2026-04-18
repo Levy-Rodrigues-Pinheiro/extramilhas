@@ -1,0 +1,77 @@
+# Dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# Builds
+dist/
+*/dist/
+**/dist/
+.next/
+*/.next/
+**/.next/
+build/
+*/build/
+
+# Environment (NEVER commit — contains secrets)
+.env
+*/.env
+**/.env
+.env.local
+*/.env.local
+**/.env.local
+.env.*.local
+
+# Local database
+*.db
+*.db-journal
+*/prisma/dev.db
+*/prisma/dev.db-journal
+**/prisma/dev.db
+**/prisma/dev.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+**/logs/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Scraper sessions (captured cookies — regenerate)
+scraper/data/sessions/
+**/data/sessions/
+
+# Metro/Expo
+.expo/
+*/.expo/
+**/.expo/
+expo-env.d.ts
+
+# Build artifacts
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+# Test coverage
+coverage/
+*/coverage/
+.nyc_output/
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Playwright browsers download
+/playwright-browsers/
+.playwright/

@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Milhas Extras",
+    "slug": "milhasextras",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "milhasextras",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.milhasextras.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.milhasextras.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#6366f1"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

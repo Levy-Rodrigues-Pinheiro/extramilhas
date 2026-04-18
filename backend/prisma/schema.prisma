@@ -1,0 +1,328 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String   @id @default(uuid())
+  email                 String   @unique
+  name                  String
+  passwordHash          String?
+  authProvider          String   @default("EMAIL")
+  subscriptionPlan      String   @default("FREE")
+  subscriptionExpiresAt DateTime?
+  refreshToken          String?
+  whatsappPhone         String?
+  isAdmin               Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  preferences   UserPreference?
+  alerts        Alert[]
+  savedOffers   SavedOffer[]
+  notifications Notification[]
+  milesBalances UserMilesBalance[]
+  auditLogs     AuditLog[]         @relation("AdminAuditLogs")
+  familyMembers FamilyMember[]
+
+  @@map("users")
+}
+
+model UserPreference {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  preferredPrograms      String   @default("[]")
+  preferredOrigins       String   @default("[]")
+  preferredDestinations  String   @default("[]")
+  targetCpm              Float    @default(25.00)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model LoyaltyProgram {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  logoUrl       String?
+  websiteUrl    String?
+  avgCpmCurrent Float    @default(25.00)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  offers              Offer[]
+  priceHistory        PriceHistory[]
+  milesBalances       UserMilesBalance[]
+  transfersFrom       TransferPartnership[] @relation("TransferFrom")
+  transfersTo         TransferPartnership[] @relation("TransferTo")
+  familyBalances      FamilyMemberBalance[]
+  awardCharts         AwardChart[]
+
+  @@map("loyalty_programs")
+}
+
+model Offer {
+  id               String    @id @default(uuid())
+  programId        String
+  type             String
+  title            String
+  description      String?
+  cpm              Float
+  classification   String
+  sourceUrl        String?
+  affiliateUrl     String?
+  startsAt         DateTime?
+  expiresAt        DateTime?
+  isActive         Boolean   @default(true)
+  isDeleted        Boolean   @default(false)
+  metadata         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  program        LoyaltyProgram  @relation(fields: [programId], references: [id])
+  savedByUsers   SavedOffer[]
+  alertHistories AlertHistory[]
+
+  @@index([programId])
+  @@index([isActive, isDeleted])
+  @@index([type])
+  @@index([classification])
+  @@index([cpm])
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@map("offers")
+}
+
+model Alert {
+  id              String    @id @default(uuid())
+  userId          String
+  type            String
+  conditions      String    @default("{}")
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  history AlertHistory[]
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("alerts")
+}
+
+model AlertHistory {
+  id      String   @id @default(uuid())
+  alertId String
+  offerId String?
+  sentAt  DateTime @default(now())
+  channel String
+
+  alert Alert  @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  offer Offer? @relation(fields: [offerId], references: [id])
+
+  @@index([alertId])
+  @@index([sentAt])
+  @@map("alert_histories")
+}
+
+model PriceHistory {
+  id        String   @id @default(uuid())
+  programId String
+  date      DateTime
+  avgCpm    Float
+  minCpm    Float
+  source    String?
+  createdAt DateTime @default(now())
+
+  program LoyaltyProgram @relation(fields: [programId], references: [id])
+
+  @@index([programId, date])
+  @@index([programId])
+  @@index([date])
+  @@map("price_histories")
+}
+
+model SavedOffer {
+  userId  String
+  offerId String
+  savedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@id([userId, offerId])
+  @@map("saved_offers")
+}
+
+model ContentArticle {
+  id          String    @id @default(uuid())
+  title       String
+  slug        String    @unique
+  body        String
+  category    String
+  isProOnly   Boolean   @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("content_articles")
+}
+
+model UserMilesBalance {
+  id        String   @id @default(uuid())
+  userId    String
+  programId String
+  balance   Int       @default(0)
+  expiresAt DateTime?
+  updatedAt DateTime  @updatedAt
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  program LoyaltyProgram @relation(fields: [programId], references: [id])
+
+  @@unique([userId, programId])
+  @@map("user_miles_balances")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  type      String
+  isRead    Boolean  @default(false)
+  data      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  action     String
+  entityType String
+  entityId   String?
+  before     String?
+  after      String?
+  createdAt  DateTime @default(now())
+
+  admin User @relation("AdminAuditLogs", fields: [adminId], references: [id])
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model TransferPartnership {
+  id            String    @id @default(uuid())
+  fromProgramId String
+  toProgramId   String
+  baseRate      Float     @default(1.0)
+  currentBonus  Float     @default(0)
+  isActive      Boolean   @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  fromProgram LoyaltyProgram @relation("TransferFrom", fields: [fromProgramId], references: [id])
+  toProgram   LoyaltyProgram @relation("TransferTo", fields: [toProgramId], references: [id])
+
+  @@index([fromProgramId, toProgramId, isActive])
+  @@map("transfer_partnerships")
+}
+
+model FamilyMember {
+  id           String   @id @default(uuid())
+  userId       String
+  name         String
+  relationship String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user     User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balances FamilyMemberBalance[]
+
+  @@index([userId])
+  @@map("family_members")
+}
+
+model AwardChart {
+  id              String   @id @default(uuid())
+  programId       String
+  origin          String
+  destination     String
+  destinationName String
+  country         String
+  cabinClass      String
+  milesRequired   Int
+  isDirectFlight  Boolean  @default(false)
+  lat             Float?
+  lng             Float?
+  source          String   @default("manual")
+  isActive        Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  program LoyaltyProgram @relation(fields: [programId], references: [id])
+
+  @@unique([programId, origin, destination, cabinClass])
+  @@index([programId, origin, cabinClass, isActive])
+  @@index([origin, destination, cabinClass, isActive])
+  @@map("award_charts")
+}
+
+model LiveFlightCache {
+  id            String   @id @default(uuid())
+  programSlug   String   // smiles, tudoazul, latampass
+  origin        String
+  destination   String
+  departDate    String   // yyyy-mm-dd
+  cabinClass    String   // economy, business, first
+  milesRequired Int
+  taxBrl        Float    @default(0)
+  airline       String?
+  flightNumber  String?
+  departureTime String?
+  arrivalTime   String?
+  duration      String?
+  stops         Int      @default(0)
+  rawPayload    String?  // JSON bruto do scraper
+  fetchedAt     DateTime @default(now())
+  expiresAt     DateTime // TTL: agora + 24h (config)
+
+  @@unique([programSlug, origin, destination, departDate, cabinClass, flightNumber])
+  @@index([origin, destination, departDate, cabinClass, expiresAt])
+  @@index([expiresAt])
+  @@map("live_flight_cache")
+}
+
+model FamilyMemberBalance {
+  id             String    @id @default(uuid())
+  familyMemberId String
+  programId      String
+  balance        Int       @default(0)
+  expiresAt      DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  member  FamilyMember   @relation(fields: [familyMemberId], references: [id], onDelete: Cascade)
+  program LoyaltyProgram @relation(fields: [programId], references: [id])
+
+  @@unique([familyMemberId, programId])
+  @@map("family_member_balances")
+}

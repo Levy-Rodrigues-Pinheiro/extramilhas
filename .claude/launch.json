@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Backend (NestJS API)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      "cwd": "./backend",
+      "port": 3001,
+      "autoPort": false
+    },
+    {
+      "name": "Admin (Next.js)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "./admin",
+      "port": 3000
+    },
+    {
+      "name": "Mobile (Expo)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8081"],
+      "cwd": "./mobile",
+      "port": 8081
+    },
+    {
+      "name": "Scraper",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      "cwd": "./scraper",
+      "port": 3002,
+      "autoPort": false
+    }
+  ]
+}

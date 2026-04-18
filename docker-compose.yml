@@ -1,0 +1,95 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: milhastop_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: milhastop
+      POSTGRES_PASSWORD: milhastop_pass
+      POSTGRES_DB: milhastop_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U milhastop']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: milhastop_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: milhastop_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://milhastop:milhastop_pass@postgres:5432/milhastop_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-super_secret_change_in_production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super_refresh_secret_change_in_production}
+      NODE_ENV: development
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: milhastop_admin
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:3001
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-admin_secret_change_in_production}
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./admin:/app
+      - /app/node_modules
+
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    container_name: milhastop_scraper
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://milhastop:milhastop_pass@postgres:5432/milhastop_db
+      REDIS_URL: redis://redis:6379
+      BACKEND_URL: http://backend:3001
+      NODE_ENV: development
+
+volumes:
+  postgres_data:
+  redis_data:
