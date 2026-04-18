@@ -1,0 +1,12 @@
+{
+  "name": "extramilhas-scrapers",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scripts de scraping rodados em GitHub Actions",
+  "dependencies": {
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "user-agents": "^1.1.284"
+  }
+}

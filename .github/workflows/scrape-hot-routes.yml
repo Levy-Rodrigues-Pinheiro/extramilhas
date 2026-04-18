@@ -1,0 +1,74 @@
+name: Scrape Hot Routes (Tier A)
+
+# Roda a cada 30 min em rotas populares.
+# IPs dos runners Azure não são banidos pelas airlines (ao contrário de IP residencial).
+#
+# Configure os secrets no repo (Settings → Secrets → Actions):
+#   BACKEND_WEBHOOK_URL    — https://seu-backend.com/api/v1/webhooks/scraper-result
+#   BACKEND_WEBHOOK_SECRET — mesmo valor de SCRAPER_WEBHOOK_SECRET no backend .env
+
+on:
+  schedule:
+    # A cada 30 min. GitHub Actions tem drift de até 15min — ok pra Tier A.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    # Permite trigger manual via Actions UI
+    inputs:
+      origin:
+        description: 'Origin IATA (override)'
+        required: false
+        default: ''
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    # Matriz de 5 origens brasileiras principais — rodam em paralelo.
+    # Cada job tira ~4 min, total ~20 min de compute por run.
+    # 48 runs/dia × 20 min = 960 min/dia = 28.800 min/mês.
+    # ⚠️ Em repo PRIVADO há limite de 2.000 min/mês — use repo PÚBLICO para ilimitado.
+    strategy:
+      fail-fast: false
+      matrix:
+        origin: [GRU, GIG, BSB, CNF, SSA]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '.github/scripts/package.json'
+
+      - name: Install scraper deps
+        working-directory: .github/scripts
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: .github/scripts
+        run: npx playwright install --with-deps chromium
+
+      - name: Scrape Tier A destinations
+        working-directory: .github/scripts
+        env:
+          BACKEND_WEBHOOK_URL: ${{ secrets.BACKEND_WEBHOOK_URL }}
+          BACKEND_WEBHOOK_SECRET: ${{ secrets.BACKEND_WEBHOOK_SECRET }}
+          ORIGIN: ${{ matrix.origin }}
+        run: |
+          # Destinos Tier A mais buscados a partir desta origem.
+          # TODO (semana 3): pegar dinamicamente via GET /api/v1/admin/hot-routes?origin=$ORIGIN
+          case "$ORIGIN" in
+            GRU) DESTS="GIG,SDU,BSB,CNF,SSA,REC,FOR,POA,CWB,FLN,VCP,MIA,JFK,MCO,LIS,MAD,CDG,EZE,SCL,BOG";;
+            GIG) DESTS="GRU,CGH,BSB,CNF,SSA,REC,FOR,POA,CWB,LIS,MIA,JFK,MCO";;
+            BSB) DESTS="GRU,CGH,GIG,SDU,CNF,SSA,REC,FOR,POA,CWB,MIA";;
+            CNF) DESTS="GRU,CGH,GIG,SDU,BSB,SSA,REC,POA,VCP,MIA";;
+            SSA) DESTS="GRU,CGH,GIG,SDU,BSB,CNF,REC,FOR,POA,MIA";;
+            *)   DESTS="GRU,GIG,BSB";;
+          esac
+          node scrape-routes.mjs "$ORIGIN" "$DESTS"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::warning ::Scrape failed for origin ${{ matrix.origin }}"
