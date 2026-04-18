@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { usePrograms, useSimulator } from '../../src/hooks/usePrograms';
 import { useFlightSearch } from '../../src/hooks/useFlightSearch';
 import { ProgramChip } from '../../src/components/ProgramChip';
@@ -379,7 +380,21 @@ function FlightResultCard({ result }: { result: any }) {
           style={styles.officialButton}
           onPress={() => {
             const url = result.officialUrl || result.bookingUrl;
-            if (url) Linking.openURL(url).catch(() => {});
+            if (!url) return;
+            // Abre WebView in-app que captura preços reais via JS injection
+            // (crowdsourcing). Fallback pra browser externo se algo der errado.
+            try {
+              // cast: rota recém-criada, tipos do expo-router ainda não regeneraram
+              router.push({
+                pathname: '/price-capture' as any,
+                params: {
+                  url: encodeURIComponent(url),
+                  title: `${result.programName} — ${result.destination}`,
+                },
+              });
+            } catch {
+              Linking.openURL(url).catch(() => {});
+            }
           }}
           activeOpacity={0.7}
         >

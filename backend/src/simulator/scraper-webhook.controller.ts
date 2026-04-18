@@ -47,13 +47,20 @@ export class ScraperWebhookController {
 
   @Public()
   @Post('scraper-result')
-  @ApiOperation({ summary: 'Recebe resultados de scrapers externos (GH Actions, CF Workers, etc.)' })
+  @ApiOperation({ summary: 'Recebe resultados de scrapers externos (GH Actions, CF Workers, crowdsourcing)' })
   async receiveScraperResult(
     @Headers('x-scraper-secret') secret: string,
     @Body() payload: WebhookPayload,
   ) {
-    // Autenticação simples por shared secret
-    if (this.expectedSecret && secret !== this.expectedSecret) {
+    // Source crowdsourcing (mobile) usa secret mais frouxo — "crowdsourced-v1".
+    // Dados são saneados com sanity checks abaixo e passam por mesmos limites.
+    const isCrowdsourced = typeof payload?.source === 'string' && payload.source.startsWith('crowdsourced-');
+    const validSecret =
+      !this.expectedSecret ||
+      secret === this.expectedSecret ||
+      (isCrowdsourced && secret === 'crowdsourced-v1');
+
+    if (!validSecret) {
       this.logger.warn(`Webhook rejeitado (secret inválido) — source=${payload?.source}`);
       throw new HttpException('Unauthorized', HttpStatus.UNAUTHORIZED);
     }
