@@ -5,23 +5,17 @@
  * Uso:
  *   node .github/scripts/scrape-routes.mjs <origin> [dest1,dest2,...] [date]
  *
- * Exemplo:
- *   node scrape-routes.mjs GRU GIG,SDU,BSB,MIA 2026-07-20
- *
- * Env vars necessárias:
- *   BACKEND_WEBHOOK_URL  — endpoint completo (https://.../api/v1/webhooks/scraper-result)
- *   BACKEND_WEBHOOK_SECRET — shared secret (X-Scraper-Secret)
- *
- * O script:
- * 1. Lança Chromium com stealth
- * 2. Para cada destino, tenta os 3 programas (Smiles, TudoAzul, LATAM)
- * 3. Extrai milhas via interceptação de API + fallback DOM
- * 4. Posta resultado agregado no webhook do backend
+ * Env vars:
+ *   BACKEND_WEBHOOK_URL    — endpoint completo
+ *   BACKEND_WEBHOOK_SECRET — shared secret
+ *   DEBUG_DUMP_PAYLOADS    — se "true", salva 1º JSON interceptado por programa
+ *                            pra diagnóstico
  */
 
 import { chromium as baseChromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import UserAgent from 'user-agents';
+import * as fs from 'fs';
 
 // Setup stealth
 const stealth = StealthPlugin();
@@ -40,7 +34,8 @@ const destinations = destsArg.split(',').map((s) => s.trim().toUpperCase());
 const date = dateArg || defaultDate();
 
 const WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL;
-const WEBHOOK_SECRET = process.env.BACKEND_WEBHOOK_SECRET;
+const WEBHOOK_SECRET = (process.env.BACKEND_WEBHOOK_SECRET || '').trim();
+const DEBUG = process.env.DEBUG_DUMP_PAYLOADS === 'true';
 
 if (!WEBHOOK_URL) {
   console.error('ERROR: BACKEND_WEBHOOK_URL env var required');
@@ -51,98 +46,151 @@ if (!WEBHOOK_URL) {
 
 function defaultDate() {
   const d = new Date();
-  d.setDate(d.getDate() + 45); // 45 dias no futuro
+  d.setDate(d.getDate() + 45);
   return d.toISOString().slice(0, 10);
 }
-
 function randomUA() {
   return new UserAgent({ deviceCategory: 'desktop', platform: /^(Win|Mac|Linux)/i }).toString();
 }
-
 function humanDelay(min, max) {
   return new Promise((r) => setTimeout(r, min + Math.random() * (max - min)));
 }
 
-// ─── URL builders (mesmos dos deep-links do backend) ──────────────────────
+// ─── URL builders ─────────────────────────────────────────────────────────
 
 function smilesUrl(o, d, dt) {
   return `https://www.smiles.com.br/passagens-aereas?originAirport=${o}&destinationAirport=${d}&departureDate=${dt}&adults=1&children=0&infants=0&cabinType=economic&isRoundTrip=false`;
 }
 function tudoazulUrl(o, d, dt) {
   const [y, m, day] = dt.split('-');
-  const brDate = `${day}-${m}-${y}`;
-  return `https://www.voeazul.com.br/br/pt/home/selecao-de-voos?o1=${o}&d1=${d}&dd1=${brDate}&passengers.adults=1&r=false&cc=economy&isAward=true`;
+  return `https://www.voeazul.com.br/br/pt/home/selecao-de-voos?o1=${o}&d1=${d}&dd1=${day}-${m}-${y}&passengers.adults=1&r=false&cc=economy&isAward=true`;
 }
 function latampassUrl(o, d, dt) {
   return `https://www.latamairlines.com/br/pt/oferta-voos?origin=${o}&destination=${d}&outbound=${dt}T12:00:00.000Z&adt=1&trip=OW&cabin=Economy&redemption=true&sort=RECOMMENDED`;
 }
 
-// ─── API interception patterns ────────────────────────────────────────────
+// ─── API interception — padrões expandidos ────────────────────────────────
 
-const SMILES_API = ['flightsearch', 'airlines/search', '/bff/'];
-const AZUL_API = ['availability', 'flights', '/api/search', '/api/booking'];
-const LATAM_API = ['offers-search', 'redemption/search', 'catalog/flights'];
+// Match em qualquer URL que contenha UMA dessas substrings (case-insensitive)
+const ALL_API_PATTERNS = [
+  'flightsearch', 'airlines/search', 'flight-search', 'search/flights',
+  '/bff/', 'graphql', '/api/flights', '/api/search', '/api/availability',
+  '/api/booking', '/api/offers', 'offers-search', 'redemption/search',
+  'catalog/flights', 'availability', 'award', 'proxy/flight',
+  'priceschedule', '/search-flights', 'searchflights', 'flightresults',
+  '/rest/', '/v1/', '/v2/', '/fares/', '/flights/',
+];
 
-// Parse genérico — tenta achar objetos que parecem "voos" em qualquer JSON
-function extractFlightsFromJson(json, program) {
+// Campos candidatos a "milhas" — em 3 programas + int'l variações
+const MILES_KEYS = [
+  'miles', 'milhas', 'points', 'pointsAmount', 'pointsRequired',
+  'milesRequired', 'milesAmount', 'fareMiles', 'fareAmount',
+  'sumOfMiles', 'totalMiles', 'totalPoints', 'awardMiles',
+  'amount', 'value', 'price', 'fare', 'cost',
+  // LATAM-specific
+  'redemption', 'redemptionPoints', 'paxFareMilesAmount',
+  // Smiles-specific
+  'award', 'awardFare',
+];
+
+/** Extrai "voos" de qualquer JSON, com log de diagnóstico. */
+function extractFlightsFromJson(json, program, stats) {
   const flights = [];
   const seen = new Set();
+  stats.objectsVisited = (stats.objectsVisited || 0) + 0;
 
-  function walk(node) {
-    if (!node || typeof node !== 'object') return;
+  function walk(node, depth = 0) {
+    if (!node || typeof node !== 'object' || depth > 20) return;
+    stats.objectsVisited++;
     if (Array.isArray(node)) {
-      node.forEach(walk);
+      node.forEach((n) => walk(n, depth + 1));
       return;
     }
-    // Heurística: objeto com miles/milhas/points + (airline|flightNumber|departure)
-    const milesKey = ['miles', 'milhas', 'points', 'pointsAmount', 'fareAmount', 'amount']
-      .find((k) => typeof node[k] === 'number' && node[k] > 1000 && node[k] < 2_000_000);
-    if (milesKey) {
-      const key = `${node[milesKey]}-${node.flightNumber || node.airline || ''}`;
+
+    // Qualquer key com valor num que pareça milhas (1k-2M)
+    const matchedKey = MILES_KEYS.find((k) => {
+      const v = node[k];
+      if (typeof v === 'number' && v >= 1000 && v <= 2_000_000) return true;
+      // Às vezes vem string tipo "120.000" ou "120,000"
+      if (typeof v === 'string') {
+        const n = parseFloat(v.replace(/[.,]/g, ''));
+        if (!isNaN(n) && n >= 1000 && n <= 2_000_000) return true;
+      }
+      return false;
+    });
+
+    if (matchedKey) {
+      const rawMiles = node[matchedKey];
+      const miles =
+        typeof rawMiles === 'number'
+          ? rawMiles
+          : parseFloat(String(rawMiles).replace(/[.,]/g, ''));
+      const key = `${miles}-${node.flightNumber || node.number || ''}-${node.departure || ''}`;
       if (!seen.has(key)) {
         seen.add(key);
+        stats.matchedKeys = stats.matchedKeys || {};
+        stats.matchedKeys[matchedKey] = (stats.matchedKeys[matchedKey] || 0) + 1;
         flights.push({
-          milesRequired: node[milesKey],
-          taxBrl: node.taxes || node.tax || node.taxAmount || 0,
-          airline: node.airline || node.carrierCode || node.operatingCarrier || '',
-          flightNumber: node.flightNumber || node.number || '',
-          departureTime: node.departureTime || node.departure || '',
-          arrivalTime: node.arrivalTime || node.arrival || '',
-          stops: typeof node.stops === 'number' ? node.stops : 0,
-          duration: node.duration || '',
+          milesRequired: miles,
+          taxBrl: node.taxes || node.tax || node.taxAmount || node.taxes_BRL || 0,
+          airline: node.airline || node.carrierCode || node.operatingCarrier || node.marketingCarrier || '',
+          flightNumber: node.flightNumber || node.number || node.flightCode || '',
+          departureTime: node.departureTime || node.departure || node.departureDateTime || '',
+          arrivalTime: node.arrivalTime || node.arrival || node.arrivalDateTime || '',
+          stops: typeof node.stops === 'number' ? node.stops : (Array.isArray(node.segments) ? Math.max(0, node.segments.length - 1) : 0),
+          duration: node.duration || node.flightDuration || '',
         });
       }
     }
-    Object.values(node).forEach(walk);
+
+    Object.values(node).forEach((v) => walk(v, depth + 1));
   }
 
   walk(json);
   return flights;
 }
 
-// ─── Scraping de uma rota para um programa ────────────────────────────────
+// ─── Scraping de uma rota ─────────────────────────────────────────────────
 
 async function scrapeOne(context, program, origin, dest, date) {
-  const urls = {
-    smiles: smilesUrl(origin, dest, date),
-    tudoazul: tudoazulUrl(origin, dest, date),
-    latampass: latampassUrl(origin, dest, date),
-  };
-  const patterns = { smiles: SMILES_API, tudoazul: AZUL_API, latampass: LATAM_API };
-  const url = urls[program];
-  const apiPatterns = patterns[program];
+  const url = { smiles: smilesUrl, tudoazul: tudoazulUrl, latampass: latampassUrl }[program](origin, dest, date);
 
   const page = await context.newPage();
   const intercepted = [];
+  const apiHits = [];
+  const stats = { jsonResponses: 0, nonJsonResponses: 0, statusCodes: {} };
 
   page.on('response', async (resp) => {
     const rurl = resp.url();
-    if (!apiPatterns.some((p) => rurl.includes(p))) return;
+    const status = resp.status();
+    stats.statusCodes[status] = (stats.statusCodes[status] || 0) + 1;
+
+    // Só processa URLs que casam com algum pattern
+    const isApi = ALL_API_PATTERNS.some((p) => rurl.toLowerCase().includes(p));
+    if (!isApi) return;
+
+    apiHits.push({ url: rurl.substring(0, 150), status });
     try {
       const ct = resp.headers()['content-type'] || '';
-      if (!ct.includes('json')) return;
+      if (!ct.includes('json')) {
+        stats.nonJsonResponses++;
+        return;
+      }
       const json = await resp.json();
-      intercepted.push(...extractFlightsFromJson(json, program));
+      stats.jsonResponses++;
+
+      // Dump primeiro JSON pra diagnóstico
+      if (DEBUG && !stats.dumped) {
+        const dumpPath = `/tmp/payload-${program}-${origin}-${dest}.json`;
+        try {
+          fs.writeFileSync(dumpPath, JSON.stringify(json, null, 2).substring(0, 200000));
+          console.log(`    [debug] dumped ${dumpPath}`);
+          stats.dumped = true;
+        } catch {}
+      }
+
+      const found = extractFlightsFromJson(json, program, stats);
+      intercepted.push(...found);
     } catch {
       /* ignore */
     }
@@ -150,15 +198,22 @@ async function scrapeOne(context, program, origin, dest, date) {
 
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
-    await humanDelay(2000, 4000);
+    await page.waitForLoadState('networkidle', { timeout: 25_000 }).catch(() => {});
+    await humanDelay(3000, 6000);
   } catch (err) {
-    console.error(`[${program}] navigation failed: ${err.message}`);
+    console.log(`    nav error: ${err.message.substring(0, 80)}`);
   } finally {
     await page.close().catch(() => {});
   }
 
-  // Dedup + limita a 5 melhores
+  // Log diagnóstico rico — crítico pra saber por que 0 flights
+  const statusSummary = Object.entries(stats.statusCodes).map(([k, v]) => `${k}:${v}`).join(' ');
+  console.log(`    [diag] apiHits=${apiHits.length} jsonResp=${stats.jsonResponses} statuses=[${statusSummary}] matched=${JSON.stringify(stats.matchedKeys || {})}`);
+  if (apiHits.length > 0 && intercepted.length === 0) {
+    // Só mostra URLs de API se zero flights — pra não poluir quando funciona
+    apiHits.slice(0, 3).forEach((h) => console.log(`      api: [${h.status}] ${h.url}`));
+  }
+
   const unique = [];
   const byKey = new Map();
   for (const f of intercepted) {
@@ -193,6 +248,8 @@ async function scrapeOne(context, program, origin, dest, date) {
 
 async function main() {
   console.log(`Scraping ${origin} → [${destinations.join(', ')}] on ${date}`);
+  console.log(`Webhook URL: ${WEBHOOK_URL.substring(0, 80)}...`);
+  console.log(`Secret length: ${WEBHOOK_SECRET.length} chars (first 4: ${WEBHOOK_SECRET.substring(0, 4)})`);
 
   const browser = await chromium.launch({
     headless: true,
@@ -204,7 +261,6 @@ async function main() {
 
   try {
     for (const dest of destinations) {
-      // Context fresh por destino — evita acumular fingerprint demais
       const context = await browser.newContext({
         userAgent: randomUA(),
         locale: 'pt-BR',
@@ -216,33 +272,34 @@ async function main() {
       });
 
       for (const program of programs) {
+        const label = `${program} ${origin}-${dest}`;
         try {
           const results = await scrapeOne(context, program, origin, dest, date);
           if (results.length > 0) {
-            console.log(`  ✓ ${program} ${origin}-${dest}: ${results.length} flights`);
+            console.log(`  ✓ ${label}: ${results.length} flights`);
             allResults.push(...results);
           } else {
-            console.log(`  ✗ ${program} ${origin}-${dest}: 0 flights`);
+            console.log(`  ✗ ${label}: 0 flights`);
           }
         } catch (err) {
-          console.log(`  ✗ ${program} ${origin}-${dest}: ERROR ${err.message}`);
+          console.log(`  ✗ ${label}: ERROR ${err.message}`);
         }
       }
 
       await context.close().catch(() => {});
-      await humanDelay(3000, 8000); // pausa entre destinos
+      await humanDelay(3000, 6000);
     }
   } finally {
     await browser.close().catch(() => {});
   }
 
-  // POST pro webhook
-  console.log(`\nPosting ${allResults.length} results to ${WEBHOOK_URL}`);
+  console.log(`\nPosting ${allResults.length} results to webhook...`);
   const resp = await fetch(WEBHOOK_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Scraper-Secret': WEBHOOK_SECRET || '',
+      'X-Scraper-Secret': WEBHOOK_SECRET,
+      'ngrok-skip-browser-warning': 'true',
     },
     body: JSON.stringify({
       source: 'github-actions',
@@ -258,9 +315,17 @@ async function main() {
   });
 
   const body = await resp.text();
-  console.log(`Webhook HTTP ${resp.status}: ${body}`);
+  console.log(`Webhook HTTP ${resp.status}: ${body.substring(0, 300)}`);
 
-  if (!resp.ok) process.exit(1);
+  // Exit 0 mesmo com 0 flights — não falha o job, só loga.
+  // Só falha se webhook HTTP >= 400 (problema de integração).
+  if (!resp.ok) {
+    console.error(`\n❌ Webhook rejected — check BACKEND_WEBHOOK_SECRET matches backend .env`);
+    process.exit(1);
+  }
+  if (allResults.length === 0) {
+    console.log(`\n⚠️  0 flights across all scrapes — Akamai likely blocked or API shape changed`);
+  }
 }
 
 main().catch((err) => {

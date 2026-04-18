@@ -26,10 +26,11 @@ jobs:
     # Cada job tira ~4 min, total ~20 min de compute por run.
     # 48 runs/dia × 20 min = 960 min/dia = 28.800 min/mês.
     # ⚠️ Em repo PRIVADO há limite de 2.000 min/mês — use repo PÚBLICO para ilimitado.
+    # MODO DEBUG: só GRU com 2 destinos. Volta pra matriz 5×20 depois que extrair flights.
     strategy:
       fail-fast: false
       matrix:
-        origin: [GRU, GIG, BSB, CNF, SSA]
+        origin: [GRU]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,19 +55,28 @@ jobs:
         env:
           BACKEND_WEBHOOK_URL: ${{ secrets.BACKEND_WEBHOOK_URL }}
           BACKEND_WEBHOOK_SECRET: ${{ secrets.BACKEND_WEBHOOK_SECRET }}
+          DEBUG_DUMP_PAYLOADS: 'true'
           ORIGIN: ${{ matrix.origin }}
         run: |
-          # Destinos Tier A mais buscados a partir desta origem.
-          # TODO (semana 3): pegar dinamicamente via GET /api/v1/admin/hot-routes?origin=$ORIGIN
+          # MODO DEBUG — só 2 destinos pra iterar rápido.
           case "$ORIGIN" in
-            GRU) DESTS="GIG,SDU,BSB,CNF,SSA,REC,FOR,POA,CWB,FLN,VCP,MIA,JFK,MCO,LIS,MAD,CDG,EZE,SCL,BOG";;
-            GIG) DESTS="GRU,CGH,BSB,CNF,SSA,REC,FOR,POA,CWB,LIS,MIA,JFK,MCO";;
-            BSB) DESTS="GRU,CGH,GIG,SDU,CNF,SSA,REC,FOR,POA,CWB,MIA";;
-            CNF) DESTS="GRU,CGH,GIG,SDU,BSB,SSA,REC,POA,VCP,MIA";;
-            SSA) DESTS="GRU,CGH,GIG,SDU,BSB,CNF,REC,FOR,POA,MIA";;
-            *)   DESTS="GRU,GIG,BSB";;
+            GRU) DESTS="GIG,MIA";;
+            GIG) DESTS="GRU,MIA";;
+            BSB) DESTS="GRU,GIG";;
+            CNF) DESTS="GRU,GIG";;
+            SSA) DESTS="GRU,GIG";;
+            *)   DESTS="GRU,GIG";;
           esac
           node scrape-routes.mjs "$ORIGIN" "$DESTS"
+
+      - name: Upload debug payloads (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payloads-${{ matrix.origin }}
+          path: /tmp/payload-*.json
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Notify on failure
         if: failure()
