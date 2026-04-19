@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { BullModule } from '@nestjs/bull';
 import { CacheModule } from '@nestjs/cache-manager';
 import { LoggerModule } from 'nestjs-pino';
@@ -107,6 +108,11 @@ import { WaitlistModule } from './waitlist/waitlist.module';
     HealthModule,
     ArbitrageModule,
     WaitlistModule,
+  ],
+  providers: [
+    // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators
+    // em controllers passam a ter efeito real. Antes era decorativo.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}
