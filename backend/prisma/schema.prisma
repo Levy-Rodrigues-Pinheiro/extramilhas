@@ -287,6 +287,26 @@ model AwardChart {
   @@map("award_charts")
 }
 
+model SearchLog {
+  id          String   @id @default(uuid())
+  origin      String
+  destination String
+  departDate  String
+  cabinClass  String
+  passengers  Int      @default(1)
+  userId      String?  // null se anônimo
+  // Resultado agregado: quantos retornaram, melhor dataQuality, fonte principal
+  resultCount Int      @default(0)
+  topSource   String?  // "cache_fresh" | "manual" | "synthetic_estimate"
+  isLive      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([origin, destination, departDate, cabinClass])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("search_logs")
+}
+
 model LiveFlightCache {
   id            String   @id @default(uuid())
   programSlug   String   // smiles, tudoazul, latampass

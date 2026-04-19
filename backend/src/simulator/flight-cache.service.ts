@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { LRUCache } from 'lru-cache';
 import { PrismaService } from '../prisma/prisma.service';
 import { ScraperFlightResult } from './scraper-client.service';
 
@@ -38,16 +39,35 @@ export class FlightCacheService {
   private readonly logger = new Logger(FlightCacheService.name);
   private readonly freshTtlMs: number;
   private readonly staleTtlMs: number;
+  /**
+   * LRU em-memória na frente do DB. Hit = <1ms; DB hit = ~30ms.
+   * Invalidação: `upsertMany` faz `clearMemory()` automático.
+   * Tamanho conservador (1000 entries) pra não vazar memória em prod.
+   */
+  private readonly memCache = new LRUCache<string, any[]>({
+    max: 1000,
+    ttl: 10 * 60 * 1000, // 10min — balanço entre frescor e hit rate
+    allowStale: false,
+  });
+  private memHits = 0;
+  private memMisses = 0;
 
   constructor(private prisma: PrismaService) {
-    // Padrão: 24h fresh, 7d stale
     const freshHours = parseInt(process.env.FLIGHT_CACHE_FRESH_HOURS || '24', 10);
     const staleHours = parseInt(process.env.FLIGHT_CACHE_STALE_HOURS || '168', 10);
     this.freshTtlMs = freshHours * 60 * 60 * 1000;
     this.staleTtlMs = staleHours * 60 * 60 * 1000;
     this.logger.log(
-      `Cache configured: fresh=${freshHours}h, stale-fallback=${staleHours}h`,
+      `Cache configured: fresh=${freshHours}h, stale-fallback=${staleHours}h, LRU=${this.memCache.max} entries`,
     );
+  }
+
+  private memKey(origin: string, dest: string, date: string, cabin: string, program?: string): string {
+    return `${origin}|${dest}|${date}|${cabin}|${program || 'all'}`;
+  }
+
+  private clearMemory(): void {
+    this.memCache.clear();
   }
 
   /**
@@ -62,13 +82,30 @@ export class FlightCacheService {
     includeStale = true,
   ): Promise<CachedFlight[]> {
     const now = new Date();
-    const staleLimit = new Date(now.getTime() - this.staleTtlMs);
+    const originUp = origin.toUpperCase();
+    const destUp = destination.toUpperCase();
+    const cabinLc = cabinClass.toLowerCase();
 
+    // 1. LRU hit?
+    const mkey = this.memKey(originUp, destUp, departDate, cabinLc, programSlug);
+    const hit = this.memCache.get(mkey);
+    if (hit) {
+      this.memHits++;
+      // Reconstrói isStale no momento da leitura (pode ter mudado desde cache)
+      return hit.map((r: any) => ({
+        ...r,
+        fetchedAt: new Date(r.fetchedAt),
+        isStale: new Date(r.expiresAt).getTime() < now.getTime(),
+      })).filter((r: any) => includeStale || !r.isStale);
+    }
+    this.memMisses++;
+
+    const staleLimit = new Date(now.getTime() - this.staleTtlMs);
     const where: any = {
-      origin: origin.toUpperCase(),
-      destination: destination.toUpperCase(),
+      origin: originUp,
+      destination: destUp,
       departDate,
-      cabinClass: cabinClass.toLowerCase(),
+      cabinClass: cabinLc,
       fetchedAt: { gte: staleLimit },
     };
     if (programSlug && programSlug !== 'all') {
@@ -79,6 +116,9 @@ export class FlightCacheService {
       where,
       orderBy: [{ programSlug: 'asc' }, { milesRequired: 'asc' }],
     });
+
+    // Salva no LRU raw (não o `isStale` que é calculado em runtime)
+    this.memCache.set(mkey, rows as any[]);
 
     const mapped: CachedFlight[] = rows.map((r) => {
       const isStale = r.expiresAt.getTime() < now.getTime();
@@ -193,6 +233,10 @@ export class FlightCacheService {
       }
     }
 
+    if (saved > 0) {
+      // Invalida LRU pra forçar próxima leitura a ir no DB (fresh data)
+      this.clearMemory();
+    }
     this.logger.log(`Cached ${saved}/${results.length} flight results`);
     return saved;
   }
@@ -230,6 +274,13 @@ export class FlightCacheService {
       ageMinutes: number;
     }>;
     uniqueRoutes: number;
+    memory: {
+      hits: number;
+      misses: number;
+      hitRate: string;
+      size: number;
+      max: number;
+    };
   }> {
     const now = new Date();
     const [total, fresh, byProgramRaw, recentRows, uniqueRoutesRows] = await Promise.all([
@@ -267,6 +318,7 @@ export class FlightCacheService {
       ageMinutes: Math.round((now.getTime() - r.fetchedAt.getTime()) / 60000),
     }));
 
+    const memTotal = this.memHits + this.memMisses;
     return {
       total,
       fresh,
@@ -274,6 +326,13 @@ export class FlightCacheService {
       byProgram,
       recent,
       uniqueRoutes: uniqueRoutesRows.length,
+      memory: {
+        hits: this.memHits,
+        misses: this.memMisses,
+        hitRate: memTotal > 0 ? `${((this.memHits / memTotal) * 100).toFixed(1)}%` : 'N/A',
+        size: this.memCache.size,
+        max: this.memCache.max,
+      },
     };
   }
 }

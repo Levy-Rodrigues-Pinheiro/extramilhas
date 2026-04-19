@@ -7,6 +7,7 @@ import {
   Logger,
   Post,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 import { FlightCacheService } from './flight-cache.service';
@@ -47,6 +48,9 @@ export class ScraperWebhookController {
 
   @Public()
   @Post('scraper-result')
+  // Throttle generoso — scrapers legítimos podem mandar muitos resultados em lote.
+  // Limite p/ IP: 60 requests/minuto. Suficiente p/ GH Actions + muitos usuários crowdsourcing.
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @ApiOperation({ summary: 'Recebe resultados de scrapers externos (GH Actions, CF Workers, crowdsourcing)' })
   async receiveScraperResult(
     @Headers('x-scraper-secret') secret: string,

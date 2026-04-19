@@ -1,63 +1,90 @@
-# MilhasTop 🛫
+# Milhas Extras ✈️
 
-Agregador de ofertas de milhas aéreas do mercado brasileiro.
+Agregador de preços de passagens aéreas por milhas para o mercado brasileiro.
 
-## Estrutura do Projeto
+Compara **Smiles · TudoAzul · Latam Pass** em qualquer rota, com estratégia de
+cobertura em 5 camadas (live → cache → chart → síntese) e pipeline de
+crowdsourcing que cresce com cada usuário.
+
+## Visão rápida
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Mobile (Expo / React Native)                                 │
+│    ├── Busca: FOR → GRU → retorna 3 programas em <2s         │
+│    └── "Ver preço oficial" → WebView captura preços reais     │
+└────────────────────────┬─────────────────────────────────────┘
+                         │ HTTP
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Backend NestJS (porta 3001)                                  │
+│    ├── FlightSearchService: 5-layer orchestrator              │
+│    │   1. LRU memory <1ms                                     │
+│    │   2. LiveFlightCache fresh (<24h)   → AO_VIVO            │
+│    │   3. Scraper live (porta 3002)      → AO_VIVO            │
+│    │   4. LiveFlightCache stale (<7d)    → ATUALIZADO         │
+│    │   5. AwardChart estático            → REFERENCIA         │
+│    │   6. Síntese por região IATA        → REFERENCIA         │
+│    ├── Webhook /webhooks/scraper-result (GH Actions + mobile) │
+│    └── Telemetria /hot-routes + /cache-stats                  │
+└────────────────────────┬─────────────────────────────────────┘
+                         │
+                         ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Fontes de dados (multi-source, free tier)                   │
+│    ├── AwardChart estático (~200 rotas curadas)               │
+│    ├── GitHub Actions cron (IPs Azure, scrape tier A)         │
+│    ├── Crowdsourcing WebView (user IP + cookies)              │
+│    └── Síntese por região (fallback universal)                │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Estrutura
 
 ```
 Extramilhas/
-├── backend/      NestJS API (porta 3001)
-├── admin/        Painel Admin Next.js (porta 3000)
-├── mobile/       App React Native com Expo
-├── scraper/      Microserviço de coleta de ofertas
+├── backend/           NestJS + Prisma + SQLite (porta 3001)
+├── admin/             Next.js 14 painel (porta 3000)
+├── mobile/            Expo Router + React Native
+├── scraper/           Playwright + stealth (porta 3002)
+├── .github/
+│   ├── workflows/     GitHub Actions cron
+│   └── scripts/       Scraper standalone pra runners
 └── docker-compose.yml
 ```
 
-## Pré-requisitos
+## Setup local
+
+### Pré-requisitos
 
 - Node.js 20+
-- Docker e Docker Compose
-- (Mobile) Expo Go no celular ou emulador
+- npm ou pnpm
+- (Opcional) Redis pra BullMQ queues no scraper
+- (Opcional) `gh` CLI + `ngrok` pra ativar o pipeline grátis
 
----
-
-## 🚀 Como Rodar
-
-### 1. Banco de dados e Redis
-
-```bash
-docker-compose up postgres redis -d
-```
-
-### 2. Backend
+### 1. Backend
 
 ```bash
 cd backend
 npm install
-cp .env.example .env.local
-# Edite .env.local com suas configurações
-
-npx prisma migrate dev --name init
+npx prisma migrate dev
 npx prisma db seed
-npm run start:dev
+npm run start:dev       # http://localhost:3001
 ```
 
-API disponível em: http://localhost:3001/api/v1
-Swagger docs: http://localhost:3001/api/docs
+Swagger: http://localhost:3001/api/docs
 
-### 3. Admin Panel
+### 2. Admin
 
 ```bash
 cd admin
 npm install
-cp .env.local.example .env.local   # já existe como .env.local
-npm run dev
+npm run dev             # http://localhost:3000
 ```
 
-Painel disponível em: http://localhost:3000
-Login: admin@milhastop.com.br / Admin@123
+Login dev: `admin@milhasextras.com.br` / `Admin@123`
 
-### 4. Mobile (Expo)
+### 3. Mobile
 
 ```bash
 cd mobile
@@ -65,88 +92,125 @@ npm install
 npx expo start
 ```
 
-Escaneie o QR code com o app Expo Go ou pressione `a` (Android) / `i` (iOS).
+Pressione `a` pra Android emulator, `i` pra iOS simulator.
 
-### 5. Scraper
+### 4. Scraper (opcional)
 
 ```bash
 cd scraper
 npm install
-npx prisma generate
-npm run start:dev
+npx playwright install chromium
+npm run start:dev       # http://localhost:3002
 ```
 
----
+O scraper em IP residencial tem taxa de sucesso baixa (Akamai). Para
+produção, ligue o pipeline grátis (abaixo).
 
-## 🔑 Credenciais de Desenvolvimento
+## Pipeline de dados "Plano Grátis"
 
-| Serviço | Usuário | Senha |
-|---------|---------|-------|
-| Admin Panel | admin@milhastop.com.br | Admin@123 |
-| PostgreSQL | milhastop | milhastop_pass |
+A arquitetura assume que scraping direto das 3 companhias é bloqueado
+pela infra anti-bot delas. Então temos **5 multiplicadores grátis**:
 
----
+| Camada | Ferramenta | Custo | O que faz |
+|--------|-----------|-------|-----------|
+| 1 | `playwright-extra` + stealth | R$ 0 | Browser pool + session persist no scraper local |
+| 2 | **GitHub Actions cron** | R$ 0 (repo público) | Scrape em IPs Azure a cada 30 min |
+| 3 | **Crowdsourcing WebView** | R$ 0 | Captura real usando IP+cookies do próprio usuário |
+| 4 | Cloudflare Workers (opcional) | R$ 0 | Replay de sessão em edge distribuído |
+| 5 | Enriquecimento OpenFlights | R$ 0 | Base de 70k rotas reais pra síntese |
 
-## 📱 Funcionalidades MVP
+Ver guia de ativação: `SETUP-GITHUB-ACTIONS.md`.
 
-- [x] Autenticação (email, Google)
-- [x] Feed de ofertas com filtros
-- [x] Alertas personalizados de CPM
-- [x] Histórico de preços por programa
-- [x] Simulador de destinos por milhas
-- [x] Comparador de programas
-- [x] Calculadora de CPM
-- [x] Painel administrativo completo
-- [x] Scraper automático (mock em dev)
-- [x] Sistema de notificações (push + in-app)
-- [x] Planos de assinatura (FREE / PREMIUM / PRO)
+## Endpoints principais
 
----
+### Público
 
-## 🌐 Variáveis de Ambiente Necessárias
+- `POST /api/v1/simulator/search-flights` — busca de voos 5-camadas
+- `GET  /api/v1/simulator/cache-stats` — telemetria do cache (fresco/stale/LRU)
+- `GET  /api/v1/simulator/hot-routes?days=7&limit=30` — top rotas buscadas
+- `POST /api/v1/webhooks/scraper-result` — recebe capturas de scrapers externos
+  - Header `X-Scraper-Secret` (Actions) ou `crowdsourced-v1` (mobile)
 
-Veja `.env.example` na raiz para a lista completa. As principais:
+### Admin (JWT requerido)
 
+- `/admin/award-charts` — CRUD da tabela estática de resgate
+- `/admin/offers` — CRUD de ofertas
+- `/admin/users` — gestão de usuários
+- UI em `http://localhost:3000/cache-stats` — dashboard do cache
+
+## Env vars relevantes
+
+`backend/.env`:
 ```env
-DATABASE_URL=postgresql://milhastop:milhastop_pass@localhost:5432/milhastop_db
+DATABASE_URL="file:./dev.db"
+PORT=3001
+JWT_SECRET=dev-jwt-secret-milhasextras-2026
+# Scraper microservice
+SCRAPER_URL=http://localhost:3002
+SCRAPER_ENABLED=true
+SCRAPER_TIMEOUT_MS=10000
+# Cache
+FLIGHT_CACHE_FRESH_HOURS=24
+FLIGHT_CACHE_STALE_HOURS=168
+# Webhook (match no GitHub Secrets BACKEND_WEBHOOK_SECRET)
+SCRAPER_WEBHOOK_SECRET=<openssl rand -hex 32>
+```
+
+`scraper/.env` (ou env vars do processo):
+```env
 REDIS_URL=redis://localhost:6379
-JWT_SECRET=mude_em_producao_minimo_32_chars
-STRIPE_SECRET_KEY=sk_test_...        # Para pagamentos
-SENDGRID_API_KEY=...                  # Para emails
-FIREBASE_PROJECT_ID=...              # Para push notifications
+REDIS_DISABLED=true   # se Redis não estiver rodando
+POOL_MAX_USES=8
+POOL_MAX_AGE_MS=1800000
+STORAGE_MAX_AGE_MS=10800000
 ```
+
+`mobile/.env`:
+```env
+# Deixe vazio pra fallback automático (iOS→localhost, Android→10.0.2.2)
+EXPO_PUBLIC_API_URL=
+```
+
+## Observabilidade
+
+### Em dev
+
+- `GET /api/v1/simulator/cache-stats` — JSON com métricas
+- `http://localhost:3000/cache-stats` — dashboard visual auto-refresh (30s)
+- Logs do backend: NestJS com Logger por service
+- Logs do scraper: `/api/stats` expõe metrics + pool info
+
+### Em prod (roadmap)
+
+- Grafana Cloud (free tier) com Loki + Prometheus
+- Sentry pra erros RN
+- PostHog pra analytics
+
+## Migração SQLite → Postgres (produção)
+
+Está em SQLite pra dev (zero-setup). Pra produção:
+
+1. Troque `provider = "sqlite"` pra `"postgresql"` no `prisma/schema.prisma`
+2. Setar `DATABASE_URL` pra Postgres (Supabase free tier funciona)
+3. `npx prisma migrate deploy`
+
+## Roadmap
+
+Ver `plano-gratis-cobertura.md` em `.claude/plans/`. Resumo:
+
+- [x] **Sem 1**: Stealth scraper + browser pool + session persist
+- [x] **Sem 2**: GitHub Actions pipeline + webhook
+- [x] **Crowdsourcing**: WebView in-app captura
+- [x] **Opt-in ético** + telemetria SearchLog + admin dashboard
+- [ ] **Sem 3**: Tier automation baseado em `/hot-routes`
+- [ ] **Sem 4**: Import OpenFlights pra síntese precisa
+- [ ] **Sem 5-6**: Cloudflare Workers edge (sessão warmup)
+- [ ] Grafana dashboards
+
+## Licença
+
+TBD.
 
 ---
 
-## 📦 Deploy com Docker
-
-```bash
-# Subir todos os serviços
-docker-compose up -d
-
-# Ver logs
-docker-compose logs -f backend
-
-# Rebuild após alterações
-docker-compose up -d --build backend
-```
-
----
-
-## 🏗️ Arquitetura
-
-```
-Mobile App (Expo)
-      ↕ REST API
-NestJS Backend ←→ PostgreSQL
-      ↕               ↕
-    Redis          Scraper
-   (cache/        (cron jobs,
-    filas)         coleta dados)
-      ↕
-Admin Panel (Next.js)
-```
-
----
-
-*Construído com NestJS, Next.js, React Native (Expo), PostgreSQL, Redis e Prisma.*
+*Construído com NestJS, Next.js, Expo, Playwright, Prisma e muito café ☕*

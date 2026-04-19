@@ -287,7 +287,47 @@ export class FlightSearchService {
       );
     }
 
-    return results.sort((a, b) => a.milesTotal - b.milesTotal);
+    const sorted = results.sort((a, b) => a.milesTotal - b.milesTotal);
+
+    // Telemetria fire-and-forget — não bloqueia resposta. Usa catch para não
+    // derrubar a busca se SearchLog falhar.
+    this.logSearch({
+      origin: originUp,
+      destination: destUp,
+      departDate,
+      cabinClass: cabinLc,
+      passengers,
+      resultCount: sorted.length,
+      topSource: sorted[0]?.source,
+      isLive: sorted.some((r) => r.isLive),
+    }).catch((err) => this.logger.warn(`SearchLog failed: ${err.message}`));
+
+    return sorted;
+  }
+
+  /** Registra uma busca para telemetria (tier classification futuro). */
+  private async logSearch(data: {
+    origin: string;
+    destination: string;
+    departDate: string;
+    cabinClass: string;
+    passengers: number;
+    resultCount: number;
+    topSource?: string;
+    isLive: boolean;
+  }): Promise<void> {
+    await this.prisma.searchLog.create({
+      data: {
+        origin: data.origin,
+        destination: data.destination,
+        departDate: data.departDate,
+        cabinClass: data.cabinClass,
+        passengers: data.passengers,
+        resultCount: data.resultCount,
+        topSource: data.topSource ?? null,
+        isLive: data.isLive,
+      },
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────

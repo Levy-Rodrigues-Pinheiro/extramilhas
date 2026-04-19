@@ -54,6 +54,32 @@ export class SimulatorController {
   }
 
   @Public()
+  @Get('hot-routes')
+  @ApiOperation({ summary: 'Top rotas buscadas nos últimos N dias (base do Tier A automation)' })
+  async hotRoutes(@Query('days') daysRaw?: string, @Query('limit') limitRaw?: string) {
+    const days = Math.max(1, Math.min(90, parseInt(daysRaw || '7', 10) || 7));
+    const limit = Math.max(1, Math.min(500, parseInt(limitRaw || '50', 10) || 50));
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Agrega por (origin, destination) — não importa data específica pro tiering
+    const grouped = await this.flightSearchService['prisma'].searchLog.groupBy({
+      by: ['origin', 'destination'],
+      where: { createdAt: { gte: since } },
+      _count: { _all: true },
+      orderBy: { _count: { origin: 'desc' } },
+      take: limit,
+    });
+
+    const routes = grouped.map((g) => ({
+      origin: g.origin,
+      destination: g.destination,
+      searchCount: g._count._all,
+    }));
+
+    return successResponse({ days, limit, totalRoutes: routes.length, routes });
+  }
+
+  @Public()
   @Get('destinations-map')
   @ApiOperation({ summary: 'Get destinations map with reachability' })
   async getDestinationsMap(

@@ -111,7 +111,7 @@ export default function ProfileScreen() {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,
-      onPress: () => Alert.alert('Em breve', 'Funcionalidade em desenvolvimento.'),
+      onPress: () => router.push('/preferences' as any),
     },
     {
       icon: 'bar-chart-outline',
