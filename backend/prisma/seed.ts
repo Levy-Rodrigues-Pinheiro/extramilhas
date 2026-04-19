@@ -256,8 +256,16 @@ async function main() {
 
   console.log(`Created ${offers.length} offers`);
 
-  // Create admin user
-  const adminPasswordHash = await bcrypt.hash('Admin@123', 10);
+  // Create admin user — senha vem de env var ou é gerada (NUNCA hardcoded
+  // pra não vazar em repo público). Em dev, default 'Admin@123' por
+  // praticidade; em prod, FORÇA env var.
+  const adminPwdEnv = process.env.SEED_ADMIN_PASSWORD;
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && !adminPwdEnv) {
+    throw new Error('SEED_ADMIN_PASSWORD obrigatória em prod');
+  }
+  const adminPlainPwd = adminPwdEnv || 'Admin@123'; // só dev sem env
+  const adminPasswordHash = await bcrypt.hash(adminPlainPwd, 10);
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@milhasextras.com' },
     update: {},
@@ -271,9 +279,13 @@ async function main() {
   });
 
   console.log(`Created admin user: ${adminUser.email}`);
+  if (!adminPwdEnv) {
+    console.log('  ⚠️  Usando senha dev hardcoded "Admin@123" — defina SEED_ADMIN_PASSWORD');
+  }
 
   // Create a test regular user
-  const userPasswordHash = await bcrypt.hash('User@123', 10);
+  const userPwdEnv = process.env.SEED_USER_PASSWORD;
+  const userPasswordHash = await bcrypt.hash(userPwdEnv || 'User@123', 10);
   const testUser = await prisma.user.upsert({
     where: { email: 'user@milhasextras.com' },
     update: {},

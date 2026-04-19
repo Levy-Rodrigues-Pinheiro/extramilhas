@@ -74,19 +74,37 @@ export class ScraperWebhookController {
       throw new HttpException('Invalid payload: results[] required', HttpStatus.BAD_REQUEST);
     }
 
-    // Sanity check: cada resultado deve ter campos mínimos
-    const valid = payload.results.filter(
-      (r) =>
-        r &&
-        typeof r.programSlug === 'string' &&
-        typeof r.origin === 'string' &&
-        typeof r.destination === 'string' &&
-        typeof r.date === 'string' &&
-        typeof r.cabinClass === 'string' &&
-        typeof r.milesRequired === 'number' &&
-        r.milesRequired > 0 &&
-        r.milesRequired < 10_000_000,
-    );
+    // Sanity checks APERTADOS pra mitigar payload spam de actor que
+    // tenha lido o secret 'crowdsourced-v1' do bundle mobile.
+    // Limites baseados em ranges reais do mercado brasileiro.
+    const ALLOWED_PROGRAMS = new Set(['smiles', 'tudoazul', 'latampass']);
+    const IATA_RX = /^[A-Z]{3}$/;
+    const ISO_DATE_RX = /^\d{4}-\d{2}-\d{2}$/;
+    const ALLOWED_CABIN = new Set(['economy', 'business', 'first']);
+
+    const valid = payload.results.filter((r) => {
+      if (!r || typeof r !== 'object') return false;
+      // Programa whitelisted
+      if (!ALLOWED_PROGRAMS.has(r.programSlug)) return false;
+      // IATAs em formato ABC, sempre 3 letras maiúsculas
+      if (!IATA_RX.test(r.origin) || !IATA_RX.test(r.destination)) return false;
+      if (r.origin === r.destination) return false; // mesma origem/destino é spam
+      // Data ISO válida e dentro de range razoável (hoje a +2 anos)
+      if (!ISO_DATE_RX.test(r.date)) return false;
+      const d = new Date(r.date).getTime();
+      const now = Date.now();
+      if (d < now - 86400_000 || d > now + 730 * 86400_000) return false;
+      // Cabin class válida
+      if (!ALLOWED_CABIN.has(r.cabinClass.toLowerCase())) return false;
+      // Milhas em range realista (era 1-10M, agora 2k-500k)
+      if (typeof r.milesRequired !== 'number') return false;
+      if (r.milesRequired < 2_000 || r.milesRequired > 500_000) return false;
+      // Tax em range realista (R$0 a R$10k)
+      if (r.taxBrl != null && (typeof r.taxBrl !== 'number' || r.taxBrl < 0 || r.taxBrl > 10_000)) return false;
+      // Stops realista (0 a 5)
+      if (r.stops != null && (typeof r.stops !== 'number' || r.stops < 0 || r.stops > 5)) return false;
+      return true;
+    });
 
     const rejected = payload.results.length - valid.length;
     if (rejected > 0) {

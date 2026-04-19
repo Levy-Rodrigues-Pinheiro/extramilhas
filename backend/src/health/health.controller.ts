@@ -44,33 +44,35 @@ export class HealthController {
   @ApiOperation({ summary: 'Readiness — verifica DB, scraper, cache. Usar em load balancers.' })
   async deep() {
     const started = Date.now();
-    const components: ComponentStatus[] = [];
 
-    // 1. Database
-    components.push(await this.checkComponent('database', async () => {
-      await this.prisma.$queryRaw`SELECT 1`;
-    }));
+    // Checks rodam em PARALELO — antes era sequencial (~700ms total).
+    // Agora bota um teto pelo componente mais lento (~250ms).
+    const checks = [
+      this.checkComponent('database', async () => {
+        await this.prisma.$queryRaw`SELECT 1`;
+      }),
+      this.scraperEnabled
+        ? this.checkComponent('scraper', async () => {
+            const controller = new AbortController();
+            const t = setTimeout(() => controller.abort(), 3000);
+            try {
+              const r = await fetch(`${this.scraperUrl}/health`, { signal: controller.signal });
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            } finally {
+              clearTimeout(t);
+            }
+          })
+        : Promise.resolve<ComponentStatus>({
+            name: 'scraper',
+            status: 'degraded',
+            error: 'SCRAPER_ENABLED=false',
+          }),
+      this.checkComponent('cache-table', async () => {
+        await this.prisma.liveFlightCache.count({ take: 1 });
+      }),
+    ];
 
-    // 2. Scraper (se habilitado)
-    if (this.scraperEnabled) {
-      components.push(await this.checkComponent('scraper', async () => {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 3000);
-        try {
-          const r = await fetch(`${this.scraperUrl}/health`, { signal: controller.signal });
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        } finally {
-          clearTimeout(t);
-        }
-      }));
-    } else {
-      components.push({ name: 'scraper', status: 'degraded', error: 'SCRAPER_ENABLED=false' });
-    }
-
-    // 3. LiveFlightCache (quantidade básica, confirma que tabela responde)
-    components.push(await this.checkComponent('cache-table', async () => {
-      await this.prisma.liveFlightCache.count({ take: 1 });
-    }));
+    const components = await Promise.all(checks);
 
     // Status agregado:
     //   up: tudo OK

@@ -75,29 +75,17 @@ export class WaitlistController {
   async signup(@Body() body: WaitlistSignupDto) {
     const email = body.email.trim().toLowerCase();
 
-    const existing = await this.prisma.waitlistSignup.findUnique({ where: { email } });
+    // Atomic upsert — sem race condition entre findUnique + create.
+    // Em re-signup, mantém valores antigos como fallback se novos vierem null.
+    const existing = await this.prisma.waitlistSignup.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    const isNew = !existing;
 
-    if (existing) {
-      // Re-signup: atualiza source/utm + sinal de "ainda interessado"
-      const updated = await this.prisma.waitlistSignup.update({
-        where: { email },
-        data: {
-          whatsappPhone: body.whatsappPhone || existing.whatsappPhone,
-          source: body.source || existing.source,
-          utmSource: body.utmSource || existing.utmSource,
-          utmMedium: body.utmMedium || existing.utmMedium,
-          utmCampaign: body.utmCampaign || existing.utmCampaign,
-          willingToPay: body.willingToPay ?? existing.willingToPay,
-          message: body.message || existing.message,
-        },
-        select: { id: true, email: true, createdAt: true },
-      });
-      this.logger.log(`Waitlist re-signup: ${email}`);
-      return successResponse({ ...updated, isNew: false });
-    }
-
-    const created = await this.prisma.waitlistSignup.create({
-      data: {
+    const result = await this.prisma.waitlistSignup.upsert({
+      where: { email },
+      create: {
         email,
         whatsappPhone: body.whatsappPhone,
         source: body.source,
@@ -107,10 +95,23 @@ export class WaitlistController {
         willingToPay: body.willingToPay,
         message: body.message,
       },
+      update: {
+        // Coalesce: se vier valor novo usa, senão mantém o antigo (Prisma update no-op em undefined)
+        whatsappPhone: body.whatsappPhone ?? undefined,
+        source: body.source ?? undefined,
+        utmSource: body.utmSource ?? undefined,
+        utmMedium: body.utmMedium ?? undefined,
+        utmCampaign: body.utmCampaign ?? undefined,
+        willingToPay: body.willingToPay ?? undefined,
+        message: body.message ?? undefined,
+      },
       select: { id: true, email: true, createdAt: true },
     });
-    this.logger.log(`Waitlist new signup: ${email} (source=${body.source || 'organic'})`);
-    return successResponse({ ...created, isNew: true });
+
+    this.logger.log(
+      `Waitlist ${isNew ? 'new' : 're-'}signup: ${email}${isNew ? ` (source=${body.source || 'organic'})` : ''}`,
+    );
+    return successResponse({ ...result, isNew });
   }
 
   @Get('stats')

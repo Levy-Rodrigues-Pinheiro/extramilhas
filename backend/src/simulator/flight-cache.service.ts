@@ -71,6 +71,28 @@ export class FlightCacheService {
   }
 
   /**
+   * Invalidação seletiva — apaga só as keys afetadas pelos flights persistidos.
+   * Antes era `clearMemory()` total: 1 write derruba 1000 entries do LRU,
+   * destruindo hit rate. Agora deleta só o cruzamento (origin, dest, date, cabin)
+   * e o cruzamento completo com programSlug.
+   */
+  private invalidateForFlights(flights: Array<{
+    origin: string; destination: string; date: string; cabinClass: string; programSlug: string;
+  }>): void {
+    const seen = new Set<string>();
+    for (const f of flights) {
+      const o = f.origin.toUpperCase();
+      const d = f.destination.toUpperCase();
+      const c = f.cabinClass.toLowerCase();
+      // Invalida tanto a query "all programs" quanto a do programa específico
+      const keyAll = this.memKey(o, d, f.date, c);
+      const keyOne = this.memKey(o, d, f.date, c, f.programSlug);
+      if (!seen.has(keyAll)) { this.memCache.delete(keyAll); seen.add(keyAll); }
+      if (!seen.has(keyOne)) { this.memCache.delete(keyOne); seen.add(keyOne); }
+    }
+  }
+
+  /**
    * Busca entradas frescas. Se não tiver nada fresco e `includeStale`, retorna dados antigos marcados.
    */
   async find(
@@ -234,8 +256,8 @@ export class FlightCacheService {
     }
 
     if (saved > 0) {
-      // Invalida LRU pra forçar próxima leitura a ir no DB (fresh data)
-      this.clearMemory();
+      // Invalidação SELETIVA — só keys afetadas (não derruba hit rate)
+      this.invalidateForFlights(results);
     }
     this.logger.log(`Cached ${saved}/${results.length} flight results`);
     return saved;

@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Query, Body, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNumber, IsString, IsOptional, IsInt, Min } from 'class-validator';
 import { SimulatorService } from './simulator.service';
@@ -107,6 +108,8 @@ export class SimulatorController {
 
   @Public()
   @Post('search-flights')
+  // Anti-DoS: 30 buscas/min por IP. Endpoint chama scraper + DB heavy.
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Search flights comparing miles across programs with cash price estimation' })
   async searchFlights(@Body() body: {
     origin: string;
