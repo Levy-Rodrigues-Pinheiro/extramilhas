@@ -7,15 +7,26 @@ import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from '@e
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/lib/theme';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { initSentry } from '../src/lib/sentry';
 
 // Keep splash visible while loading
 SplashScreen.preventAutoHideAsync();
+
+// Initialize Sentry (no-op if EXPO_PUBLIC_SENTRY_DSN not set)
+initSentry();
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
+      staleTime: 30_000, // 30s — evita refetch imediato em navegação comum
+      gcTime: 10 * 60 * 1000, // 10min — mantém em cache 10min após última uso
       refetchOnWindowFocus: false,
+      refetchOnReconnect: 'always', // refaz ao reconectar (útil em mobile instável)
+    },
+    mutations: {
+      retry: 1, // muta só 1x; não é idempotente por padrão
     },
   },
 });
@@ -36,9 +47,10 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <QueryClientProvider client={queryClient}>
           <StatusBar style="light" backgroundColor={Colors.bg.primary} />
           <Stack
             screenOptions={{
@@ -81,8 +93,9 @@ export default function RootLayout() {
             <Stack.Screen name="value-compare" options={{ headerShown: false }} />
             <Stack.Screen name="family" options={{ headerShown: false }} />
           </Stack>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+          </QueryClientProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

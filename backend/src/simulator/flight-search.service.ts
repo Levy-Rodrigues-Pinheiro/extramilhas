@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GoogleFlightsService } from './google-flights.service';
 import { ScraperClientService, ScraperFlightResult } from './scraper-client.service';
 import { FlightCacheService, CachedFlight } from './flight-cache.service';
+import { OfficialUrlService } from './official-url.service';
 import { getIataInfo } from './iata-data';
 
 export interface FlightSearchParams {
@@ -89,6 +90,7 @@ export class FlightSearchService {
     private googleFlightsService: GoogleFlightsService,
     private scraper: ScraperClientService,
     private cache: FlightCacheService,
+    private officialUrl: OfficialUrlService,
   ) {
     this.scraperWaitMs = parseInt(process.env.SCRAPER_WAIT_MS || '15000', 10);
   }
@@ -392,14 +394,14 @@ export class FlightSearchService {
       source: 'live_scraping',
       disclaimer: 'Dados capturados em tempo real do site oficial. Confirme antes de emitir.',
       lastUpdatedAt: live.scrapedAt,
-      officialUrl: this.buildOfficialUrl(
-        live.programSlug,
-        live.origin,
-        live.destination,
-        live.date,
-        live.cabinClass,
+      officialUrl: this.officialUrl.build({
+        programSlug: live.programSlug,
+        origin: live.origin,
+        destination: live.destination,
+        date: live.date,
+        cabin: live.cabinClass,
         passengers,
-      ),
+      }),
       dataQuality: 'AO_VIVO',
     };
   }
@@ -460,14 +462,14 @@ export class FlightSearchService {
         ? `Dados capturados há ${staleHours}h — scraping atual falhou, mostrando última captura válida.`
         : `Dados capturados há ${staleHours}h do site oficial.`,
       lastUpdatedAt: cached.fetchedAt.toISOString(),
-      officialUrl: this.buildOfficialUrl(
-        cached.programSlug,
-        cached.origin,
-        cached.destination,
-        cached.departDate,
-        cached.cabinClass,
+      officialUrl: this.officialUrl.build({
+        programSlug: cached.programSlug,
+        origin: cached.origin,
+        destination: cached.destination,
+        date: cached.departDate,
+        cabin: cached.cabinClass,
         passengers,
-      ),
+      }),
       dataQuality: cached.isStale ? 'ATUALIZADO' : 'AO_VIVO',
     };
   }
@@ -563,7 +565,7 @@ export class FlightSearchService {
       disclaimer:
         'ESTIMATIVA baseada em região geográfica. Rota não está na nossa base local e scraping ao vivo não disponível agora. Confirme no site oficial.',
       lastUpdatedAt: new Date().toISOString(),
-      officialUrl: this.buildOfficialUrl(programSlug, origin, destination, departDate, cabinClass, passengers, returnDate),
+      officialUrl: this.officialUrl.build({ programSlug, origin, destination, date: departDate, cabin: cabinClass, passengers, returnDate }),
       dataQuality: 'REFERENCIA',
     };
   }
@@ -617,15 +619,15 @@ export class FlightSearchService {
       source: chart.source,
       disclaimer: 'Preço base de referência. Confirme o valor exato no site oficial antes de emitir.',
       lastUpdatedAt: chart.updatedAt?.toISOString() || chart.createdAt?.toISOString() || new Date().toISOString(),
-      officialUrl: this.buildOfficialUrl(
-        chart.program.slug,
-        chart.origin,
-        chart.destination,
-        departDate,
-        chart.cabinClass,
+      officialUrl: this.officialUrl.build({
+        programSlug: chart.program.slug,
+        origin: chart.origin,
+        destination: chart.destination,
+        date: departDate,
+        cabin: chart.cabinClass,
         passengers,
         returnDate,
-      ),
+      }),
       dataQuality: 'REFERENCIA',
     };
   }
@@ -638,96 +640,6 @@ export class FlightSearchService {
     if (savingsPercent > 10) return 'MILHAS';
     if (savingsPercent < -10) return 'DINHEIRO';
     return 'EQUIVALENTE';
-  }
-
-  private buildOfficialUrl(
-    programSlug: string,
-    origin: string,
-    dest: string,
-    date: string,
-    cabin: string,
-    passengers: number,
-    returnDate?: string,
-  ): string {
-    const pax = Math.max(1, passengers || 1);
-    const isRT = !!returnDate;
-    const cabinLc = (cabin || 'economy').toLowerCase();
-    const safeDate = date || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-
-    if (programSlug === 'smiles') {
-      const cabinType = cabinLc === 'business' || cabinLc === 'first' ? 'BUSINESS' : 'ECONOMIC';
-      const tripType = isRT ? 2 : 1;
-      const params = new URLSearchParams({
-        originAirportCode: origin,
-        destinationAirportCode: dest,
-        departureDate: safeDate,
-        adults: String(pax),
-        children: '0',
-        infants: '0',
-        cabinType,
-        tripType: String(tripType),
-        currencyCode: 'BRL',
-        segments: '1',
-      });
-      if (returnDate) params.set('returnDate', returnDate);
-      return `https://www.smiles.com.br/emissao?${params.toString()}`;
-    }
-
-    if (programSlug === 'tudoazul') {
-      const dd1 = this.formatDateForProgram('tudoazul', safeDate);
-      const cc = cabinLc === 'business' || cabinLc === 'first' ? 'business' : 'economy';
-      const params = new URLSearchParams({
-        o1: origin,
-        d1: dest,
-        dd1,
-        'passengers.adults': String(pax),
-        'passengers.children': '0',
-        'passengers.infants': '0',
-        r: isRT ? 'true' : 'false',
-        cc,
-        isAward: 'true',
-      });
-      if (returnDate) {
-        params.set('o2', dest);
-        params.set('d2', origin);
-        params.set('dd2', this.formatDateForProgram('tudoazul', returnDate));
-      }
-      return `https://www.voeazul.com.br/br/pt/home/selecao-de-voos?${params.toString()}`;
-    }
-
-    if (programSlug === 'latampass') {
-      const outbound = this.formatDateForProgram('latampass', safeDate);
-      const cabinLatam = cabinLc === 'business' || cabinLc === 'first' ? 'Business' : 'Economy';
-      const trip = isRT ? 'RT' : 'OW';
-      const params = new URLSearchParams({
-        origin,
-        destination: dest,
-        outbound,
-        adt: String(pax),
-        chd: '0',
-        inf: '0',
-        trip,
-        cabin: cabinLatam,
-        redemption: 'true',
-        sort: 'RECOMMENDED',
-      });
-      if (returnDate) params.set('inbound', this.formatDateForProgram('latampass', returnDate));
-      return `https://www.latamairlines.com/br/pt/oferta-voos?${params.toString()}`;
-    }
-
-    return `https://www.google.com/travel/flights?q=Flights+from+${origin}+to+${dest}+on+${safeDate}&hl=pt-BR&curr=BRL`;
-  }
-
-  private formatDateForProgram(programSlug: string, isoDate: string): string {
-    if (programSlug === 'tudoazul') {
-      const [y, m, d] = isoDate.split('-');
-      if (!y || !m || !d) return isoDate;
-      return `${d}-${m}-${y}`;
-    }
-    if (programSlug === 'latampass') {
-      return `${isoDate}T12:00:00.000Z`;
-    }
-    return isoDate;
   }
 
   private estimateTicketPrice(origin: string, destination: string, cabinClass: string, isRoundTrip: boolean): number {

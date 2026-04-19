@@ -96,6 +96,9 @@ model Offer {
 
   @@index([programId])
   @@index([isActive, isDeleted])
+  @@index([isActive, isDeleted, cpm]) // feed ordenado por CPM
+  @@index([isActive, isDeleted, createdAt]) // feed ordenado por recência
+  @@index([programId, isActive, isDeleted]) // listagem por programa
   @@index([type])
   @@index([classification])
   @@index([cpm])

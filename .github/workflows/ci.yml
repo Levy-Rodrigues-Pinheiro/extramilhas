@@ -1,0 +1,107 @@
+name: CI
+
+# Roda em todo push e PR pra main.
+# Valida type-check e build dos 4 componentes em paralelo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancela builds antigos quando novos commits chegam na mesma branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (NestJS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - name: Install
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+      - name: Prisma generate
+        working-directory: backend
+        run: npx prisma generate
+      - name: Type-check
+        working-directory: backend
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+  scraper:
+    name: Scraper (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scraper/package-lock.json
+      - name: Install
+        working-directory: scraper
+        run: npm ci --no-audit --no-fund
+      - name: Prisma generate
+        working-directory: scraper
+        run: npx prisma generate
+      - name: Type-check
+        working-directory: scraper
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: scraper
+        run: npm run build
+
+  admin:
+    name: Admin (Next.js)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin/package-lock.json
+      - name: Install
+        working-directory: admin
+        run: npm ci --no-audit --no-fund
+      - name: Type-check
+        working-directory: admin
+        run: npx tsc --noEmit
+      - name: Build
+        working-directory: admin
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
+          NEXTAUTH_URL: http://localhost:3000
+          NEXTAUTH_SECRET: ci-placeholder-secret-not-for-prod
+        run: npm run build
+
+  mobile:
+    name: Mobile (Expo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+      - name: Type-check
+        working-directory: mobile
+        run: npx tsc --noEmit

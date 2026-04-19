@@ -7,6 +7,7 @@ import { GoogleFlightsService } from './google-flights.service';
 import { ScraperClientService } from './scraper-client.service';
 import { FlightCacheService } from './flight-cache.service';
 import { ScraperWebhookController } from './scraper-webhook.controller';
+import { OfficialUrlService } from './official-url.service';
 
 @Module({
   imports: [PrismaModule],
@@ -17,6 +18,7 @@ import { ScraperWebhookController } from './scraper-webhook.controller';
     GoogleFlightsService,
     ScraperClientService,
     FlightCacheService,
+    OfficialUrlService,
   ],
 })
 export class SimulatorModule {}
