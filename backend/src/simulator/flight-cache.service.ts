@@ -219,20 +219,61 @@ export class FlightCacheService {
     fresh: number;
     stale: number;
     byProgram: Record<string, number>;
+    recent: Array<{
+      programSlug: string;
+      origin: string;
+      destination: string;
+      departDate: string;
+      milesRequired: number;
+      airline: string | null;
+      fetchedAt: Date;
+      ageMinutes: number;
+    }>;
+    uniqueRoutes: number;
   }> {
     const now = new Date();
-    const [total, fresh, byProgramRaw] = await Promise.all([
+    const [total, fresh, byProgramRaw, recentRows, uniqueRoutesRows] = await Promise.all([
       this.prisma.liveFlightCache.count(),
       this.prisma.liveFlightCache.count({ where: { expiresAt: { gt: now } } }),
       this.prisma.liveFlightCache.groupBy({
         by: ['programSlug'],
         _count: { _all: true },
       }),
+      this.prisma.liveFlightCache.findMany({
+        orderBy: { fetchedAt: 'desc' },
+        take: 20,
+        select: {
+          programSlug: true,
+          origin: true,
+          destination: true,
+          departDate: true,
+          milesRequired: true,
+          airline: true,
+          fetchedAt: true,
+        },
+      }),
+      this.prisma.liveFlightCache.groupBy({
+        by: ['origin', 'destination'],
+      }),
     ]);
+
     const byProgram: Record<string, number> = {};
     for (const row of byProgramRaw) {
       byProgram[row.programSlug] = row._count._all;
     }
-    return { total, fresh, stale: total - fresh, byProgram };
+
+    const recent = recentRows.map((r) => ({
+      ...r,
+      ageMinutes: Math.round((now.getTime() - r.fetchedAt.getTime()) / 60000),
+    }));
+
+    return {
+      total,
+      fresh,
+      stale: total - fresh,
+      byProgram,
+      recent,
+      uniqueRoutes: uniqueRoutesRows.length,
+    };
   }
 }

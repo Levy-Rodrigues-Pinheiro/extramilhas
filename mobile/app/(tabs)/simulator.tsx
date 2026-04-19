@@ -17,6 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { usePrograms, useSimulator } from '../../src/hooks/usePrograms';
+import { getContributeState, setContributeState } from '../../src/lib/contribute-preference';
+import { ContributeOptInModal } from '../../src/components/ContributeOptInModal';
 import { useFlightSearch } from '../../src/hooks/useFlightSearch';
 import { ProgramChip } from '../../src/components/ProgramChip';
 import { Colors } from '../../src/lib/theme';
@@ -257,6 +259,54 @@ function FlightResultCard({ result }: { result: any }) {
   const pax = result.passengers || 1;
   const totalMiles = result.milesTotal ?? (isRoundTrip ? result.milesRoundTrip : result.milesOneWay) ?? 0;
 
+  // Opt-in crowdsourcing — primeira vez que clica em "Ver preço oficial"
+  const [optInVisible, setOptInVisible] = useState(false);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+
+  const openInWebView = (url: string) => {
+    try {
+      router.push({
+        pathname: '/price-capture' as any,
+        params: {
+          url: encodeURIComponent(url),
+          title: `${result.programName} — ${result.destination}`,
+        },
+      });
+    } catch {
+      Linking.openURL(url).catch(() => {});
+    }
+  };
+
+  const handleOfficialPress = async () => {
+    const url = result.officialUrl || result.bookingUrl;
+    if (!url) return;
+    const state = await getContributeState();
+    if (state === 'accepted') {
+      openInWebView(url);
+    } else if (state === 'declined') {
+      // Respeita recusa anterior — abre no browser externo sem captura
+      Linking.openURL(url).catch(() => {});
+    } else {
+      // Primeira vez — pergunta
+      setPendingUrl(url);
+      setOptInVisible(true);
+    }
+  };
+
+  const handleAccept = async () => {
+    await setContributeState('accepted');
+    setOptInVisible(false);
+    if (pendingUrl) openInWebView(pendingUrl);
+    setPendingUrl(null);
+  };
+
+  const handleDecline = async () => {
+    await setContributeState('declined');
+    setOptInVisible(false);
+    if (pendingUrl) Linking.openURL(pendingUrl).catch(() => {});
+    setPendingUrl(null);
+  };
+
   const recColor = result.recommendation === 'MILHAS' ? '#10B981'
     : result.recommendation === 'DINHEIRO' ? '#EF4444' : '#F59E0B';
   const recIcon = result.recommendation === 'MILHAS' ? 'checkmark-circle'
@@ -378,24 +428,7 @@ function FlightResultCard({ result }: { result: any }) {
         </View>
         <TouchableOpacity
           style={styles.officialButton}
-          onPress={() => {
-            const url = result.officialUrl || result.bookingUrl;
-            if (!url) return;
-            // Abre WebView in-app que captura preços reais via JS injection
-            // (crowdsourcing). Fallback pra browser externo se algo der errado.
-            try {
-              // cast: rota recém-criada, tipos do expo-router ainda não regeneraram
-              router.push({
-                pathname: '/price-capture' as any,
-                params: {
-                  url: encodeURIComponent(url),
-                  title: `${result.programName} — ${result.destination}`,
-                },
-              });
-            } catch {
-              Linking.openURL(url).catch(() => {});
-            }
-          }}
+          onPress={handleOfficialPress}
           activeOpacity={0.7}
         >
           <LinearGradient
@@ -414,6 +447,11 @@ function FlightResultCard({ result }: { result: any }) {
           Atualizado em {new Date(result.lastUpdatedAt).toLocaleDateString('pt-BR')}
         </Text>
       )}
+      <ContributeOptInModal
+        visible={optInVisible}
+        onAccept={handleAccept}
+        onDecline={handleDecline}
+      />
     </View>
   );
 }

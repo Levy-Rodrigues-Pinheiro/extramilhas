@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiProperty, ApiProperty
 import { IsNumber, IsString, IsOptional, IsInt, Min } from 'class-validator';
 import { SimulatorService } from './simulator.service';
 import { FlightSearchService } from './flight-search.service';
+import { FlightCacheService } from './flight-cache.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { successResponse } from '../common/helpers/response.helper';
@@ -41,7 +42,16 @@ export class SimulatorController {
   constructor(
     private readonly simulatorService: SimulatorService,
     private readonly flightSearchService: FlightSearchService,
+    private readonly flightCacheService: FlightCacheService,
   ) {}
+
+  @Public()
+  @Get('cache-stats')
+  @ApiOperation({ summary: 'Estatísticas do LiveFlightCache (cobertura + frescor por programa)' })
+  async cacheStats() {
+    const stats = await this.flightCacheService.stats();
+    return successResponse(stats);
+  }
 
   @Public()
   @Get('destinations-map')
