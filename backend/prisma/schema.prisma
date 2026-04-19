@@ -291,6 +291,31 @@ model AwardChart {
   @@map("award_charts")
 }
 
+model WaitlistSignup {
+  id            String   @id @default(uuid())
+  email         String
+  whatsappPhone String?
+  source        String?  // ex: "instagram-ad-v1", "blog-arbitragem", "organic"
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  // Quanto a pessoa diz estar disposta a pagar (R$/mês)
+  willingToPay  Float?
+  // Mensagem livre na captura
+  message       String?
+  // Quando foi convertido em usuário pago
+  convertedAt   DateTime?
+  // Se ainda não convertido, contador de quantos emails ela recebeu
+  emailsSent    Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@unique([email])
+  @@index([source])
+  @@index([createdAt])
+  @@index([convertedAt])
+  @@map("waitlist_signups")
+}
+
 model SearchLog {
   id          String   @id @default(uuid())
   origin      String

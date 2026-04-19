@@ -21,6 +21,7 @@ import { AdminModule } from './admin/admin.module';
 import { TransfersModule } from './transfers/transfers.module';
 import { HealthModule } from './health/health.module';
 import { ArbitrageModule } from './arbitrage/arbitrage.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { ArbitrageModule } from './arbitrage/arbitrage.module';
     TransfersModule,
     HealthModule,
     ArbitrageModule,
+    WaitlistModule,
   ],
 })
 export class AppModule {}
