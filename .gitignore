@@ -75,3 +75,5 @@ temp/
 # Playwright browsers download
 /playwright-browsers/
 .playwright/
+backend/prisma/dev.db*
+backend/prisma/migrations.sqlite.backup/
