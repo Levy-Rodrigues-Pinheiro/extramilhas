@@ -38,4 +38,4 @@ EXPOSE 3001
 
 # Roda migrations + boot — se migration falha, app não sobe (fail-fast)
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/src/main.js"]
