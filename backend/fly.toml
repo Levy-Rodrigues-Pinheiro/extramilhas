@@ -1,0 +1,54 @@
+# fly.toml app configuration file generated for milhasextras-api on 2026-04-19T14:00:25-03:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'milhasextras-api'
+primary_region = 'gru'
+kill_signal = 'SIGTERM'
+kill_timeout = '10s'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[deploy]
+  strategy = 'rolling'
+
+[env]
+  API_PREFIX = 'api/v1'
+  FLIGHT_CACHE_FRESH_HOURS = '24'
+  FLIGHT_CACHE_STALE_HOURS = '168'
+  LOG_LEVEL = 'info'
+  NODE_ENV = 'production'
+  PORT = '3001'
+  SCRAPER_ENABLED = 'false'
+  SCRAPER_TIMEOUT_MS = '10000'
+  SCRAPER_WAIT_MS = '10000'
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'requests'
+    hard_limit = 250
+    soft_limit = 200
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '15s'
+    method = 'GET'
+    path = '/api/v1/health'
+    protocol = 'http'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 512
