@@ -108,6 +108,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/explore'),
     },
     {
+      icon: 'trending-up-outline',
+      label: 'Oportunidades de arbitragem',
+      showChevron: true,
+      onPress: () => router.push('/arbitrage' as any),
+    },
+    {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,
