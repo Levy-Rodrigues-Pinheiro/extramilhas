@@ -36,6 +36,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "0f700ac6-7e45-40b8-91eb-05c01bc24ee5"
+      }
+    },
+    "owner": "levyrodrigues"
   }
 }
