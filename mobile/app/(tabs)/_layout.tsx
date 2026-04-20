@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/lib/theme';
+import { useNotificationFeed } from '../../src/hooks/useNotificationFeed';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -28,6 +29,10 @@ function TabIcon({
  * o foco é monetização via arbitragem.
  */
 export default function TabsLayout() {
+  // Unread count pra badge no tab Perfil (aponta pra Notification Center)
+  const notifFeed = useNotificationFeed();
+  const unreadCount = notifFeed.data?.unreadCount ?? 0;
+
   return (
     <Tabs
       screenOptions={{
@@ -101,6 +106,17 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="person" focused={focused} color={color} />
           ),
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#EC4899',
+            color: '#fff',
+            fontSize: 10,
+            fontWeight: '700',
+            minWidth: 16,
+            height: 16,
+            borderRadius: 8,
+            lineHeight: 16,
+          },
         }}
       />
 

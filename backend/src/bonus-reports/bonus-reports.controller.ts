@@ -559,6 +559,40 @@ export class BonusReportsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
+  @Put('admin/bonus-reports/:id/undo')
+  @ApiOperation({
+    summary: 'Reverte approve/reject pra PENDING. Se aprovado, desativa partnership criada.',
+  })
+  async undo(@Req() req: any, @Param('id') id: string) {
+    const reviewerId = req.user?.id;
+    const report = await this.prisma.bonusReport.findUnique({ where: { id } });
+    if (!report) throw new HttpException('Report não encontrado', HttpStatus.NOT_FOUND);
+
+    // Se foi APROVADO e criou uma partnership, desativamos
+    if (report.status === 'APPROVED' && report.partnershipId) {
+      await this.prisma.transferPartnership.update({
+        where: { id: report.partnershipId },
+        data: { isActive: false, currentBonus: 0 },
+      });
+    }
+
+    const updated = await this.prisma.bonusReport.update({
+      where: { id },
+      data: {
+        status: 'PENDING',
+        adminNotes: report.adminNotes
+          ? `${report.adminNotes}\n[UNDONE by ${reviewerId} em ${new Date().toISOString()}]`
+          : `[UNDONE by ${reviewerId}]`,
+        reviewedAt: null,
+        reviewedById: null,
+      },
+    });
+    this.logger.log(`Report ${id} UNDONE by ${reviewerId} (was ${report.status})`);
+    return successResponse(updated);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
   @Put('admin/bonus-reports/:id/reject')
   @ApiOperation({ summary: 'Rejeitar report (com motivo)' })
   async reject(@Req() req: any, @Param('id') id: string, @Body() body: ReviewBonusReportDto) {
