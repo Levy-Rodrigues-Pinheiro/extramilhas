@@ -2,21 +2,20 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
-import { PushModule } from '../push/push.module';
-import { BonusReportsController } from './bonus-reports.controller';
+import { PushController } from './push.controller';
+import { PushService } from './push.service';
 
 @Module({
   imports: [
     PrismaModule,
-    PushModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
-      }),
+      useFactory: (config: ConfigService) => ({ secret: config.get<string>('JWT_SECRET') }),
     }),
   ],
-  controllers: [BonusReportsController],
+  controllers: [PushController],
+  providers: [PushService],
+  exports: [PushService],
 })
-export class BonusReportsModule {}
+export class PushModule {}

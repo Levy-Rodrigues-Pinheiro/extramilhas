@@ -32,6 +32,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { successResponse } from '../common/helpers/response.helper';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 
 class CreateBonusReportDto {
   @ApiProperty({ example: 'livelo' })
@@ -101,6 +102,7 @@ export class BonusReportsController {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private push: PushService,
   ) {}
 
   private tryGetUserId(req: any): string | null {
@@ -315,6 +317,25 @@ export class BonusReportsController {
     });
 
     this.logger.log(`Bonus report ${id} APPROVED by ${reviewerId}; partnership ${partnership.id}`);
+
+    // Fire-and-forget: notifica TODOS os devices do novo bônus.
+    // Falha de push não deve impedir a resposta admin.
+    const bonusPct = Math.round(report.bonusPercent);
+    this.push
+      .broadcast({
+        title: `🎁 ${bonusPct}% de bônus ${report.fromProgramSlug} → ${report.toProgramSlug}!`,
+        body: 'Abre o app pra ver se vale a pena transferir seus pontos agora.',
+        data: {
+          type: 'bonus_approved',
+          partnershipId: partnership.id,
+          fromProgramSlug: report.fromProgramSlug,
+          toProgramSlug: report.toProgramSlug,
+          bonusPercent: report.bonusPercent,
+          deepLink: '/arbitrage',
+        },
+      })
+      .catch((err) => this.logger.error(`Push broadcast failed: ${err.message}`));
+
     return successResponse({ report: updated, partnership });
   }
 

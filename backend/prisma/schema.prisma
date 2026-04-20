@@ -34,6 +34,7 @@ model User {
   familyMembers FamilyMember[]
   bonusReports  BonusReport[]      @relation("BonusReportReporter")
   bonusReviews  BonusReport[]      @relation("BonusReportReviewer")
+  deviceTokens  DeviceToken[]
 
   @@map("users")
 }
@@ -323,6 +324,25 @@ model BonusReport {
   @@index([reporterId])
   @@index([fromProgramSlug, toProgramSlug])
   @@map("bonus_reports")
+}
+
+// Device tokens para push notifications (Expo Push).
+// Um user pode ter múltiplos (celular + tablet + web). Um device pode ser
+// anônimo (userId=null) — vira associado se logar depois via re-register.
+model DeviceToken {
+  id         String   @id @default(uuid())
+  userId     String?
+  token      String   @unique // ExponentPushToken[xxx]
+  platform   String   // 'android' | 'ios' | 'web'
+  appVersion String?
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([lastUsedAt])
+  @@map("device_tokens")
 }
 
 model WaitlistSignup {

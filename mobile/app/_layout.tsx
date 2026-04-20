@@ -9,6 +9,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../src/lib/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initSentry } from '../src/lib/sentry';
+import { usePushNotifications } from '../src/hooks/usePushNotifications';
+
+// Arma push notifications (permissão + token + listeners).
+// Extraído como componente vazio só pra poder usar o hook dentro do provider tree.
+function PushBootstrap() {
+  usePushNotifications();
+  return null;
+}
 
 // Keep splash visible while loading
 SplashScreen.preventAutoHideAsync();
@@ -51,6 +59,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
+          <PushBootstrap />
           <StatusBar style="light" backgroundColor={Colors.bg.primary} />
           <Stack
             screenOptions={{
