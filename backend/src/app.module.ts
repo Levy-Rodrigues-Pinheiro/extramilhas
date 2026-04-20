@@ -30,6 +30,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { ReferralModule } from './referral/referral.module';
 import { AnalyticsModule } from './common/analytics.module';
 import { MissionsModule } from './missions/missions.module';
+import { IntelAgentModule } from './intel-agent/intel-agent.module';
 
 @Module({
   imports: [
@@ -122,6 +123,7 @@ import { MissionsModule } from './missions/missions.module';
     ReferralModule,
     AnalyticsModule,
     MissionsModule,
+    IntelAgentModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

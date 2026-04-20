@@ -18,6 +18,7 @@ import {
   Map,
   Database,
   Megaphone,
+  Bot,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -38,6 +39,7 @@ const navItems = [
   { label: 'Programas', href: '/programs', icon: Award },
   { label: 'Tabela de Resgate', href: '/award-charts', icon: Map },
   { label: 'Reports de Bônus', href: '/bonus-reports', icon: Megaphone },
+  { label: 'Agentes Inteligentes', href: '/intel-agent', icon: Bot },
   { label: 'Cache & Telemetria', href: '/cache-stats', icon: Database },
   { label: 'Artigos', href: '/articles', icon: FileText },
   { label: 'Notificações', href: '/notifications', icon: Bell },

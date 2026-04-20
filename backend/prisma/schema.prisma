@@ -371,6 +371,56 @@ model DeviceToken {
   @@map("device_tokens")
 }
 
+// ─── Intel Agent: crawlers inteligentes ──────────────────────────────
+// Fontes que o agente varre (sites, blogs, landing pages). Admin edita
+// sem precisar deploy. Cada source tem um run-log no IntelAgentRun.
+
+model IntelSource {
+  id            String   @id @default(uuid())
+  name          String   // "Melhores Destinos - promoções"
+  url           String
+  // "html" = baixa página inteira; "rss" = feed XML; "api" = endpoint
+  sourceType    String   @default("html")
+  // Regex/seletor opcional pra extrair só o trecho relevante (reduz
+  // tokens enviados ao LLM). Ex: "main.post-content" ou "div.promos"
+  scopeSelector String?
+  isActive      Boolean  @default(true)
+  // Rate limit: só refaz extraction se última run >minIntervalMin atrás
+  minIntervalMin Int     @default(120)
+  lastRunAt     DateTime?
+  // Custo acumulado em USD (atualizado por run)
+  costUsd       Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  runs IntelAgentRun[]
+
+  @@index([isActive, lastRunAt])
+  @@map("intel_sources")
+}
+
+model IntelAgentRun {
+  id              String   @id @default(uuid())
+  sourceId        String
+  startedAt       DateTime @default(now())
+  finishedAt      DateTime?
+  status          String   // "running" | "ok" | "skipped" | "error"
+  // Métricas
+  htmlBytes       Int?
+  extractedCount  Int      @default(0) // bônus extraídos pelo LLM
+  newReportsCount Int      @default(0) // após dedupe
+  costUsd         Float    @default(0)
+  errorMessage    String?
+  // Debug: primeiros 500 chars do trecho enviado ao LLM
+  inputPreview    String?
+
+  source IntelSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId, startedAt])
+  @@index([status, startedAt])
+  @@map("intel_agent_runs")
+}
+
 model WaitlistSignup {
   id            String   @id @default(uuid())
   email         String
