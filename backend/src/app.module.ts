@@ -29,6 +29,7 @@ import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { ReferralModule } from './referral/referral.module';
 import { AnalyticsModule } from './common/analytics.module';
+import { MissionsModule } from './missions/missions.module';
 
 @Module({
   imports: [
@@ -120,6 +121,7 @@ import { AnalyticsModule } from './common/analytics.module';
     SchedulerModule,
     ReferralModule,
     AnalyticsModule,
+    MissionsModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

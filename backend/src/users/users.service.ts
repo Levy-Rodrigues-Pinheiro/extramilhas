@@ -218,7 +218,7 @@ export class UsersService {
   }
 
   async getFamilyMembers(userId: string) {
-    return this.prisma.familyMember.findMany({
+    const members = await this.prisma.familyMember.findMany({
       where: { userId },
       include: {
         balances: {
@@ -227,6 +227,43 @@ export class UsersService {
       },
       orderBy: { name: 'asc' },
     });
+
+    // Calcula valor R$ por membro + total da família
+    const membersWithValue = members.map((m) => {
+      const totalPoints = m.balances.reduce((acc, b) => acc + b.balance, 0);
+      const totalValueBrl = m.balances.reduce(
+        (acc, b) =>
+          acc + (b.balance / 1000) * Number(b.program.avgCpmCurrent),
+        0,
+      );
+      return {
+        ...m,
+        summary: {
+          totalPoints,
+          totalValueBrl: parseFloat(totalValueBrl.toFixed(2)),
+          programsCount: m.balances.length,
+        },
+      };
+    });
+
+    const familyTotal = membersWithValue.reduce(
+      (acc, m) => acc + m.summary.totalValueBrl,
+      0,
+    );
+    const familyPoints = membersWithValue.reduce(
+      (acc, m) => acc + m.summary.totalPoints,
+      0,
+    );
+
+    return {
+      count: members.length,
+      members: membersWithValue,
+      summary: {
+        totalValueBrl: parseFloat(familyTotal.toFixed(2)),
+        totalPoints: familyPoints,
+        membersCount: members.length,
+      },
+    };
   }
 
   async addFamilyMember(userId: string, name: string, relationship: string) {

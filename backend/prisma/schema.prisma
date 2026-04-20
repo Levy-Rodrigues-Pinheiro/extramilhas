@@ -48,6 +48,8 @@ model User {
   // reactivation cron sem precisar instrumentar login em toda query.
   lastActiveAt  DateTime?
 
+  userMissions  UserMission[]
+
   @@map("users")
 }
 
@@ -437,6 +439,50 @@ model LiveFlightCache {
   @@index([origin, destination, departDate, cabinClass, expiresAt])
   @@index([expiresAt])
   @@map("live_flight_cache")
+}
+
+// ─── Gamification: Missions ────────────────────────────────────────────
+// Missions são "desafios" semanais/mensais que admin cria e users completam
+// pra ganhar dias Premium. Reforçam crowdsource + retention sem pagar $.
+
+model Mission {
+  id            String   @id @default(uuid())
+  slug          String   @unique // "report-3-bonuses-week"
+  title         String
+  description   String
+  // Tipos suportados (validados no service):
+  //   "bonus_reports_approved" | "balance_programs_added" | "referrals_applied"
+  targetType    String
+  targetCount   Int
+  rewardDays    Int      @default(7) // dias Premium
+  isActive      Boolean  @default(true)
+  validFrom     DateTime @default(now())
+  validTo       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userMissions  UserMission[]
+
+  @@index([isActive, validFrom])
+  @@map("missions")
+}
+
+model UserMission {
+  id             String    @id @default(uuid())
+  userId         String
+  missionId      String
+  progress       Int       @default(0)
+  completedAt    DateTime?
+  rewardClaimedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, missionId])
+  @@index([userId, completedAt])
+  @@map("user_missions")
 }
 
 model FamilyMemberBalance {

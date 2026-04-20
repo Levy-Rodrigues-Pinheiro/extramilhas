@@ -130,6 +130,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/referral' as any),
     },
     {
+      icon: 'trophy-outline',
+      label: 'Missões',
+      showChevron: true,
+      onPress: () => router.push('/missions' as any),
+    },
+    {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,
