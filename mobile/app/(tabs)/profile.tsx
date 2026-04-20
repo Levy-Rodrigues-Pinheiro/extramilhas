@@ -182,6 +182,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/dashboard' as any),
     },
     {
+      icon: 'shield-checkmark-outline',
+      label: t('profile.security'),
+      showChevron: true,
+      onPress: () => router.push('/security' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

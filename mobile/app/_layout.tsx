@@ -116,6 +116,8 @@ export default function RootLayout() {
             <Stack.Screen name="bonus-history" options={{ headerShown: false }} />
             <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
             <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+            <Stack.Screen name="active-sessions" options={{ headerShown: false }} />
+            <Stack.Screen name="security" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

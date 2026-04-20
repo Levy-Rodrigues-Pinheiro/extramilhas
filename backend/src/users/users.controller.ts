@@ -200,6 +200,21 @@ export class UsersController {
     return successResponse(result);
   }
 
+  @Get('sessions')
+  @ApiOperation({ summary: 'Lista dispositivos conectados (proxy de sessões ativas)' })
+  async listSessions(@CurrentUser() user: any) {
+    const result = await this.usersService.listActiveSessions(user.id);
+    return successResponse(result);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Desconecta um dispositivo (revoga DeviceToken)' })
+  async revokeSession(@CurrentUser() user: any, @Param('id') id: string) {
+    const result = await this.usersService.revokeSession(user.id, id);
+    return successResponse(result);
+  }
+
   @Get('dashboard/stats')
   @ApiOperation({ summary: 'Estatísticas agregadas do user: economia, transfers, alertas, missões' })
   async getDashboardStats(@CurrentUser() user: any) {

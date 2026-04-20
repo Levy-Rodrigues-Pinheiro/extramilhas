@@ -387,6 +387,41 @@ export class UsersService {
    * transferências feitas fora do app). Calcula: se user tem X pontos num
    * programa que hoje tem bônus Y%, economia hipotética = X * CPM * Y%.
    */
+  /**
+   * Lista dispositivos conectados. DeviceToken serve como proxy de sessão:
+   * enquanto o token existe, o dispositivo recebe push; revogar = desregistrar
+   * o push. Se o user loga de novo, cria novo token. Suficiente pra "dispositivos
+   * ativos" sem adicionar tabela UserSession separada.
+   */
+  async listActiveSessions(userId: string) {
+    const tokens = await this.prisma.deviceToken.findMany({
+      where: { userId },
+      orderBy: { lastUsedAt: 'desc' },
+      select: {
+        id: true,
+        platform: true,
+        appVersion: true,
+        lastUsedAt: true,
+        createdAt: true,
+      },
+    });
+    const now = Date.now();
+    return tokens.map((t) => ({
+      ...t,
+      isRecent: now - t.lastUsedAt.getTime() < 7 * 86400_000,
+      ageDays: Math.floor((now - t.createdAt.getTime()) / 86400_000),
+    }));
+  }
+
+  async revokeSession(userId: string, tokenId: string) {
+    const token = await this.prisma.deviceToken.findFirst({
+      where: { id: tokenId, userId },
+    });
+    if (!token) throw new NotFoundException('Sessão não encontrada');
+    await this.prisma.deviceToken.delete({ where: { id: tokenId } });
+    return { revoked: true };
+  }
+
   async getDashboardStats(userId: string) {
     const now = new Date();
     const yearStart = new Date(now.getFullYear(), 0, 1);
