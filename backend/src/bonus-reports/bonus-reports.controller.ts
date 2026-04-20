@@ -320,23 +320,30 @@ export class BonusReportsController {
 
     this.logger.log(`Bonus report ${id} APPROVED by ${reviewerId}; partnership ${partnership.id}`);
 
-    // Fire-and-forget: notifica TODOS os devices do novo bônus.
-    // Falha de push não deve impedir a resposta admin.
+    // Fire-and-forget: notifica quem quer receber (respeita prefs) +
+    // WhatsApp pro PRO tier verificado. Falha nunca bloqueia a resposta.
     const bonusPct = Math.round(report.bonusPercent);
     this.push
-      .broadcast({
-        title: `🎁 ${bonusPct}% de bônus ${report.fromProgramSlug} → ${report.toProgramSlug}!`,
-        body: 'Abre o app pra ver se vale a pena transferir seus pontos agora.',
-        data: {
-          type: 'bonus_approved',
-          partnershipId: partnership.id,
-          fromProgramSlug: report.fromProgramSlug,
-          toProgramSlug: report.toProgramSlug,
+      .broadcastBonusAlert(
+        {
+          fromSlug: report.fromProgramSlug,
+          toSlug: report.toProgramSlug,
           bonusPercent: report.bonusPercent,
-          deepLink: '/arbitrage',
         },
-      })
-      .catch((err) => this.logger.error(`Push broadcast failed: ${err.message}`));
+        {
+          title: `🎁 ${bonusPct}% de bônus ${report.fromProgramSlug} → ${report.toProgramSlug}!`,
+          body: 'Abre o app pra ver se vale a pena transferir seus pontos agora.',
+          data: {
+            type: 'bonus_approved',
+            partnershipId: partnership.id,
+            fromProgramSlug: report.fromProgramSlug,
+            toProgramSlug: report.toProgramSlug,
+            bonusPercent: report.bonusPercent,
+            deepLink: '/arbitrage',
+          },
+        },
+      )
+      .catch((err) => this.logger.error(`Bonus alert broadcast failed: ${err.message}`));
 
     // Push dedicado pro reporter: reforço positivo + feedback de tier.
     // Só se ele tem conta (reporterId) — anônimos via email não têm push.

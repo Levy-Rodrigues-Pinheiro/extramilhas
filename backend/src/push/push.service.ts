@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { PrismaService } from '../prisma/prisma.service';
+import { WhatsAppService } from './whatsapp.service';
 
 /**
  * PushService — envio de notificações via Expo Push Service.
@@ -19,7 +20,10 @@ export class PushService {
   private readonly logger = new Logger(PushService.name);
   private readonly expo: Expo;
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private whatsapp: WhatsAppService,
+  ) {
     // Access token opcional aumenta rate-limit de 600 → 1800/segundo.
     // Sem ele ainda funciona, só com throttle mais apertado.
     this.expo = new Expo({
@@ -165,6 +169,94 @@ export class PushService {
     });
     if (devices.length === 0) return { sent: 0, errors: 0 };
     return this.sendToTokens(devices.map((d) => d.token), payload);
+  }
+
+  /**
+   * Broadcast especializado pra "bônus aprovado" que respeita TODAS as prefs:
+   *  - filtra users com notifyBonus=false
+   *  - filtra users com notifyProgramPairs não vazio E pair atual não está
+   *  - manda WhatsApp em paralelo pra PRO tier + notifyWhatsApp + verified
+   *
+   * Usado no approve do BonusReport pra substituir o broadcast genérico.
+   */
+  async broadcastBonusAlert(pair: { fromSlug: string; toSlug: string; bonusPercent: number }, payload: {
+    title: string;
+    body: string;
+    data: Record<string, any>;
+  }): Promise<{ push: { sent: number; errors: number }; whatsapp: { sent: number; errors: number } }> {
+    const cutoff = new Date(Date.now() - 60 * 86400_000);
+    const pairKey = `${pair.fromSlug}:${pair.toSlug}`;
+
+    // `as any` — tipos stale no Prisma Client local (dev-server antigo
+    // prende DLL Windows). Campos existem no schema + no DB.
+    const devices = (await this.prisma.deviceToken.findMany({
+      where: { lastUsedAt: { gte: cutoff } },
+      include: {
+        user: {
+          include: { preferences: true },
+        },
+      } as any,
+    })) as any[];
+
+    // Separa em 2 buckets
+    const pushTargets: string[] = [];
+    const whatsappTargets: string[] = [];
+
+    for (const d of devices) {
+      // Anônimo (userId=null): manda push, não filtra
+      if (!d.userId || !d.user) {
+        pushTargets.push(d.token);
+        continue;
+      }
+
+      const prefs = d.user.preferences;
+      // Sem prefs ainda = default (notify all)
+      const wantsBonus = prefs?.notifyBonus ?? true;
+      if (!wantsBonus) continue;
+
+      let pairs: string[] = [];
+      try {
+        pairs = prefs ? JSON.parse(prefs.notifyProgramPairs || '[]') : [];
+      } catch {
+        pairs = [];
+      }
+      // Se user filtrou pares específicos e este não está, pula
+      if (pairs.length > 0 && !pairs.includes(pairKey)) continue;
+
+      pushTargets.push(d.token);
+
+      // WhatsApp: PRO + verified + optin + tem phone
+      const isPaid = d.user.subscriptionPlan === 'PRO';
+      const wantsWhatsApp =
+        isPaid &&
+        (prefs?.notifyWhatsApp ?? false) &&
+        !!prefs?.whatsappVerifiedAt &&
+        !!d.user.whatsappPhone;
+      if (wantsWhatsApp && d.user.whatsappPhone) {
+        whatsappTargets.push(d.user.whatsappPhone);
+      }
+    }
+
+    // Dedupe WhatsApp (user pode ter múltiplos devices)
+    const uniquePhones = Array.from(new Set(whatsappTargets));
+
+    const [pushResult, waResult] = await Promise.all([
+      pushTargets.length > 0
+        ? this.sendToTokens(pushTargets, payload)
+        : Promise.resolve({ sent: 0, errors: 0 }),
+      uniquePhones.length > 0
+        ? this.whatsapp.broadcast(
+            uniquePhones,
+            `*${payload.title}*\n\n${payload.body}\n\nAbra o app pra calcular quanto vale pra você.`,
+          )
+        : Promise.resolve({ sent: 0, errors: 0 }),
+    ]);
+
+    this.logger.log(
+      `Bonus alert ${pairKey}: push ${pushResult.sent}/${pushTargets.length}, whatsapp ${waResult.sent}/${uniquePhones.length}`,
+    );
+
+    return { push: pushResult, whatsapp: waResult };
   }
 
   /**

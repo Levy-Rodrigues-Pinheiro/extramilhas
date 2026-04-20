@@ -104,6 +104,7 @@ export default function RootLayout() {
             <Stack.Screen name="report-bonus" options={{ headerShown: false, animation: 'slide_from_bottom', presentation: 'modal' }} />
             <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
             <Stack.Screen name="welcome-quiz" options={{ headerShown: false, gestureEnabled: false }} />
+            <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

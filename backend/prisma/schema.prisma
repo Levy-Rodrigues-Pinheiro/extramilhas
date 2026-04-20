@@ -47,6 +47,15 @@ model UserPreference {
   preferredOrigins       String   @default("[]")
   preferredDestinations  String   @default("[]")
   targetCpm              Float    @default(25.00)
+  // Preferências de notificação (bonus reports aprovados)
+  // notifyBonus=true é default friendly — user desliga se quiser
+  notifyBonus            Boolean  @default(true)
+  // JSON array de pares "from:to" (ex: ["livelo:smiles","esfera:smiles"])
+  // Vazio = recebe notificação de TODOS os bônus
+  notifyProgramPairs     String   @default("[]")
+  // Canais extras (push é padrão sempre-on se notifyBonus=true)
+  notifyWhatsApp         Boolean  @default(false)
+  whatsappVerifiedAt     DateTime? // só envia WhatsApp depois de verificar o número
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

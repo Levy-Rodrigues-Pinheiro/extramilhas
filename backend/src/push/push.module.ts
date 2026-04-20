@@ -4,6 +4,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PrismaModule } from '../prisma/prisma.module';
 import { PushController } from './push.controller';
 import { PushService } from './push.service';
+import { WhatsAppService } from './whatsapp.service';
+import { NotificationPreferencesController } from './preferences.controller';
 
 @Module({
   imports: [
@@ -14,8 +16,8 @@ import { PushService } from './push.service';
       useFactory: (config: ConfigService) => ({ secret: config.get<string>('JWT_SECRET') }),
     }),
   ],
-  controllers: [PushController],
-  providers: [PushService],
-  exports: [PushService],
+  controllers: [PushController, NotificationPreferencesController],
+  providers: [PushService, WhatsAppService],
+  exports: [PushService, WhatsAppService],
 })
 export class PushModule {}
