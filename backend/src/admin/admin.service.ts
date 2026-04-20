@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { OfferClassification, SubscriptionPlan } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { createPaginatedResult, getPaginationSkip } from '../common/dto/pagination.dto';
 import { ContentService, CreateArticleDto, UpdateArticleDto } from '../content/content.service';
+import { PushService } from '../push/push.service';
 
 function classifyFromCpm(cpm: number): OfferClassification {
   if (cpm < 20) return OfferClassification.IMPERDIVEL;
@@ -12,12 +13,21 @@ function classifyFromCpm(cpm: number): OfferClassification {
   return OfferClassification.NORMAL;
 }
 
+function classificationLabel(c: string): string {
+  if (c === 'IMPERDIVEL') return '🔥 imperdível';
+  if (c === 'BOA') return '⚡ boa oferta';
+  return 'oferta';
+}
+
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private contentService: ContentService,
+    private push: PushService,
   ) {}
 
   // ─── Dashboard ──────────────────────────────────────────────────────────────
@@ -289,7 +299,7 @@ export class AdminService {
     const classification =
       dto.classification ?? classifyFromCpm(dto.cpm);
 
-    return this.prisma.offer.create({
+    const offer = await this.prisma.offer.create({
       data: {
         programId: dto.programId,
         type: dto.type,
@@ -306,6 +316,68 @@ export class AdminService {
       },
       include: { program: { select: { id: true, name: true, slug: true } } },
     });
+
+    // Feat 3: Matching — notifica usuários cuja preferência bate no programa.
+    // Fire-and-forget. Só dispara pra ofertas IMPERDIVEL/BOA pra evitar spam.
+    if (offer.isActive && classification !== 'NORMAL') {
+      this.notifyMatchingUsers(offer).catch((err) =>
+        this.logger.error(`Offer match push failed: ${err.message}`),
+      );
+    }
+
+    return offer;
+  }
+
+  private async notifyMatchingUsers(offer: any) {
+    // Busca users cuja preferredPrograms JSON contém o slug do programa desta oferta
+    // Abordagem: fetch todos users com prefs, filtrar em JS (ok até ~10k users;
+    // depois virar query raw com jsonb_array).
+    const prefs = await this.prisma.userPreference.findMany({
+      where: {
+        preferredPrograms: { not: '[]' },
+      },
+      select: {
+        userId: true,
+        preferredPrograms: true,
+        user: {
+          select: {
+            deviceTokens: {
+              where: { lastUsedAt: { gte: new Date(Date.now() - 30 * 86400_000) } },
+              select: { token: true },
+            },
+          },
+        },
+      },
+    });
+
+    const programSlug = offer.program?.slug;
+    if (!programSlug) return;
+
+    const matchedTokens: string[] = [];
+    for (const p of prefs) {
+      try {
+        const arr: string[] = JSON.parse(p.preferredPrograms || '[]');
+        if (arr.includes(programSlug)) {
+          p.user?.deviceTokens?.forEach((d) => matchedTokens.push(d.token));
+        }
+      } catch {}
+    }
+
+    if (matchedTokens.length === 0) return;
+
+    await this.push.sendToTokens(matchedTokens, {
+      title: `💎 ${offer.program.name}: ${offer.title}`,
+      body: `CPM ${offer.cpm.toFixed(2)} — ${classificationLabel(offer.classification)}. Toque pra ver.`,
+      data: {
+        type: 'offer_match',
+        offerId: offer.id,
+        programSlug,
+        deepLink: `/offer/${offer.id}`,
+      },
+    });
+    this.logger.log(
+      `Offer match push: sent to ${matchedTokens.length} device(s) (${programSlug})`,
+    );
   }
 
   async updateOffer(id: string, dto: Partial<CreateOfferDto>) {

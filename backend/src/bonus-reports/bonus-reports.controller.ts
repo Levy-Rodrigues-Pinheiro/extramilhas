@@ -174,6 +174,17 @@ export class BonusReportsController {
       `Bonus report ${report.id}: ${body.fromProgramSlug}→${body.toProgramSlug} ${body.bonusPercent}% [${status}]`,
     );
 
+    // Feat 1: notifica admins se PENDING (DUPLICATE não precisa revisão).
+    // Fire-and-forget — não bloqueia resposta pro reporter.
+    if (status === 'PENDING') {
+      this.notifyAdminsOfPendingReport({
+        reportId: report.id,
+        fromSlug: body.fromProgramSlug,
+        toSlug: body.toProgramSlug,
+        bonusPct: Math.round(body.bonusPercent),
+      }).catch((err) => this.logger.error(`Admin push failed: ${err.message}`));
+    }
+
     return successResponse({
       ...report,
       isDuplicate: status === 'DUPLICATE',
@@ -182,6 +193,40 @@ export class BonusReportsController {
           ? 'Já tínhamos esse bônus! Obrigado mesmo assim.'
           : 'Recebido — vamos validar e avisar todo mundo.',
     });
+  }
+
+  private async notifyAdminsOfPendingReport(params: {
+    reportId: string;
+    fromSlug: string;
+    toSlug: string;
+    bonusPct: number;
+  }) {
+    // Pega devices de users admin ativos nos últimos 30d
+    const cutoff = new Date(Date.now() - 30 * 86400_000);
+    const adminDevices = await this.prisma.deviceToken.findMany({
+      where: {
+        lastUsedAt: { gte: cutoff },
+        user: { isAdmin: true },
+      },
+      select: { token: true },
+    });
+    if (adminDevices.length === 0) return;
+
+    await this.push.sendToTokens(
+      adminDevices.map((d) => d.token),
+      {
+        title: `🔔 Novo report: ${params.bonusPct}% ${params.fromSlug}→${params.toSlug}`,
+        body: 'Toque pra revisar e aprovar/rejeitar no app.',
+        data: {
+          type: 'admin_review',
+          reportId: params.reportId,
+          deepLink: `/admin-review/${params.reportId}`,
+        },
+      },
+    );
+    this.logger.log(
+      `Admin push sent to ${adminDevices.length} device(s) for report ${params.reportId}`,
+    );
   }
 
   @Public()

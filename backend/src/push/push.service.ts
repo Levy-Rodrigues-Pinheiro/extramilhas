@@ -50,8 +50,9 @@ export class PushService {
     }
 
     const existing = await this.prisma.deviceToken.findUnique({ where: { token } });
+    let deviceToken;
     if (existing) {
-      return this.prisma.deviceToken.update({
+      deviceToken = await this.prisma.deviceToken.update({
         where: { token },
         data: {
           userId,
@@ -60,11 +61,25 @@ export class PushService {
           lastUsedAt: new Date(),
         },
       });
+    } else {
+      deviceToken = await this.prisma.deviceToken.create({
+        data: { token, userId, platform, appVersion },
+      });
     }
 
-    return this.prisma.deviceToken.create({
-      data: { token, userId, platform, appVersion },
-    });
+    // Atualiza lastActiveAt do user (alimenta reactivation cron)
+    if (userId) {
+      this.prisma.user
+        .update({
+          where: { id: userId },
+          data: { lastActiveAt: new Date() } as any,
+        })
+        .catch(() => {
+          /* silently ignore — not critical path */
+        });
+    }
+
+    return deviceToken;
   }
 
   async unregisterToken(token: string) {

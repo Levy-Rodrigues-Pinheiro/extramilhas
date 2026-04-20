@@ -124,6 +124,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/notification-settings' as any),
     },
     {
+      icon: 'gift-outline',
+      label: 'Indique e ganhe Premium',
+      showChevron: true,
+      onPress: () => router.push('/referral' as any),
+    },
+    {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,

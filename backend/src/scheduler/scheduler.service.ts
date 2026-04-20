@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 
 /**
  * Lista conservadora de rotas populares a pré-aquecer.
@@ -58,7 +59,10 @@ const POPULAR_ROUTES: Array<{ origin: string; destination: string }> = [
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private push: PushService,
+  ) {}
 
   private isEnabled(): boolean {
     // default: ativo em produção, desligado em dev pra não martelar scraper
@@ -135,6 +139,85 @@ export class SchedulerService {
    * DeviceNotRegistered já é tratado no envio, isto pega os que nunca
    * responderam mas também não acusaram erro.
    */
+  /**
+   * Feat 5: Reactivation.
+   * Terça 10h UTC (~7h BRT). Identifica usuários inativos 14-28 dias
+   * (janela — evita reactivar quem acabou de sair, foco nos "quase perdidos")
+   * e manda push com o MAIOR bônus ativo do momento como isca.
+   * Quem está inativo >28d é perda já estabelecida — pra esses mandaríamos
+   * email (ainda não temos infra) ou nada.
+   */
+  @Cron('0 10 * * 2') // every Tuesday 10:00 UTC
+  async reactivateInactiveUsers() {
+    if (!this.isEnabled()) return;
+
+    const now = Date.now();
+    const inactiveSince = new Date(now - 14 * 86400_000); // inativo há 14+ dias
+    const inactiveCap = new Date(now - 28 * 86400_000); // não pega quem saiu há 28+ dias
+
+    // Usa DeviceToken.lastUsedAt como proxy de atividade (atualizado em cada
+    // register do hook usePushNotifications no mobile)
+    const inactiveUsers = (await this.prisma.user.findMany({
+      where: {
+        deviceTokens: {
+          some: {
+            lastUsedAt: { gte: inactiveCap, lt: inactiveSince },
+          },
+        },
+      } as any,
+      select: {
+        id: true,
+        deviceTokens: {
+          where: { lastUsedAt: { gte: inactiveCap, lt: inactiveSince } },
+          select: { token: true },
+        },
+      },
+    })) as any[];
+
+    if (inactiveUsers.length === 0) {
+      this.logger.log('Reactivation: no inactive users in window');
+      return;
+    }
+
+    // Pega o bônus mais alto ativo pra usar de isca
+    const topBonus = await this.prisma.transferPartnership.findFirst({
+      where: { isActive: true, currentBonus: { gt: 0 } },
+      orderBy: { currentBonus: 'desc' },
+      include: {
+        fromProgram: { select: { slug: true, name: true } },
+        toProgram: { select: { slug: true, name: true } },
+      },
+    });
+
+    const title = topBonus
+      ? `🎁 ${Math.round(Number(topBonus.currentBonus))}% ${topBonus.fromProgram.name}→${topBonus.toProgram.name}`
+      : '👋 Faz tempo que você não abre o app!';
+    const body = topBonus
+      ? 'Bônus ativo agora. Calcule quanto vale no seu saldo — abre o app.'
+      : 'Bônus de transferência novos aparecem toda semana. Vem dar uma olhada.';
+
+    const allTokens: string[] = [];
+    for (const u of inactiveUsers) {
+      u.deviceTokens?.forEach((d: any) => allTokens.push(d.token));
+    }
+
+    if (allTokens.length === 0) return;
+
+    await this.push.sendToTokens(allTokens, {
+      title,
+      body,
+      data: {
+        type: 'reactivation',
+        partnershipId: topBonus?.id,
+        deepLink: topBonus ? '/arbitrage' : '/',
+      },
+    });
+
+    this.logger.log(
+      `Reactivation: ${inactiveUsers.length} user(s), ${allTokens.length} device(s) targeted`,
+    );
+  }
+
   @Cron('0 4 * * 0') // every Sunday 04:00
   async cleanupDeadTokens() {
     if (!this.isEnabled()) return;

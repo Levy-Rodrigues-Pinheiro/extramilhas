@@ -37,6 +37,17 @@ model User {
   bonusReviews  BonusReport[]      @relation("BonusReportReviewer")
   deviceTokens  DeviceToken[]
 
+  // Referral — cada user tem código único pra dividir; pode ter sido referido
+  // por outro user. Ambos ganham bônus quando o novo user fica ativo.
+  referralCode  String?  @unique
+  referredById  String?
+  referredBy    User?    @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals     User[]   @relation("UserReferrals")
+
+  // Última atividade detectada (push register, abertura — proxy). Alimenta
+  // reactivation cron sem precisar instrumentar login em toda query.
+  lastActiveAt  DateTime?
+
   @@map("users")
 }
 

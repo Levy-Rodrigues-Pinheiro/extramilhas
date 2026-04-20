@@ -105,6 +105,7 @@ export default function RootLayout() {
             <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
             <Stack.Screen name="welcome-quiz" options={{ headerShown: false, gestureEnabled: false }} />
             <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+            <Stack.Screen name="referral" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>
