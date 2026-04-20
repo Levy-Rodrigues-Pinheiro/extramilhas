@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { LlmExtractor, ExtractedBonus } from './llm-extractor.service';
+import { TelegramAdapter } from './telegram-adapter.service';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cheerio: typeof import('cheerio') = require('cheerio');
 
@@ -30,6 +31,7 @@ export class IntelAgentService {
   constructor(
     private prisma: PrismaService,
     private llm: LlmExtractor,
+    private telegram: TelegramAdapter,
   ) {}
 
   private isEnabled(): boolean {
@@ -101,37 +103,49 @@ export class IntelAgentService {
     })) as any;
 
     try {
-      // 1. Fetch
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 15_000);
-      const res = await fetch(source.url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (compatible; MilhasExtrasBot/1.0; +https://milhasextras.com.br/bot)',
-          'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-        },
-        signal: ctrl.signal,
-      });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
+      let html: string;
+      let text: string;
 
-      // 2. Cheerio scope
-      let scoped = html;
-      if (source.scopeSelector) {
-        try {
-          const $ = cheerio.load(html);
-          const el = $(source.scopeSelector);
-          scoped = el.length ? el.text() : $('body').text();
-        } catch {
-          // fallback: html inteiro
-        }
+      // 1. Fetch — branch por sourceType (Feat C: Telegram adapter)
+      if (source.sourceType === 'telegram') {
+        const handle = source.url.startsWith('telegram:')
+          ? source.url.slice('telegram:'.length).replace(/^@/, '')
+          : source.url.replace(/^@/, '').replace(/^https?:\/\/t\.me\/s?\//, '');
+        const telegramText = await this.telegram.fetchChannelText(handle);
+        html = telegramText;
+        text = telegramText; // já vem limpo
       } else {
-        const $ = cheerio.load(html);
-        scoped = $('body').text();
+        // HTML genérico
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 15_000);
+        const res = await fetch(source.url, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (compatible; MilhasExtrasBot/1.0; +https://milhasextras.com.br/bot)',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+          },
+          signal: ctrl.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        html = await res.text();
+
+        // 2. Cheerio scope
+        let scoped = html;
+        if (source.scopeSelector) {
+          try {
+            const $ = cheerio.load(html);
+            const el = $(source.scopeSelector);
+            scoped = el.length ? el.text() : $('body').text();
+          } catch {
+            /* fallback: html inteiro */
+          }
+        } else {
+          const $ = cheerio.load(html);
+          scoped = $('body').text();
+        }
+        text = scoped.replace(/\s+/g, ' ').trim();
       }
-      // Collapse whitespace
-      const text = scoped.replace(/\s+/g, ' ').trim();
 
       // 3. Pre-filter
       if (!this.llm.hasRelevantKeywords(text)) {
@@ -159,12 +173,36 @@ export class IntelAgentService {
       const newReportIds: string[] = [];
       const weekAgo = new Date(Date.now() - 7 * 86400_000);
 
+      // Smart dedup intra-run: LLM pode extrair o MESMO bônus em 2 formatos
+      // ("+100%" + "dobra pontos"). Colapsa por (from, to, bonus±5%) antes
+      // de gastar queries no DB.
+      const dedupedInRun: typeof extraction.bonuses = [];
       for (const b of extraction.bonuses) {
+        const dup = dedupedInRun.find(
+          (x) =>
+            x.fromProgramSlug === b.fromProgramSlug &&
+            x.toProgramSlug === b.toProgramSlug &&
+            Math.abs(x.bonusPercent - b.bonusPercent) <= 5,
+        );
+        if (!dup) dedupedInRun.push(b);
+      }
+      if (dedupedInRun.length < extraction.bonuses.length) {
+        this.logger.log(
+          `Run-local dedup: ${extraction.bonuses.length} → ${dedupedInRun.length}`,
+        );
+      }
+
+      for (const b of dedupedInRun) {
+        // Dedup DB-wide: par igual + bônus dentro de tolerância ±5%
+        // (agente pode extrair "99%" hoje e "100%" amanhã da mesma fonte)
         const existing = await this.prisma.bonusReport.findFirst({
           where: {
             fromProgramSlug: b.fromProgramSlug,
             toProgramSlug: b.toProgramSlug,
-            bonusPercent: b.bonusPercent,
+            bonusPercent: {
+              gte: b.bonusPercent - 5,
+              lte: b.bonusPercent + 5,
+            },
             createdAt: { gte: weekAgo },
           },
         });

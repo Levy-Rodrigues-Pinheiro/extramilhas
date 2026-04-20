@@ -37,7 +37,49 @@ export default function BonusReportsPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({})
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulking, setBulking] = useState(false)
   const { toast } = useToast()
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    setSelected(
+      selected.size === reports.length
+        ? new Set()
+        : new Set(reports.map((r) => r.id)),
+    )
+  }
+
+  const bulkAction = async (action: 'approve' | 'reject') => {
+    if (selected.size === 0) return
+    if (!confirm(`${action === 'approve' ? 'Aprovar' : 'Rejeitar'} ${selected.size} report(s)?`)) return
+    setBulking(true)
+    try {
+      const { data } = await api.post('/admin/bonus-reports/bulk', {
+        ids: Array.from(selected),
+        action,
+      })
+      toast({
+        title: `${data.success}/${selected.size} processados`,
+        description: data.failed > 0 ? `${data.failed} falharam` : 'Sucesso total!',
+        variant: data.failed > 0 ? 'destructive' : undefined,
+      })
+      setSelected(new Set())
+      fetchReports(activeTab)
+    } catch {
+      toast({ title: 'Erro', variant: 'destructive' })
+    } finally {
+      setBulking(false)
+    }
+  }
 
   const fetchReports = useCallback(async (status: string) => {
     setRefreshing(true)
@@ -100,6 +142,38 @@ export default function BonusReportsPage() {
         }
       />
 
+      {/* Bulk actions bar — só aparece quando tem item selecionado */}
+      {activeTab === 'PENDING' && selected.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-lg border-2 border-purple-500/50 bg-purple-500/10 px-4 py-3">
+          <p className="text-sm font-medium">
+            <strong>{selected.size}</strong> selecionado{selected.size > 1 ? 's' : ''}
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>
+              Limpar
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => bulkAction('reject')}
+              disabled={bulking}
+            >
+              <X className="mr-1 h-3 w-3" />
+              Rejeitar {selected.size}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => bulkAction('approve')}
+              disabled={bulking}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              <Check className="mr-1 h-3 w-3" />
+              Aprovar {selected.size}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-2 border-b">
         {STATUS_TABS.map((t) => (
@@ -127,9 +201,31 @@ export default function BonusReportsPage() {
           </div>
         )}
 
+        {activeTab === 'PENDING' && reports.length > 0 && (
+          <div className="flex items-center gap-2 px-2 py-1">
+            <input
+              type="checkbox"
+              checked={selected.size === reports.length && reports.length > 0}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 cursor-pointer accent-purple-500"
+            />
+            <span className="text-xs text-muted-foreground">
+              Selecionar todos ({reports.length})
+            </span>
+          </div>
+        )}
+
         {reports.map((r) => (
           <div key={r.id} className="rounded-lg border bg-card p-4">
             <div className="flex items-start justify-between gap-4">
+              {activeTab === 'PENDING' && (
+                <input
+                  type="checkbox"
+                  checked={selected.has(r.id)}
+                  onChange={() => toggleSelect(r.id)}
+                  className="mt-1 h-4 w-4 cursor-pointer accent-purple-500 shrink-0"
+                />
+              )}
               <div className="flex-1 space-y-1">
                 <div className="flex items-baseline gap-2">
                   <span className="text-base font-bold">

@@ -218,6 +218,77 @@ export class SchedulerService {
     );
   }
 
+  /**
+   * Feat A: Expiração de bônus.
+   * Diário 5h UTC: desativa TransferPartnerships cujo expiresAt passou.
+   * Sem isso, usuário vê "+100% Livelo→Smiles" e transfere, mas bônus já
+   * acabou ontem → perde dinheiro real. Risco user-facing grave.
+   */
+  @Cron('0 5 * * *')
+  async expireBonuses() {
+    if (!this.isEnabled()) return;
+    const now = new Date();
+    const result = await this.prisma.transferPartnership.updateMany({
+      where: {
+        isActive: true,
+        expiresAt: { not: null, lt: now },
+      },
+      data: { isActive: false, currentBonus: 0 },
+    });
+    if (result.count > 0) {
+      this.logger.log(`Expired ${result.count} transfer partnerships`);
+    }
+  }
+
+  /**
+   * Feat E: Digest semanal.
+   * Sexta 10h UTC (~7h BRT): resumo de bônus aprovados na semana pra
+   * re-engajar user que não abriu o app. Inclui contagem + maior bônus
+   * da semana como isca.
+   */
+  @Cron('0 10 * * 5')
+  async sendWeeklyDigest() {
+    if (!this.isEnabled()) return;
+
+    const weekAgo = new Date(Date.now() - 7 * 86400_000);
+    const approvedThisWeek = await this.prisma.bonusReport.findMany({
+      where: {
+        status: 'APPROVED',
+        reviewedAt: { gte: weekAgo },
+      },
+      orderBy: { bonusPercent: 'desc' },
+    });
+
+    if (approvedThisWeek.length === 0) {
+      this.logger.log('Digest: nothing approved this week, skipping');
+      return;
+    }
+
+    const biggest = approvedThisWeek[0];
+    const title = `📬 ${approvedThisWeek.length} bônus${approvedThisWeek.length > 1 ? 's' : ''} essa semana`;
+    const body = `Destaque: +${Math.round(biggest.bonusPercent)}% ${biggest.fromProgramSlug}→${biggest.toProgramSlug}. Calcule o valor na sua carteira.`;
+
+    // Send to all active devices
+    const cutoff = new Date(Date.now() - 30 * 86400_000);
+    const devices = await this.prisma.deviceToken.findMany({
+      where: { lastUsedAt: { gte: cutoff } },
+      select: { token: true },
+    });
+    if (devices.length === 0) return;
+
+    await this.push.sendToTokens(
+      devices.map((d) => d.token),
+      {
+        title,
+        body,
+        data: { type: 'weekly_digest', deepLink: '/arbitrage' },
+      },
+    );
+    this.logger.log(
+      `Weekly digest sent: ${approvedThisWeek.length} bonuses to ${devices.length} devices`,
+    );
+  }
+
   @Cron('0 4 * * 0') // every Sunday 04:00
   async cleanupDeadTokens() {
     if (!this.isEnabled()) return;

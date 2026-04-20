@@ -107,6 +107,58 @@ export class BonusReportsController {
     private leaderboard: LeaderboardService,
   ) {}
 
+  /**
+   * Feat D: Busca Alerts tipo BONUS_THRESHOLD que batem com o report
+   * aprovado e manda push dedicado pra cada user. Conditions shape:
+   *  {"fromProgramSlug": "livelo"?, "toProgramSlug": "smiles"?, "minPercent": 80}
+   * Slugs omitidos = wildcard.
+   */
+  private async fireBonusThresholdAlerts(report: any, bonusPct: number) {
+    const alerts = await this.prisma.alert.findMany({
+      where: { type: 'BONUS_THRESHOLD', isActive: true },
+      include: {
+        user: { select: { id: true } },
+      },
+    });
+
+    for (const alert of alerts) {
+      let cond: any = {};
+      try {
+        cond = JSON.parse(alert.conditions || '{}');
+      } catch {
+        continue;
+      }
+      const fromMatch = !cond.fromProgramSlug || cond.fromProgramSlug === report.fromProgramSlug;
+      const toMatch = !cond.toProgramSlug || cond.toProgramSlug === report.toProgramSlug;
+      const pctMatch = typeof cond.minPercent === 'number' ? bonusPct >= cond.minPercent : true;
+
+      if (fromMatch && toMatch && pctMatch) {
+        await this.push.sendToUser(alert.userId, {
+          title: `🎯 Seu alerta disparou: ${bonusPct}% ${report.fromProgramSlug}→${report.toProgramSlug}`,
+          body: `Bônus bateu seu limite de ${cond.minPercent ?? 0}%. Abre o app pra transferir antes que acabe.`,
+          data: {
+            type: 'alert_triggered',
+            alertId: alert.id,
+            bonusPercent: report.bonusPercent,
+            deepLink: '/arbitrage',
+          },
+        });
+        // Grava AlertHistory
+        await this.prisma.alertHistory.create({
+          data: {
+            alertId: alert.id,
+            channel: 'PUSH',
+          },
+        });
+        // Marca lastTriggered
+        await this.prisma.alert.update({
+          where: { id: alert.id },
+          data: { lastTriggeredAt: new Date() },
+        });
+      }
+    }
+  }
+
   private tryGetUserId(req: any): string | null {
     const auth = req.headers?.authorization;
     if (!auth || !auth.startsWith('Bearer ')) return null;
@@ -365,6 +417,13 @@ export class BonusReportsController {
 
     this.logger.log(`Bonus report ${id} APPROVED by ${reviewerId}; partnership ${partnership.id}`);
 
+    // Feat D: Bonus threshold alerts — dispara push dedicado pra users que
+    // configuraram alerta matching (ex: "me avisa quando Livelo→Smiles ≥80%").
+    // Fire-and-forget; roda em paralelo ao broadcast geral.
+    this.fireBonusThresholdAlerts(report, Math.round(report.bonusPercent)).catch((err) =>
+      this.logger.error(`Bonus threshold alerts failed: ${err.message}`),
+    );
+
     // Fire-and-forget: notifica quem quer receber (respeita prefs) +
     // WhatsApp pro PRO tier verificado. Falha nunca bloqueia a resposta.
     const bonusPct = Math.round(report.bonusPercent);
@@ -425,6 +484,44 @@ export class BonusReportsController {
     }
 
     return successResponse({ report: updated, partnership });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Post('admin/bonus-reports/bulk')
+  @ApiOperation({ summary: 'Bulk approve/reject de múltiplos reports (admin)' })
+  async bulk(
+    @Req() req: any,
+    @Body() body: { ids: string[]; action: 'approve' | 'reject'; adminNotes?: string },
+  ) {
+    if (!Array.isArray(body?.ids) || body.ids.length === 0) {
+      throw new HttpException('ids obrigatório (array não-vazio)', HttpStatus.BAD_REQUEST);
+    }
+    if (body.ids.length > 50) {
+      throw new HttpException('Máximo 50 IDs por call', HttpStatus.BAD_REQUEST);
+    }
+    if (!['approve', 'reject'].includes(body.action)) {
+      throw new HttpException('action deve ser approve|reject', HttpStatus.BAD_REQUEST);
+    }
+
+    const results = { success: 0, failed: 0, errors: [] as string[] };
+    for (const id of body.ids) {
+      try {
+        if (body.action === 'approve') {
+          await this.approve(req, id, { adminNotes: body.adminNotes });
+        } else {
+          await this.reject(req, id, { adminNotes: body.adminNotes });
+        }
+        results.success++;
+      } catch (err: any) {
+        results.failed++;
+        results.errors.push(`${id}: ${err.message || 'falha'}`);
+      }
+    }
+    this.logger.log(
+      `Bulk ${body.action}: ${results.success}/${body.ids.length} sucesso`,
+    );
+    return successResponse(results);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

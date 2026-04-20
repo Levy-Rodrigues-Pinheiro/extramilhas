@@ -5,6 +5,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { IntelAgentController } from './intel-agent.controller';
 import { IntelAgentService } from './intel-agent.service';
 import { LlmExtractor } from './llm-extractor.service';
+import { TelegramAdapter } from './telegram-adapter.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { LlmExtractor } from './llm-extractor.service';
     }),
   ],
   controllers: [IntelAgentController],
-  providers: [IntelAgentService, LlmExtractor],
+  providers: [IntelAgentService, LlmExtractor, TelegramAdapter],
   exports: [IntelAgentService],
 })
 export class IntelAgentModule {}

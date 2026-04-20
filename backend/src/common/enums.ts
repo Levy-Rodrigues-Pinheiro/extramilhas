@@ -33,6 +33,12 @@ export enum AlertType {
   CPM_THRESHOLD = 'CPM_THRESHOLD',
   DESTINATION = 'DESTINATION',
   PROGRAM_PROMO = 'PROGRAM_PROMO',
+  /**
+   * BONUS_THRESHOLD: user define {fromProgramSlug?, toProgramSlug?, minPercent}
+   * Dispara quando BonusReport é APROVADO e bate o threshold.
+   * Qualquer slug omitido = wildcard (match qualquer).
+   */
+  BONUS_THRESHOLD = 'BONUS_THRESHOLD',
 }
 
 export enum NotificationChannel {
