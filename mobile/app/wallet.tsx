@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useWallet, useUpsertBalance, useDeleteBalance, WalletItem } from '../src/hooks/useWallet';
 import { usePrograms } from '../src/hooks/usePrograms';
 
@@ -31,6 +32,7 @@ import { usePrograms } from '../src/hooks/usePrograms';
  * Sem saldo cadastrado → empty state convidando a cadastrar.
  */
 export default function WalletScreen() {
+  const { t } = useTranslation();
   const { data, isLoading, isRefetching, refetch, error } = useWallet();
   const { data: programs } = usePrograms();
   const upsert = useUpsertBalance();
@@ -45,7 +47,7 @@ export default function WalletScreen() {
       setEditing(null);
       setAdding(false);
     } catch (e: any) {
-      Alert.alert('Erro', e?.message || 'Não foi possível salvar');
+      Alert.alert(t('common.error'), e?.message || t('errors.generic'));
     }
   };
 
@@ -77,8 +79,8 @@ export default function WalletScreen() {
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.titleBox}>
-          <Text style={styles.title}>Minha Carteira</Text>
-          <Text style={styles.subtitle}>Saldos de milhas e pontos</Text>
+          <Text style={styles.title}>{t('wallet.title')}</Text>
+          <Text style={styles.subtitle}>{t('wallet.total_miles')}</Text>
         </View>
         <TouchableOpacity onPress={() => setAdding(true)} style={styles.addBtn}>
           <Ionicons name="add" size={24} color="#8B5CF6" />
@@ -100,7 +102,7 @@ export default function WalletScreen() {
         {error && (
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle" size={32} color="#EF4444" />
-            <Text style={styles.errorText}>Não foi possível carregar a carteira.</Text>
+            <Text style={styles.errorText}>{t('errors.generic')}</Text>
           </View>
         )}
 
@@ -113,7 +115,7 @@ export default function WalletScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.hero}
             >
-              <Text style={styles.heroLabel}>Sua carteira vale</Text>
+              <Text style={styles.heroLabel}>{t('wallet.total_value')}</Text>
               <Text style={styles.heroValue}>
                 R$ {data.summary.totalValueBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Text>
@@ -136,13 +138,17 @@ export default function WalletScreen() {
             {data.items.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Ionicons name="wallet-outline" size={48} color="#64748B" />
-                <Text style={styles.emptyTitle}>Carteira vazia</Text>
+                <Text style={styles.emptyTitle}>{t('wallet.no_balances_title')}</Text>
                 <Text style={styles.emptyText}>
-                  Cadastre seus saldos pra ver o valor total, alertas de expiração e
-                  oportunidades de transferência personalizadas.
+                  {t('wallet.no_balances_subtitle')}
                 </Text>
-                <TouchableOpacity onPress={() => setAdding(true)} style={styles.emptyBtn}>
-                  <Text style={styles.emptyBtnText}>+ Adicionar saldo</Text>
+                <TouchableOpacity
+                  onPress={() => setAdding(true)}
+                  style={styles.emptyBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('wallet.add_program')}
+                >
+                  <Text style={styles.emptyBtnText}>+ {t('wallet.add_program')}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -188,6 +194,7 @@ function BalanceCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={[styles.card, item.isExpiringSoon && { borderColor: '#F59E0B' }]}>
       <View style={styles.cardHeader}>
@@ -208,13 +215,23 @@ function BalanceCard({
         <Text style={styles.cardCpm}> · CPM R$ {item.program.avgCpm.toFixed(2)}</Text>
       </Text>
       <View style={styles.cardActions}>
-        <TouchableOpacity onPress={onEdit} style={styles.cardBtn}>
+        <TouchableOpacity
+          onPress={onEdit}
+          style={styles.cardBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('wallet.edit_balance') + ' ' + item.program.name}
+        >
           <Ionicons name="pencil" size={14} color="#8B5CF6" />
-          <Text style={styles.cardBtnText}>Editar</Text>
+          <Text style={styles.cardBtnText}>{t('common.edit')}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={onDelete} style={styles.cardBtn}>
+        <TouchableOpacity
+          onPress={onDelete}
+          style={styles.cardBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t('wallet.delete_balance') + ' ' + item.program.name}
+        >
           <Ionicons name="trash-outline" size={14} color="#EF4444" />
-          <Text style={[styles.cardBtnText, { color: '#EF4444' }]}>Remover</Text>
+          <Text style={[styles.cardBtnText, { color: '#EF4444' }]}>{t('common.remove')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -236,6 +253,7 @@ function BalanceModal({
   onClose: () => void;
   loading: boolean;
 }) {
+  const { t } = useTranslation();
   const [programId, setProgramId] = useState(item?.programId || '');
   const [balance, setBalance] = useState(item?.balance.toString() || '');
   const [expiresAt, setExpiresAt] = useState(item?.expiresAt?.substring(0, 10) || '');
@@ -256,7 +274,7 @@ function BalanceModal({
         <View style={styles.modalCard}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>
-              {item ? 'Editar saldo' : 'Adicionar saldo'}
+              {item ? t('wallet.edit_balance') : t('wallet.add_program')}
             </Text>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="#94A3B8" />
@@ -266,7 +284,7 @@ function BalanceModal({
           {/* Programa */}
           {!item && (
             <>
-              <Text style={styles.modalLabel}>Programa</Text>
+              <Text style={styles.modalLabel}>{t('wallet.add_program')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {availablePrograms.map((p) => (
@@ -302,26 +320,28 @@ function BalanceModal({
           )}
 
           {/* Saldo */}
-          <Text style={styles.modalLabel}>Saldo (pontos)</Text>
+          <Text style={styles.modalLabel}>{t('wallet.total_miles')}</Text>
           <TextInput
             style={styles.modalInput}
             value={balance}
             onChangeText={(v) => setBalance(v.replace(/\D/g, ''))}
             keyboardType="numeric"
-            placeholder="ex: 10000"
+            placeholder={t('wallet.placeholder_miles')}
             placeholderTextColor="#475569"
             maxLength={9}
+            accessibilityLabel={t('wallet.total_miles')}
           />
 
           {/* Expiração (opcional) */}
-          <Text style={styles.modalLabel}>Expira em (opcional)</Text>
+          <Text style={styles.modalLabel}>{t('wallet.expiring_soon')}</Text>
           <TextInput
             style={styles.modalInput}
             value={expiresAt}
             onChangeText={setExpiresAt}
-            placeholder="aaaa-mm-dd (ex: 2026-12-31)"
+            placeholder="aaaa-mm-dd"
             placeholderTextColor="#475569"
             maxLength={10}
+            accessibilityLabel={t('wallet.expiring_soon')}
           />
 
           <TouchableOpacity
@@ -338,7 +358,7 @@ function BalanceModal({
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.modalSubmitText}>{item ? 'Atualizar' : 'Adicionar'}</Text>
+                <Text style={styles.modalSubmitText}>{item ? t('common.save') : t('common.add')}</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>

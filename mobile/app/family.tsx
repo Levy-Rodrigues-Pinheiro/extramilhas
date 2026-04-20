@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import {
   useFamily,
   useAddFamilyMember,
@@ -26,6 +27,7 @@ import { EmptyState } from '../src/components/EmptyState';
 import { Colors, Gradients } from '../src/lib/theme';
 
 export default function FamilyScreen() {
+  const { t } = useTranslation();
   const { data: members, isLoading, isError } = useFamily();
   const addMember = useAddFamilyMember();
   const deleteMember = useDeleteFamilyMember();
@@ -57,7 +59,7 @@ export default function FamilyScreen() {
     if (!editingBalance) return;
     const parsed = parseInt(editValue.replace(/\D/g, ''), 10);
     if (isNaN(parsed) || parsed < 0) {
-      Alert.alert('Valor inválido', 'Digite um saldo válido em milhas (ex: 50000).');
+      Alert.alert(t('common.error'), t('errors.invalid_value'));
       return;
     }
     try {
@@ -68,18 +70,18 @@ export default function FamilyScreen() {
       });
       cancelEditBalance();
     } catch {
-      Alert.alert('Erro', 'Não foi possível atualizar o saldo. Tente novamente.');
+      Alert.alert(t('common.error'), t('family.error_update'));
     }
   };
 
   const handleDeleteBalance = (memberId: string, programId: string, programName: string) => {
     Alert.alert(
-      'Remover saldo',
-      `Remover o saldo de ${programName} desse membro?`,
+      t('family.remove_balance_title'),
+      t('family.remove_balance_text', { program: programName }),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Remover',
+          text: t('common.remove'),
           style: 'destructive',
           onPress: () => deleteBalance.mutate({ memberId, programId }),
         },
@@ -90,7 +92,7 @@ export default function FamilyScreen() {
   const startAddBalance = (memberId: string, existingProgramIds: string[]) => {
     const available = (programs ?? []).filter((p: any) => !existingProgramIds.includes(p.id));
     if (available.length === 0) {
-      Alert.alert('Sem programas', 'Todos os programas já estão cadastrados pra esse membro.');
+      Alert.alert(t('common.error'), t('family.no_programs_available'));
       return;
     }
     setAddingBalanceFor(memberId);
@@ -108,7 +110,7 @@ export default function FamilyScreen() {
     if (!addingBalanceFor || !newBalanceProgramId) return;
     const parsed = parseInt(newBalanceValue.replace(/\D/g, ''), 10);
     if (isNaN(parsed) || parsed < 0) {
-      Alert.alert('Valor inválido', 'Digite um saldo válido em milhas.');
+      Alert.alert(t('common.error'), t('errors.invalid_value'));
       return;
     }
     try {
@@ -119,13 +121,13 @@ export default function FamilyScreen() {
       });
       cancelAddBalance();
     } catch {
-      Alert.alert('Erro', 'Não foi possível adicionar o saldo.');
+      Alert.alert(t('common.error'), t('family.error_add'));
     }
   };
 
   const handleAdd = async () => {
     if (!newName.trim() || !newRelationship.trim()) {
-      Alert.alert('Atenção', 'Preencha o nome e o parentesco.');
+      Alert.alert(t('common.error'), t('family.required_name_rel'));
       return;
     }
     try {
@@ -134,15 +136,15 @@ export default function FamilyScreen() {
       setNewRelationship('');
       setShowAddForm(false);
     } catch {
-      Alert.alert('Erro', 'Não foi possível adicionar o membro. Tente novamente.');
+      Alert.alert(t('common.error'), t('family.error_add_member'));
     }
   };
 
   const handleDelete = (id: string, name: string) => {
-    Alert.alert('Remover membro', `Deseja remover ${name} da família?`, [
-      { text: 'Cancelar', style: 'cancel' },
+    Alert.alert(t('family.remove_member_title'), t('family.remove_member_text', { name }), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Remover',
+        text: t('common.remove'),
         style: 'destructive',
         onPress: () => deleteMember.mutate(id),
       },
@@ -279,13 +281,13 @@ export default function FamilyScreen() {
                 );
               })
             ) : (
-              <Text style={styles.noBalances}>Nenhum saldo cadastrado</Text>
+              <Text style={styles.noBalances}>{t('family.no_balances')}</Text>
             )}
 
             {/* Add new program balance */}
             {addingBalanceFor === item.id ? (
               <View style={styles.addBalanceBlock}>
-                <Text style={styles.addBalanceTitle}>Adicionar saldo</Text>
+                <Text style={styles.addBalanceTitle}>{t('family.add_balance_title')}</Text>
                 <View style={styles.programsPicker}>
                   {(programs ?? [])
                     .filter(
@@ -325,7 +327,7 @@ export default function FamilyScreen() {
                   value={newBalanceValue}
                   onChangeText={setNewBalanceValue}
                   keyboardType="numeric"
-                  placeholder="Saldo em milhas (ex: 50000)"
+                  placeholder={t('wallet.placeholder_miles')}
                   placeholderTextColor={Colors.text.muted}
                   accessibilityLabel="Saldo em milhas"
                 />
@@ -366,10 +368,10 @@ export default function FamilyScreen() {
                 }
                 activeOpacity={0.7}
                 accessibilityRole="button"
-                accessibilityLabel={`Adicionar saldo de programa pra ${item.name}`}
+                accessibilityLabel={t('family.add_balance_cta') + ': ' + item.name}
               >
                 <Ionicons name="add-circle-outline" size={16} color={Colors.primary.light} />
-                <Text style={styles.addBalanceButtonText}>Adicionar saldo de programa</Text>
+                <Text style={styles.addBalanceButtonText}>{t('family.add_balance_cta')}</Text>
               </TouchableOpacity>
             )}
 
@@ -381,7 +383,7 @@ export default function FamilyScreen() {
               accessibilityLabel={`Remover ${item.name} da família`}
             >
               <Ionicons name="trash-outline" size={14} color={Colors.red.primary} />
-              <Text style={styles.deleteText}>Remover membro</Text>
+              <Text style={styles.deleteText}>{t('family.remove_member_button')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -399,7 +401,7 @@ export default function FamilyScreen() {
         >
           <Ionicons name="arrow-back" size={22} color={Colors.text.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Minha Família</Text>
+        <Text style={styles.headerTitle}>{t('family.title')}</Text>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setShowAddForm(!showAddForm)}
@@ -416,11 +418,11 @@ export default function FamilyScreen() {
       {/* Add form */}
       {showAddForm && (
         <View style={styles.addForm}>
-          <Text style={styles.addFormTitle}>Adicionar Membro</Text>
+          <Text style={styles.addFormTitle}>{t('family.add_member')}</Text>
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Nome"
+              placeholder={t('family.name_placeholder')}
               placeholderTextColor={Colors.text.muted}
               value={newName}
               onChangeText={setNewName}
@@ -429,7 +431,7 @@ export default function FamilyScreen() {
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.input}
-              placeholder="Parentesco (ex: Cônjuge, Filho, Mãe)"
+              placeholder={t('family.relationship_placeholder')}
               placeholderTextColor={Colors.text.muted}
               value={newRelationship}
               onChangeText={setNewRelationship}
@@ -450,7 +452,7 @@ export default function FamilyScreen() {
               {addMember.isPending ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.addMemberText}>Adicionar</Text>
+                <Text style={styles.addMemberText}>{t('family.add_member_cta')}</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -478,8 +480,8 @@ export default function FamilyScreen() {
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
-              title="Nenhum membro"
-              description="Adicione membros da família para gerenciar milhas de todos em um só lugar."
+              title={t('family.empty_title')}
+              description={t('family.empty_subtitle')}
             />
           }
         />

@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { useTransferBonuses, TransferOpportunity } from '../src/hooks/useArbitrage';
 import { PaywallUpsellBanner, LockedOpportunityCard } from '../src/components/PaywallGate';
 import { FirstRunTip } from '../src/components/FirstRunTip';
@@ -25,6 +26,7 @@ import { FirstRunTip } from '../src/components/FirstRunTip';
  * Futuro: compra promocional, melhor programa por rota, expiração + ação.
  */
 export default function ArbitrageScreen() {
+  const { t } = useTranslation();
   const { data, isLoading, isRefetching, refetch, error } = useTransferBonuses();
 
   return (
@@ -34,11 +36,11 @@ export default function ArbitrageScreen() {
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
         <View style={styles.titleBox}>
-          <Text style={styles.title}>Oportunidades</Text>
+          <Text style={styles.title}>{t('home.quick_opportunities')}</Text>
           <Text style={styles.subtitle}>
             {data?.isPersonalized
-              ? 'Personalizado com seu saldo'
-              : 'Transferências com bônus ativo'}
+              ? t('arbitrage.best_for_your_balance')
+              : t('arbitrage.subtitle')}
           </Text>
         </View>
       </View>
@@ -52,16 +54,21 @@ export default function ArbitrageScreen() {
         {isLoading && (
           <View style={styles.loader}>
             <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loaderText}>Buscando oportunidades...</Text>
+            <Text style={styles.loaderText}>{t('common.loading')}</Text>
           </View>
         )}
 
         {error && (
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle" size={32} color="#EF4444" />
-            <Text style={styles.errorText}>Não foi possível carregar oportunidades.</Text>
-            <TouchableOpacity onPress={() => refetch()} style={styles.retryBtn}>
-              <Text style={styles.retryBtnText}>Tentar de novo</Text>
+            <Text style={styles.errorText}>{t('errors.generic')}</Text>
+            <TouchableOpacity
+              onPress={() => refetch()}
+              style={styles.retryBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.try_again')}
+            >
+              <Text style={styles.retryBtnText}>{t('common.try_again')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -69,10 +76,9 @@ export default function ArbitrageScreen() {
         {!isLoading && data && data.count === 0 && (
           <View style={styles.emptyBox}>
             <Ionicons name="trending-up-outline" size={48} color="#64748B" />
-            <Text style={styles.emptyTitle}>Nenhum bônus ativo agora</Text>
+            <Text style={styles.emptyTitle}>{t('home.no_bonuses')}</Text>
             <Text style={styles.emptyText}>
-              Bônus de transferência aparecem e somem em horas. Configure um alerta e
-              seja o primeiro a saber — evita perder oportunidade boa.
+              {t('home.no_bonuses_notice')}
             </Text>
             <TouchableOpacity
               onPress={() => router.push('/alerts/create' as any)}
@@ -153,8 +159,8 @@ export default function ArbitrageScreen() {
             <Ionicons name="megaphone" size={20} color="#8B5CF6" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={cta.title}>Viu um bônus que não está aqui?</Text>
-            <Text style={cta.text}>Reporta — vira oportunidade pra todo mundo →</Text>
+            <Text style={cta.title}>{t('arbitrage.report_cta_title')}</Text>
+            <Text style={cta.text}>{t('arbitrage.report_cta_text')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#64748B" />
         </TouchableOpacity>
@@ -189,14 +195,15 @@ const cta = StyleSheet.create({
 });
 
 function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity }) {
+  const { t } = useTranslation();
   const color =
     o.classification === 'IMPERDIVEL' ? '#10B981' : o.classification === 'BOA' ? '#F59E0B' : '#64748B';
   const label =
     o.classification === 'IMPERDIVEL'
-      ? 'Imperdível'
+      ? t('arbitrage.classification_imperdivel')
       : o.classification === 'BOA'
-      ? 'Boa oportunidade'
-      : 'Oportunidade modesta';
+      ? t('arbitrage.classification_boa')
+      : t('arbitrage.classification_normal');
 
   const daysLeft =
     o.expiresAt != null
@@ -217,7 +224,7 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
           </View>
           {daysLeft !== null && (
             <Text style={styles.daysLeft}>
-              {daysLeft > 0 ? `${daysLeft}d restantes` : 'expira hoje'}
+              {daysLeft > 0 ? t('wallet.expires_in_days', { days: daysLeft }) : t('wallet.expiring_soon')}
             </Text>
           )}
         </View>
@@ -288,7 +295,7 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
               style={styles.transferGradient}
             >
               <Ionicons name="open-outline" size={16} color="#fff" />
-              <Text style={styles.transferText}>Transferir em {o.fromProgram.name}</Text>
+              <Text style={styles.transferText}>{t('arbitrage.transfer_button')} · {o.fromProgram.name}</Text>
             </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity
@@ -296,7 +303,7 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
             activeOpacity={0.7}
             style={styles.shareBtn}
             accessibilityRole="button"
-            accessibilityLabel="Compartilhar esta oportunidade"
+            accessibilityLabel={t('arbitrage.share_aria')}
             hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
           >
             <Ionicons name="share-social-outline" size={18} color="#25D366" />

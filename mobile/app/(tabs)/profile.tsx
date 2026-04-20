@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '../../src/store/auth.store';
 import { useProfile, useUpdateBalances } from '../../src/hooks/useProfile';
 import { usePrograms } from '../../src/hooks/usePrograms';
@@ -31,6 +32,7 @@ interface MenuItem {
 }
 
 export default function ProfileScreen() {
+  const { t } = useTranslation();
   const { user, logout } = useAuthStore();
   const { data: profileData, isLoading: profileLoading } = useProfile();
   const { data: programs, isLoading: programsLoading } = usePrograms();
@@ -69,16 +71,16 @@ export default function ProfileScreen() {
     }));
     try {
       await updateBalances.mutateAsync({ balances: balancePayload });
-      Alert.alert('Sucesso', 'Saldo de milhas atualizado!');
+      Alert.alert(t('common.success'), t('wallet.balance_updated'));
     } catch {
-      Alert.alert('Erro', 'Não foi possível salvar o saldo. Tente novamente.');
+      Alert.alert(t('common.error'), t('errors.generic'));
     }
   };
 
   const handleLogout = () => {
-    Alert.alert('Sair da conta', 'Tem certeza que deseja sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', style: 'destructive', onPress: () => logout() },
+    Alert.alert(t('auth.logout'), t('profile.logout_confirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('auth.logout'), style: 'destructive', onPress: () => logout() },
     ]);
   };
 
@@ -214,10 +216,10 @@ export default function ProfileScreen() {
             <View style={styles.upgradeContent}>
               <View style={styles.upgradeTitleRow}>
                 <Ionicons name="rocket-outline" size={18} color="#fff" />
-                <Text style={styles.upgradeTitle}>Assinar Premium</Text>
+                <Text style={styles.upgradeTitle}>{t('profile.upgrade_cta')}</Text>
               </View>
               <Text style={styles.upgradeDesc}>
-                Alertas em tempo real, histórico completo e muito mais
+                {t('paywall.upgrade_pitch')}
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="#c7d2fe" />
@@ -227,7 +229,7 @@ export default function ProfileScreen() {
 
         {/* Miles balance */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Saldo de Milhas</Text>
+          <Text style={styles.sectionTitle}>{t('wallet.total_miles')}</Text>
           {programsLoading ? (
             <ActivityIndicator color="#3B82F6" style={styles.sectionLoader} />
           ) : (
@@ -262,7 +264,7 @@ export default function ProfileScreen() {
                   {updateBalances.isPending ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Salvar Saldo</Text>
+                    <Text style={styles.saveButtonText}>{t('common.save')}</Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
@@ -272,7 +274,7 @@ export default function ProfileScreen() {
 
         {/* Menu */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Menu</Text>
+          <Text style={styles.sectionTitle}>{t('profile.title')}</Text>
           <View style={styles.menuCard}>
             {menuItems.map((item, index) => (
               <React.Fragment key={item.label}>
@@ -300,9 +302,11 @@ export default function ProfileScreen() {
             style={styles.logoutButton}
             onPress={handleLogout}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={t('auth.logout')}
           >
             <Ionicons name="log-out-outline" size={18} color={Colors.red.primary} />
-            <Text style={styles.logoutText}>Sair</Text>
+            <Text style={styles.logoutText}>{t('auth.logout')}</Text>
           </TouchableOpacity>
         </View>
 
