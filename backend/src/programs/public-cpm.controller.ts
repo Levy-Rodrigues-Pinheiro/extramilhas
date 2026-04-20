@@ -49,6 +49,77 @@ export class PublicCpmController {
   }
 
   /**
+   * Stats agregadas pra prova social na landing.
+   * Zero info sensitive — totais do sistema.
+   */
+  @Public()
+  @Get('stats')
+  @Header('Access-Control-Allow-Origin', '*')
+  @Header('Cache-Control', 'public, max-age=600')
+  @ApiOperation({ summary: 'Stats públicas da plataforma (prova social)' })
+  async stats() {
+    const now = new Date();
+    const weekAgo = new Date(Date.now() - 7 * 86400_000);
+    const monthAgo = new Date(Date.now() - 30 * 86400_000);
+
+    const [
+      totalUsers,
+      totalPrograms,
+      approvedAllTime,
+      approvedThisWeek,
+      approvedThisMonth,
+      activePartnerships,
+      biggestBonus,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.loyaltyProgram.count({ where: { isActive: true } }),
+      this.prisma.bonusReport.count({ where: { status: 'APPROVED' } }),
+      this.prisma.bonusReport.count({
+        where: { status: 'APPROVED', reviewedAt: { gte: weekAgo } },
+      }),
+      this.prisma.bonusReport.count({
+        where: { status: 'APPROVED', reviewedAt: { gte: monthAgo } },
+      }),
+      this.prisma.transferPartnership.count({
+        where: { isActive: true, currentBonus: { gt: 0 } },
+      }),
+      this.prisma.transferPartnership.findFirst({
+        where: { isActive: true, currentBonus: { gt: 0 } },
+        orderBy: { currentBonus: 'desc' },
+        include: {
+          fromProgram: { select: { name: true } },
+          toProgram: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    return successResponse({
+      users: {
+        total: totalUsers,
+        formatted:
+          totalUsers > 1000
+            ? `${(totalUsers / 1000).toFixed(1)}k`
+            : String(totalUsers),
+      },
+      programs: totalPrograms,
+      bonuses: {
+        allTime: approvedAllTime,
+        thisWeek: approvedThisWeek,
+        thisMonth: approvedThisMonth,
+        activeNow: activePartnerships,
+      },
+      biggestActiveBonus: biggestBonus
+        ? {
+            from: biggestBonus.fromProgram.name,
+            to: biggestBonus.toProgram.name,
+            percent: Number(biggestBonus.currentBonus),
+          }
+        : null,
+      generatedAt: now.toISOString(),
+    });
+  }
+
+  /**
    * Transferências ativas com bônus — útil pro site mostrar "bônus da semana".
    */
   @Public()

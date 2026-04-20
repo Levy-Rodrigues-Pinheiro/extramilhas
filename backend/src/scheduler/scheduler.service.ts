@@ -302,6 +302,30 @@ export class SchedulerService {
   }
 
   /**
+   * Cleanup LiveFlightCache — remove entries staler que 30d.
+   * Supabase free 500MB limit; melhor manter enxuto. Cache STALE (24h-7d)
+   * ainda vira REFERENCIA útil, mas >30d só ocupa espaço.
+   * Domingo 3h UTC junto com outros cleanups.
+   */
+  @Cron('0 3 * * 0')
+  async cleanupOldFlightCache() {
+    if (!this.isEnabled()) return;
+    try {
+      const cutoff = new Date(Date.now() - 30 * 86400_000);
+      const result = await (this.prisma as any).liveFlightCache.deleteMany({
+        where: { updatedAt: { lt: cutoff } },
+      });
+      if (result.count > 0) {
+        this.logger.log(
+          `LiveFlightCache cleanup: removed ${result.count} entries older than 30d`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`FlightCache cleanup failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * Snapshot diário 6h UTC — grava counts de tabelas chave como AuditLog.
    * Útil pra detectar data loss: se amanhã User.count dropa de 500 pra 30,
    * temos evidência histórica. Supabase já faz backup físico, isso é

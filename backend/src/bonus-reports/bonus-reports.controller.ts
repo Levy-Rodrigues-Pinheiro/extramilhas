@@ -488,6 +488,39 @@ export class BonusReportsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
+  @Post('admin/bonus-reports')
+  @ApiOperation({ summary: 'Admin cria report manualmente (ex: dica via WhatsApp)' })
+  @ApiBody({ type: CreateBonusReportDto })
+  async adminCreate(@Req() req: any, @Body() body: CreateBonusReportDto) {
+    const reviewerId = req.user?.id;
+    const [fromProg, toProg] = await Promise.all([
+      this.prisma.loyaltyProgram.findUnique({ where: { slug: body.fromProgramSlug } }),
+      this.prisma.loyaltyProgram.findUnique({ where: { slug: body.toProgramSlug } }),
+    ]);
+    if (!fromProg || !toProg) {
+      throw new HttpException('Programa origem/destino inválido', HttpStatus.BAD_REQUEST);
+    }
+
+    const report = await this.prisma.bonusReport.create({
+      data: {
+        reporterId: reviewerId,
+        reporterEmail: body.reporterEmail,
+        fromProgramSlug: body.fromProgramSlug,
+        toProgramSlug: body.toProgramSlug,
+        bonusPercent: body.bonusPercent,
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        screenshotUrl: body.screenshotUrl,
+        notes: body.notes ? `📝 Admin: ${body.notes}` : '📝 Criado manualmente pelo admin',
+        status: 'PENDING', // admin ainda precisa aprovar explicitamente
+      },
+      select: { id: true, status: true, createdAt: true },
+    });
+    this.logger.log(`Admin manual report created: ${report.id} by ${reviewerId}`);
+    return successResponse(report);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
   @Post('admin/bonus-reports/bulk')
   @ApiOperation({ summary: 'Bulk approve/reject de múltiplos reports (admin)' })
   async bulk(

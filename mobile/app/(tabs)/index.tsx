@@ -17,6 +17,7 @@ import { useWallet } from '../../src/hooks/useWallet';
 import { useMyLeaderboardStats, TIER_META } from '../../src/hooks/useLeaderboard';
 import { PaywallUpsellBanner } from '../../src/components/PaywallGate';
 import { useMissions } from '../../src/hooks/useMissions';
+import { FirstRunTip } from '../../src/components/FirstRunTip';
 
 /**
  * Home — dashboard focado em arbitragem de milhas.
@@ -69,6 +70,14 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={refetchAll} tintColor="#8B5CF6" />
         }
       >
+        {/* Tutorial first-run (aparece 1x, dismiss persistido) */}
+        <FirstRunTip
+          tipKey="home-intro-v1"
+          title="Seu dashboard de arbitragem"
+          body="Cadastre saldos pra ver quanto VOCÊ ganha em R$ em cada oportunidade. Perfil → Saldo de Milhas."
+          icon="bulb"
+        />
+
         {/* Greeting */}
         <View style={styles.header}>
           <View>

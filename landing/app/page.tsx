@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { LiveBonuses } from './components/LiveBonuses';
+import { SocialProofStats } from './components/SocialProofStats';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://milhasextras-api.fly.dev/api/v1';
 
@@ -153,6 +154,7 @@ export default function LandingPage() {
 
       {/* Widget de bônus ao vivo — credibilidade + SEO dinâmico */}
       <section className="px-6 py-8 max-w-3xl mx-auto">
+        <SocialProofStats />
         <LiveBonuses />
       </section>
 
