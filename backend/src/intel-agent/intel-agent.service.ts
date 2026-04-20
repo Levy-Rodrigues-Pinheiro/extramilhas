@@ -287,6 +287,8 @@ export class IntelAgentService {
       }
 
       // 6. Finaliza run + atualiza source costUsd
+      // Salva LLM output raw (truncado a 5k) — admin debuga prompts ruins
+      const llmOutputRaw = JSON.stringify(extraction.bonuses).slice(0, 5000);
       await (this.prisma as any).intelAgentRun.update({
         where: { id: run.id },
         data: {
@@ -297,6 +299,7 @@ export class IntelAgentService {
           newReportsCount: newReportIds.length,
           costUsd: extraction.costUsd,
           inputPreview: text.slice(0, 500),
+          llmOutputRaw,
         },
       });
       await (this.prisma as any).intelSource.update({

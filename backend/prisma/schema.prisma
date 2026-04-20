@@ -420,6 +420,9 @@ model IntelAgentRun {
   errorMessage    String?
   // Debug: primeiros 500 chars do trecho enviado ao LLM
   inputPreview    String?
+  // Output bruto do LLM (JSON array de bonuses extraídos) pra debug/auditoria
+  // Limitado no código a 5000 chars. Se LLM produziu lixo, admin debuga.
+  llmOutputRaw    String?
 
   source IntelSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 

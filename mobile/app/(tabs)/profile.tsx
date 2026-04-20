@@ -142,6 +142,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/missions' as any),
     },
     {
+      icon: 'create-outline',
+      label: 'Editar perfil',
+      showChevron: true,
+      onPress: () => router.push('/edit-profile' as any),
+    },
+    {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,

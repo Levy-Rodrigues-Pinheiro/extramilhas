@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Eye, ChevronDown } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Eye, ChevronDown, ExternalLink } from 'lucide-react'
 import { PageHeader } from '@/components/page-header'
 import { DataTable, Column } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
@@ -149,6 +150,7 @@ function UserDetailDialog({ open, onOpenChange, userId }: UserDetailDialogProps)
 }
 
 export default function UsersPage() {
+  const router = useRouter()
   const { toast } = useToast()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -242,11 +244,20 @@ export default function UsersPage() {
             size="sm"
             variant="ghost"
             className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
+            onClick={() => router.push(`/users/${row.id}`)}
+            title="Abrir página de detalhes"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-gray-700"
             onClick={() => {
               setSelectedUserId(row.id)
               setDetailOpen(true)
             }}
-            title="Ver detalhes"
+            title="Ver resumo rápido"
           >
             <Eye className="h-4 w-4" />
           </Button>

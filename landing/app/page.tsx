@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { LiveBonuses } from './components/LiveBonuses';
 import { SocialProofStats } from './components/SocialProofStats';
 import { FAQ } from './components/FAQ';
+import { Testimonials } from './components/Testimonials';
+import { ComparisonTable } from './components/ComparisonTable';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://milhasextras-api.fly.dev/api/v1';
 
@@ -241,6 +243,12 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
+      {/* Prova social */}
+      <Testimonials />
+
+      {/* Diferenciação */}
+      <ComparisonTable />
+
       {/* FAQ (SEO + confiança) */}
       <FAQ />
 

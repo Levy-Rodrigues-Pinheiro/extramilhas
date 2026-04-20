@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
@@ -21,6 +22,27 @@ export class UsersService {
 
     const { passwordHash, refreshToken, ...sanitized } = user;
     return sanitized;
+  }
+
+  /**
+   * Troca senha — valida a atual antes. Invalida refresh tokens
+   * pra forçar re-login em outros devices (security win).
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User não encontrado');
+    if (!user.passwordHash) {
+      throw new UnauthorizedException('Conta social não tem senha pra trocar');
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedException('Senha atual incorreta');
+
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash, refreshToken: null },
+    });
+    return { changed: true };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {

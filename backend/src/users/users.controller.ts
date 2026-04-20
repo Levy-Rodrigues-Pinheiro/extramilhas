@@ -10,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -45,6 +46,22 @@ export class UsersController {
   async updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
     const result = await this.usersService.updateProfile(user.id, dto);
     return successResponse(result, 'Profile updated successfully');
+  }
+
+  @Put('password')
+  @ApiOperation({ summary: 'Change current user password' })
+  async changePassword(
+    @CurrentUser() user: any,
+    @Body() body: { currentPassword: string; newPassword: string },
+  ) {
+    if (!body?.currentPassword || !body?.newPassword) {
+      throw new BadRequestException('currentPassword e newPassword obrigatórios');
+    }
+    if (body.newPassword.length < 6) {
+      throw new BadRequestException('Nova senha deve ter ao menos 6 caracteres');
+    }
+    await this.usersService.changePassword(user.id, body.currentPassword, body.newPassword);
+    return successResponse({ changed: true }, 'Senha alterada');
   }
 
   @Get('preferences')
