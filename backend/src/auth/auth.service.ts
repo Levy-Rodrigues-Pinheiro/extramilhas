@@ -174,6 +174,21 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
+    // IMPORTANTE: SendGrid ainda não wired. Ao invés de mentir pro user
+    // ("enviamos o link") e perder confiança, retornamos instrução clara
+    // pra contato via WhatsApp — canal que já temos.
+    //
+    // Quando SENDGRID_API_KEY for setado + notificationsService tiver o
+    // método sendPasswordResetEmail, reativar o fluxo de token via email.
+    const hasEmail = process.env.SENDGRID_API_KEY;
+    if (!hasEmail) {
+      return {
+        message:
+          'Recuperação de senha por email está sendo implementada. ' +
+          'Enquanto isso, entre em contato via WhatsApp em @milhasextras.',
+      };
+    }
+
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
 
     // Always return success to prevent email enumeration
@@ -188,7 +203,7 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
     this.passwordResetTokens.set(token, { userId: user.id, expiresAt });
 
-    // TODO: In production, send email via SendGrid or similar
+    // TODO: wire SendGrid — blocked by missing integration
     // await this.notificationsService.sendPasswordResetEmail(user.email, token);
 
     return { message: 'If the email exists, a reset link has been sent' };

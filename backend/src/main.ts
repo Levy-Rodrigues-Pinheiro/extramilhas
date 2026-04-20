@@ -14,11 +14,22 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
-  // SECURITY: In production, replace origin with specific allowed domains
-  // e.g., origin: ['https://milhasextras.com.br', 'https://admin.milhasextras.com.br']
-  const allowedOrigins = configService.get<string>('CORS_ORIGINS')
-    ? configService.get<string>('CORS_ORIGINS')!.split(',')
-    : true; // allow all in development only
+  // CORS seguro:
+  //  - dev (NODE_ENV !== production): default true (allow all) → iteração rápida
+  //  - prod: default = allowlist restrita (admin + landing + api do próprio).
+  //          Override via env CORS_ORIGINS="https://a.com,https://b.com"
+  //  Rotas /public/* já têm CORS * via @Header decorator (bypassa este guard).
+  const corsEnv = configService.get<string>('CORS_ORIGINS');
+  const isProd = process.env.NODE_ENV === 'production';
+  const allowedOrigins: string[] | boolean = corsEnv
+    ? corsEnv.split(',').map((s) => s.trim())
+    : isProd
+      ? [
+          'https://milhasextras.com.br',
+          'https://www.milhasextras.com.br',
+          'https://admin.milhasextras.com.br',
+        ]
+      : true;
 
   app.enableCors({
     origin: allowedOrigins,

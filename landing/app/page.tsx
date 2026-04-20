@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { LiveBonuses } from './components/LiveBonuses';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://milhasextras-api.fly.dev/api/v1';
 
@@ -148,6 +149,11 @@ export default function LandingPage() {
             </p>
           </div>
         )}
+      </section>
+
+      {/* Widget de bônus ao vivo — credibilidade + SEO dinâmico */}
+      <section className="px-6 py-8 max-w-3xl mx-auto">
+        <LiveBonuses />
       </section>
 
       {/* Por que */}

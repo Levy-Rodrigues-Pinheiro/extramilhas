@@ -10,6 +10,7 @@ import { Colors } from '../src/lib/theme';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initSentry } from '../src/lib/sentry';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
+import { initAnalytics } from '../src/lib/analytics';
 
 // Arma push notifications (permissão + token + listeners).
 // Extraído como componente vazio só pra poder usar o hook dentro do provider tree.
@@ -23,6 +24,8 @@ SplashScreen.preventAutoHideAsync();
 
 // Initialize Sentry (no-op if EXPO_PUBLIC_SENTRY_DSN not set)
 initSentry();
+// Initialize PostHog analytics (no-op if EXPO_PUBLIC_POSTHOG_KEY not set)
+initAnalytics();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -106,6 +109,7 @@ export default function RootLayout() {
             <Stack.Screen name="welcome-quiz" options={{ headerShown: false, gestureEnabled: false }} />
             <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
             <Stack.Screen name="referral" options={{ headerShown: false }} />
+            <Stack.Screen name="admin-review/[id]" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

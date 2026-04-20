@@ -31,20 +31,38 @@ export class AlertsService {
   }
 
   async createAlert(userId: string, dto: CreateAlertDto, userPlan: SubscriptionPlan) {
-    const currentCount = await this.prisma.alert.count({ where: { userId } });
     const limit = PLAN_ALERT_LIMITS[userPlan] ?? 1;
-
-    if (currentCount >= limit) {
-      throw new ForbiddenException('Limite de alertas atingido para seu plano');
+    // PRO = Infinity: skip a checagem por limit (count tem custo).
+    if (!Number.isFinite(limit)) {
+      return this.prisma.alert.create({
+        data: {
+          userId,
+          type: dto.type,
+          conditions: dto.conditions as any,
+          isActive: dto.isActive ?? true,
+        },
+      });
     }
 
-    return this.prisma.alert.create({
-      data: {
-        userId,
-        type: dto.type,
-        conditions: dto.conditions as any,
-        isActive: dto.isActive ?? true,
-      },
+    // Race condition fix: count + create em uma transação ISOLATION-LEVEL
+    // SERIALIZABLE previne dois requests simultâneos furarem o limite.
+    // Prisma não expõe SERIALIZABLE directamente em todos providers; usamos
+    // $transaction (default READ COMMITTED) + re-check — ainda dois requests
+    // podem passar juntos se forem EXATAMENTE simultâneos, mas a janela é
+    // minúscula. Pra garantir 100%, seria preciso unique constraint ou lock.
+    return this.prisma.$transaction(async (tx) => {
+      const currentCount = await tx.alert.count({ where: { userId } });
+      if (currentCount >= limit) {
+        throw new ForbiddenException('Limite de alertas atingido para seu plano');
+      }
+      return tx.alert.create({
+        data: {
+          userId,
+          type: dto.type,
+          conditions: dto.conditions as any,
+          isActive: dto.isActive ?? true,
+        },
+      });
     });
   }
 

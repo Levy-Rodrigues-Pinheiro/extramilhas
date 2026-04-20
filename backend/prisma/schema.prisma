@@ -220,6 +220,9 @@ model UserMilesBalance {
   program LoyaltyProgram @relation(fields: [programId], references: [id])
 
   @@unique([userId, programId])
+  // Acesso hot: arbitrage.service.ts faz findMany({where: {userId}}) a cada
+  // request de oportunidades. Unique composta não serve pra userId solo.
+  @@index([userId])
   @@map("user_miles_balances")
 }
 

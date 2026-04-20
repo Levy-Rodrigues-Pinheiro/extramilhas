@@ -1,10 +1,22 @@
 # Milhas Extras ✈️
 
-Agregador de preços de passagens aéreas por milhas para o mercado brasileiro.
+App de **arbitragem de milhas** focado no mercado brasileiro.
 
-Compara **Smiles · TudoAzul · Latam Pass** em qualquer rota, com estratégia de
-cobertura em 5 camadas (live → cache → chart → síntese) e pipeline de
-crowdsourcing que cresce com cada usuário.
+Identifica e notifica em tempo real oportunidades de transferência com bônus
+(ex: Livelo→Smiles 100%), calcula o valor real da carteira de milhas do user,
+e fecha o loop com crowdsource de bônus reportados pela comunidade.
+
+**3 pilares ativos** (abril/26):
+
+1. **Arbitragem personalizada** — top 3 oportunidades free, todas no Premium;
+   gate real no backend, preview ofuscado no mobile.
+2. **Crowdsource com loop completo** — user reporta bônus → admin aprova (1-click
+   no mobile via push) → broadcast pra toda base via push + WhatsApp (PRO) +
+   personalizado ao reporter (tier + rank).
+3. **Engajamento** — onboarding quiz de 30s, leaderboard mensal, ranking com
+   tiers, referral 30d Premium pra ambos, reactivation cron pra inativos.
+
+Arquitetura completa em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Visão rápida
 
@@ -43,14 +55,13 @@ crowdsourcing que cresce com cada usuário.
 
 ```
 Extramilhas/
-├── backend/           NestJS + Prisma + SQLite (porta 3001)
+├── backend/           NestJS + Prisma + Postgres (porta 3001)
 ├── admin/             Next.js 14 painel (porta 3000)
 ├── mobile/            Expo Router + React Native
+├── landing/           Next.js marketing (porta 3030)
 ├── scraper/           Playwright + stealth (porta 3002)
-├── .github/
-│   ├── workflows/     GitHub Actions cron
-│   └── scripts/       Scraper standalone pra runners
-└── docker-compose.yml
+├── docs/              ARCHITECTURE.md, STRIPE_SETUP.md
+└── .github/workflows/ CI + GH Actions cron
 ```
 
 ## Setup local
@@ -82,7 +93,8 @@ npm install
 npm run dev             # http://localhost:3000
 ```
 
-Login dev: `admin@milhasextras.com.br` / `Admin@123`
+Login dev: `admin@milhasextras.com.br` / senha via `SEED_ADMIN_PASSWORD` env
+(ver `backend/prisma/reset-admin-password.ts`)
 
 ### 3. Mobile
 

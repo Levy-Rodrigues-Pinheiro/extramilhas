@@ -1,3 +1,17 @@
+/**
+ * Em produção, secrets obrigatórios → fail-fast no boot se faltarem.
+ * Evita rodar com "default-secret-change-in-production" e virar um
+ * JWT sharing scam entre deploys que esqueceram de setar.
+ */
+function requireInProd(name: string, value: string | undefined, fallback: string): string {
+  if (process.env.NODE_ENV === 'production' && !value) {
+    throw new Error(
+      `Config error: ${name} é obrigatório em produção. Configure via: flyctl secrets set ${name}=...`,
+    );
+  }
+  return value || fallback;
+}
+
 export default () => ({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3001,
@@ -14,9 +28,13 @@ export default () => ({
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET || 'default-secret-change-in-production',
+    secret: requireInProd('JWT_SECRET', process.env.JWT_SECRET, 'default-secret-change-in-production'),
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'default-refresh-secret',
+    refreshSecret: requireInProd(
+      'JWT_REFRESH_SECRET',
+      process.env.JWT_REFRESH_SECRET,
+      'default-refresh-secret',
+    ),
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
 
@@ -25,6 +43,8 @@ export default () => ({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
     premiumPriceId: process.env.STRIPE_PREMIUM_PRICE_ID || '',
     proPriceId: process.env.STRIPE_PRO_PRICE_ID || '',
+    premiumAnnualPriceId: process.env.STRIPE_PREMIUM_ANNUAL_PRICE_ID || '',
+    proAnnualPriceId: process.env.STRIPE_PRO_ANNUAL_PRICE_ID || '',
   },
 
   firebase: {

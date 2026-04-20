@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { router } from 'expo-router';
 import api, { SECURE_STORE_KEYS } from '../lib/api';
+import { identify, track, reset as resetAnalytics } from '../lib/analytics';
 import type {
   User,
   AuthResponse,
@@ -84,6 +85,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      identify(data.user.id, { email: data.user.email, plan: (data.user as any).plan });
+      track('auth_login', { method: 'email' });
       router.replace('/(tabs)');
     } catch (error) {
       set({ isLoading: false });
@@ -109,6 +112,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      identify(data.user.id, { email: data.user.email, provider });
+      track('auth_login', { method: 'social', provider });
       router.replace('/(tabs)');
     } catch (error) {
       set({ isLoading: false });
@@ -132,6 +137,8 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      identify(data.user.id, { email: data.user.email });
+      track('auth_register', { method: 'email' });
       // Novo usuário vai direto pro quiz de onboarding — maximiza conversão
       // (carteira cadastrada = valor aparece na home, arbitragem personalizada)
       router.replace('/welcome-quiz' as any);
@@ -143,6 +150,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     clearTokens().catch(() => {});
+    track('auth_logout');
+    resetAnalytics();
     set({
       user: null,
       accessToken: null,

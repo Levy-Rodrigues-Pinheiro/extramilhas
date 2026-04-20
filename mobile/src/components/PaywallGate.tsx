@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { track } from '../lib/analytics';
 
 /**
  * Banner persuasivo mostrado abaixo das oportunidades visíveis quando há
@@ -12,12 +13,24 @@ import { router } from 'expo-router';
  * benefício claro, CTA singular pra /subscription.
  */
 export function PaywallUpsellBanner({ lockedCount }: { lockedCount: number }) {
+  // Dispara evento quando o banner é renderizado (proxy de "paywall_shown")
+  React.useEffect(() => {
+    if (lockedCount > 0) {
+      track('paywall_shown', { lockedCount, surface: 'arbitrage_banner' });
+    }
+  }, [lockedCount]);
+
   if (lockedCount <= 0) return null;
+
+  const handleClick = () => {
+    track('paywall_upgrade_clicked', { lockedCount });
+    router.push('/subscription');
+  };
 
   return (
     <TouchableOpacity
       activeOpacity={0.85}
-      onPress={() => router.push('/subscription')}
+      onPress={handleClick}
       style={styles.outer}
     >
       <LinearGradient
