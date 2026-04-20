@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import { useTransferBonuses } from '../../src/hooks/useArbitrage';
 import { useWallet } from '../../src/hooks/useWallet';
 import { useMyLeaderboardStats, TIER_META } from '../../src/hooks/useLeaderboard';
+import { PaywallUpsellBanner } from '../../src/components/PaywallGate';
 
 /**
  * Home — dashboard focado em arbitragem de milhas.
@@ -171,6 +172,10 @@ export default function HomeScreen() {
               </Text>
             </View>
           )}
+
+          {bonuses.data?.shouldUpsell && bonuses.data.lockedCount && bonuses.data.lockedCount > 0 ? (
+            <PaywallUpsellBanner lockedCount={bonuses.data.lockedCount} />
+          ) : null}
 
           {topOpportunities.map((op) => (
             <TouchableOpacity

@@ -88,6 +88,12 @@ export class SubscriptionService {
   ) {
     const stripeKey = this.configService.get<string>('stripe.secretKey');
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, stripeCustomerId: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
     if (!stripeKey) {
       // Development mock
       this.logger.log(
@@ -100,24 +106,38 @@ export class SubscriptionService {
       };
     }
 
-    // Production: use Stripe SDK
     try {
-      // Dynamic import to avoid breaking when stripe isn't installed
       const Stripe = await import('stripe' as any).then((m: any) => m.default ?? m);
       const stripe = new (Stripe as any)(stripeKey, { apiVersion: '2024-06-20' });
+
+      // Reusa customer se já temos; senão cria e persiste
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          metadata: { userId: user.id },
+        });
+        customerId = customer.id as string;
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { stripeCustomerId: customerId },
+        });
+      }
 
       const priceIdKey =
         period === 'annual'
           ? `stripe.${plan.toLowerCase()}AnnualPriceId`
           : `stripe.${plan.toLowerCase()}PriceId`;
-
       const priceId = this.configService.get<string>(priceIdKey);
 
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
+        customer: customerId,
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
+        // metadata vai no session E na subscription criada — ambos caminhos úteis no webhook
         metadata: { userId, plan, period },
+        subscription_data: { metadata: { userId, plan, period } },
         success_url: `${this.configService.get('frontendUrl')}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${this.configService.get('frontendUrl')}/subscription/cancel`,
       });
@@ -127,6 +147,31 @@ export class SubscriptionService {
       this.logger.error('Stripe checkout session creation failed', err);
       throw err;
     }
+  }
+
+  /**
+   * Portal Stripe pra usuário gerenciar assinatura (trocar cartão, cancelar).
+   * Muito melhor UX que chamar cancel direto — e atende requisitos de compliance.
+   */
+  async createPortalSession(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeCustomerId: true },
+    });
+    if (!user?.stripeCustomerId) {
+      throw new NotFoundException('Usuário não tem assinatura ativa pra gerenciar');
+    }
+    const stripeKey = this.configService.get<string>('stripe.secretKey');
+    if (!stripeKey) {
+      return { portalUrl: 'http://localhost:3000/subscription/mock-portal', isMock: true };
+    }
+    const Stripe = await import('stripe' as any).then((m: any) => m.default ?? m);
+    const stripe = new (Stripe as any)(stripeKey, { apiVersion: '2024-06-20' });
+    const session = await stripe.billingPortal.sessions.create({
+      customer: user.stripeCustomerId,
+      return_url: `${this.configService.get('frontendUrl')}/subscription`,
+    });
+    return { portalUrl: session.url, isMock: false };
   }
 
   async cancelSubscription(userId: string) {
@@ -159,18 +204,51 @@ export class SubscriptionService {
       switch (event.type) {
         case 'checkout.session.completed': {
           const session = event.data.object as any;
-          const { userId, plan } = session.metadata ?? {};
+          const { userId, plan, period } = session.metadata ?? {};
+          const customerId = session.customer as string | undefined;
           if (userId && plan) {
+            // FIX: respeita o period real (bug antigo sempre adicionava 1 mês)
             const expiresAt = new Date();
-            expiresAt.setMonth(expiresAt.getMonth() + 1);
+            if (period === 'annual') {
+              expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+            } else {
+              expiresAt.setMonth(expiresAt.getMonth() + 1);
+            }
             await this.prisma.user.update({
               where: { id: userId },
               data: {
                 subscriptionPlan: plan as SubscriptionPlan,
                 subscriptionExpiresAt: expiresAt,
+                // Garante stripeCustomerId persistido (caso checkout via portal)
+                ...(customerId ? { stripeCustomerId: customerId } : {}),
               },
             });
-            this.logger.log(`Subscription upgraded: user=${userId} plan=${plan}`);
+            this.logger.log(
+              `Subscription upgraded: user=${userId} plan=${plan} period=${period || 'monthly'} until=${expiresAt.toISOString()}`,
+            );
+          }
+          break;
+        }
+
+        // Renovação recorrente — estende expiresAt
+        case 'invoice.payment_succeeded': {
+          const invoice = event.data.object as any;
+          const customerId = invoice.customer as string;
+          const periodEnd = invoice.lines?.data?.[0]?.period?.end; // unix seconds
+          if (!customerId) break;
+          const user = await this.prisma.user.findUnique({
+            where: { stripeCustomerId: customerId },
+            select: { id: true, subscriptionPlan: true },
+          });
+          if (!user) break;
+          if (periodEnd) {
+            await this.prisma.user.update({
+              where: { id: user.id },
+              data: { subscriptionExpiresAt: new Date(periodEnd * 1000) },
+            });
+            this.logger.log(
+              `Subscription renewed: user=${user.id} until=${new Date(periodEnd * 1000).toISOString()}`,
+            );
           }
           break;
         }
@@ -178,8 +256,23 @@ export class SubscriptionService {
         case 'customer.subscription.deleted': {
           const subscription = event.data.object as any;
           const customerId = subscription.customer as string;
-          // Look up user by stripe customer id if stored; for now log
-          this.logger.log(`Subscription deleted for customer=${customerId}`);
+          if (!customerId) break;
+          const user = await this.prisma.user.findUnique({
+            where: { stripeCustomerId: customerId },
+            select: { id: true },
+          });
+          if (user) {
+            await this.prisma.user.update({
+              where: { id: user.id },
+              data: {
+                subscriptionPlan: SubscriptionPlan.FREE,
+                subscriptionExpiresAt: null,
+              },
+            });
+            this.logger.log(`Subscription cancelled: user=${user.id}`);
+          } else {
+            this.logger.warn(`Cancel webhook sem match de User: customerId=${customerId}`);
+          }
           break;
         }
 

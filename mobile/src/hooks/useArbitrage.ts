@@ -55,6 +55,10 @@ interface Payload {
   count: number;
   opportunities: TransferOpportunity[];
   isPersonalized: boolean;
+  // Novos campos do gate de plano — podem não existir em builds antigas do backend
+  lockedCount?: number;
+  plan?: 'FREE' | 'PREMIUM' | 'PRO';
+  shouldUpsell?: boolean;
 }
 
 export function useTransferBonuses() {

@@ -68,6 +68,15 @@ export class SubscriptionController {
     return successResponse(result);
   }
 
+  @Post('portal')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Abre portal Stripe pro user gerenciar assinatura' })
+  async createPortal(@CurrentUser() user: any) {
+    const result = await this.subscriptionService.createPortalSession(user.id);
+    return successResponse(result);
+  }
+
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)

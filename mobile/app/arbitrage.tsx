@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTransferBonuses, TransferOpportunity } from '../src/hooks/useArbitrage';
+import { PaywallUpsellBanner, LockedOpportunityCard } from '../src/components/PaywallGate';
 
 /**
  * Arbitragem de milhas — tela dedicada.
@@ -85,6 +86,16 @@ export default function ArbitrageScreen() {
             {data.opportunities.map((op) => (
               <OpportunityCard key={op.id} opportunity={op} />
             ))}
+
+            {/* Paywall: banner + 2 cards locked como preview */}
+            {data.shouldUpsell && data.lockedCount && data.lockedCount > 0 ? (
+              <>
+                <PaywallUpsellBanner lockedCount={data.lockedCount} />
+                {Array.from({ length: Math.min(2, data.lockedCount) }).map((_, i) => (
+                  <LockedOpportunityCard key={`locked-${i}`} index={i} />
+                ))}
+              </>
+            ) : null}
           </>
         )}
 

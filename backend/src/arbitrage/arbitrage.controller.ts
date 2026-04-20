@@ -90,10 +90,15 @@ export class ArbitrageController {
   })
   async transferBonuses(@Req() req: any) {
     const userId = this.tryGetUserId(req);
-    const data = await this.arbitrage.transferBonusOpportunities(userId ?? undefined);
+    const gated = await this.arbitrage.transferBonusOpportunitiesWithGate(
+      userId ?? undefined,
+    );
     return successResponse({
-      count: data.length,
-      opportunities: data,
+      count: gated.opportunities.length,
+      opportunities: gated.opportunities,
+      lockedCount: gated.lockedCount,
+      plan: gated.plan,
+      shouldUpsell: gated.shouldUpsell,
       isPersonalized: !!userId,
     });
   }

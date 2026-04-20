@@ -20,6 +20,17 @@ import { PrismaService } from '../prisma/prisma.service';
  * na fromProgram.
  */
 
+export interface TransferBonusesResult {
+  /** Oportunidades visíveis (FREE = top 3, PREMIUM/PRO = todas) */
+  opportunities: TransferOpportunity[];
+  /** Quantas oportunidades foram bloqueadas pelo plano atual */
+  lockedCount: number;
+  /** Plano do usuário ou 'FREE' se anônimo */
+  plan: 'FREE' | 'PREMIUM' | 'PRO';
+  /** Flag pra UI decidir se mostra CTA de upgrade */
+  shouldUpsell: boolean;
+}
+
 export interface TransferOpportunity {
   id: string;
   fromProgram: {
@@ -218,6 +229,44 @@ export class ArbitrageService {
    * Lista oportunidades de transferência com bônus ativo.
    * Se userId fornecido, personaliza com saldo real.
    */
+  /**
+   * Lista de oportunidades com gate de plano.
+   * - FREE (ou anônimo): top 3 oportunidades visíveis, resto é lockedCount
+   * - PREMIUM/PRO: todas visíveis
+   *
+   * shouldUpsell=true quando há pelo menos uma oportunidade escondida,
+   * justificando mostrar CTA de upgrade no mobile.
+   */
+  async transferBonusOpportunitiesWithGate(userId?: string): Promise<TransferBonusesResult> {
+    const allOpportunities = await this.transferBonusOpportunities(userId);
+
+    let plan: 'FREE' | 'PREMIUM' | 'PRO' = 'FREE';
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { subscriptionPlan: true, subscriptionExpiresAt: true },
+      });
+      const raw = (user?.subscriptionPlan as any) || 'FREE';
+      const notExpired =
+        !user?.subscriptionExpiresAt || user.subscriptionExpiresAt > new Date();
+      if ((raw === 'PREMIUM' || raw === 'PRO') && notExpired) {
+        plan = raw;
+      }
+    }
+
+    const isPaid = plan === 'PREMIUM' || plan === 'PRO';
+    const FREE_LIMIT = 3;
+    const visible = isPaid ? allOpportunities : allOpportunities.slice(0, FREE_LIMIT);
+    const lockedCount = isPaid ? 0 : Math.max(0, allOpportunities.length - FREE_LIMIT);
+
+    return {
+      opportunities: visible,
+      lockedCount,
+      plan,
+      shouldUpsell: lockedCount > 0,
+    };
+  }
+
   async transferBonusOpportunities(userId?: string): Promise<TransferOpportunity[]> {
     // Busca todas as partnerships ativas com bônus > 0 (ou expiresAt futuro)
     const now = new Date();
