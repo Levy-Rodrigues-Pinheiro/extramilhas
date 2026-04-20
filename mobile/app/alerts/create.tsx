@@ -22,6 +22,13 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 
 const ALERT_TYPES: { type: AlertType; label: string; description: string; icon: IoniconName; color: string }[] = [
   {
+    type: 'BONUS_THRESHOLD',
+    label: 'Bônus de transferência',
+    description: 'Avisa quando Livelo→Smiles (ou qualquer par) atingir o bônus mínimo',
+    icon: 'gift-outline',
+    color: '#8B5CF6',
+  },
+  {
     type: 'CPM_THRESHOLD',
     label: 'Limite de CPM',
     description: 'Alerta quando o CPM cair abaixo do valor definido',
@@ -76,6 +83,11 @@ export default function CreateAlertScreen() {
   // PROGRAM_PROMO fields
   const [promoProgramId, setPromoProgramId] = useState('');
 
+  // BONUS_THRESHOLD fields — slugs opcionais (vazio = wildcard)
+  const [bonusFromSlug, setBonusFromSlug] = useState<string>('');
+  const [bonusToSlug, setBonusToSlug] = useState<string>('');
+  const [bonusMinPercent, setBonusMinPercent] = useState('');
+
   const toggleChannel = (channel: AlertChannel) => {
     setSelectedChannels((prev) =>
       prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]
@@ -92,6 +104,10 @@ export default function CreateAlertScreen() {
     if (selectedType === 'DESTINATION') {
       if (!origin || origin.length < 3) return 'Informe o código IATA de origem (ex: GRU)';
       if (!destination || destination.length < 3) return 'Informe o código IATA de destino (ex: CDG)';
+    }
+    if (selectedType === 'BONUS_THRESHOLD') {
+      const pct = parseInt(bonusMinPercent, 10);
+      if (isNaN(pct) || pct < 1 || pct > 500) return 'Informe % entre 1 e 500';
     }
     return null;
   };
@@ -119,6 +135,10 @@ export default function CreateAlertScreen() {
       if (maxMiles) payload.condition.maxMiles = parseInt(maxMiles, 10);
     } else if (selectedType === 'PROGRAM_PROMO') {
       if (promoProgramId) payload.condition.programId = promoProgramId;
+    } else if (selectedType === 'BONUS_THRESHOLD') {
+      if (bonusFromSlug) (payload.condition as any).fromProgramSlug = bonusFromSlug;
+      if (bonusToSlug) (payload.condition as any).toProgramSlug = bonusToSlug;
+      (payload.condition as any).minPercent = parseInt(bonusMinPercent, 10);
     }
 
     try {
@@ -288,6 +308,83 @@ export default function CreateAlertScreen() {
                   <Text style={[styles.classButtonText, cabinClass === cls.value && styles.classButtonTextSelected]}>
                     {cls.label}
                   </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {selectedType === 'BONUS_THRESHOLD' && (
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Bônus de transferência</Text>
+
+            <Text style={styles.fieldLabel}>De qual programa? (opcional — vazio = todos)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.programScrollView}>
+              {[
+                { slug: '', name: 'Qualquer' },
+                { slug: 'livelo', name: 'Livelo' },
+                { slug: 'esfera', name: 'Esfera' },
+                { slug: 'itau', name: 'Itaú' },
+                { slug: 'bradesco', name: 'Bradesco' },
+              ].map((p) => (
+                <TouchableOpacity
+                  key={p.slug || 'any-from'}
+                  style={[styles.programChip, bonusFromSlug === p.slug && styles.programChipSelected]}
+                  onPress={() => setBonusFromSlug(p.slug)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.programChipText, bonusFromSlug === p.slug && styles.programChipTextSelected]}>
+                    {p.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Pra qual programa? (opcional)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.programScrollView}>
+              {[
+                { slug: '', name: 'Qualquer' },
+                { slug: 'smiles', name: 'Smiles' },
+                { slug: 'latampass', name: 'Latam Pass' },
+                { slug: 'tudoazul', name: 'TudoAzul' },
+                { slug: 'azul', name: 'Azul' },
+              ].map((p) => (
+                <TouchableOpacity
+                  key={p.slug || 'any-to'}
+                  style={[styles.programChip, bonusToSlug === p.slug && styles.programChipSelected]}
+                  onPress={() => setBonusToSlug(p.slug)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.programChipText, bonusToSlug === p.slug && styles.programChipTextSelected]}>
+                    {p.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={[styles.fieldLabel, { marginTop: 20 }]}>
+              Me avise quando o bônus for de pelo menos
+            </Text>
+            <View style={styles.bonusInputRow}>
+              <TextInput
+                style={styles.bonusInputField}
+                value={bonusMinPercent}
+                onChangeText={(v) => setBonusMinPercent(v.replace(/\D/g, '').slice(0, 3))}
+                keyboardType="numeric"
+                placeholder="80"
+                placeholderTextColor="#475569"
+                maxLength={3}
+              />
+              <Text style={styles.bonusInputSuffix}>%</Text>
+            </View>
+            <View style={styles.quickPctRow}>
+              {[50, 80, 100, 120].map((pct) => (
+                <TouchableOpacity
+                  key={pct}
+                  onPress={() => setBonusMinPercent(String(pct))}
+                  style={styles.quickPct}
+                >
+                  <Text style={styles.quickPctText}>{pct}%</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -505,6 +602,34 @@ const styles = StyleSheet.create({
   programChipTextSelected: {
     color: '#fff',
   },
+  bonusInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141C2F',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  bonusInputField: {
+    flex: 1,
+    color: '#f8fafc',
+    fontSize: 28,
+    fontWeight: '800',
+    paddingVertical: 14,
+  },
+  bonusInputSuffix: { color: '#64748b', fontSize: 22, fontWeight: '700' },
+  quickPctRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  quickPct: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 14,
+  },
+  quickPctText: { color: '#A78BFA', fontSize: 12, fontWeight: '700' },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',

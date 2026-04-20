@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -215,9 +216,33 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
             </Text>
           </View>
         )}
+
+        {/* Share button — spread orgânico via WhatsApp */}
+        <TouchableOpacity
+          onPress={() => shareOpportunity(o)}
+          activeOpacity={0.7}
+          style={styles.shareBtn}
+        >
+          <Ionicons name="share-social-outline" size={15} color="#25D366" />
+          <Text style={styles.shareText}>Compartilhar no WhatsApp</Text>
+        </TouchableOpacity>
       </LinearGradient>
     </View>
   );
+}
+
+async function shareOpportunity(o: TransferOpportunity) {
+  const bonus = Math.round(o.currentBonus);
+  const gain = o.gainPercent.toFixed(1);
+  const message =
+    `🎁 Bônus ativo: ${bonus}% ${o.fromProgram.name} → ${o.toProgram.name}\n\n` +
+    `Ganho real de ${gain}% no valor das milhas. Descobri no Milhas Extras — baixe o app pra calcular na sua carteira:\n\n` +
+    `https://milhasextras.com.br`;
+  try {
+    await Share.share({ message });
+  } catch {
+    /* user cancelou */
+  }
 }
 
 const styles = StyleSheet.create({
@@ -240,6 +265,16 @@ const styles = StyleSheet.create({
   errorText: { color: '#F1F5F9', fontSize: 14, textAlign: 'center' },
   retryBtn: { backgroundColor: '#1E293B', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   retryBtnText: { color: '#8B5CF6', fontWeight: '600' },
+
+  shareBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6,
+    marginTop: 12, paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#064E3B',
+    borderWidth: 1, borderColor: '#25D366',
+  },
+  shareText: { color: '#25D366', fontSize: 12, fontWeight: '600' },
 
   emptyBox: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 24, gap: 10 },
   emptyTitle: { color: '#F1F5F9', fontSize: 16, fontWeight: '600' },

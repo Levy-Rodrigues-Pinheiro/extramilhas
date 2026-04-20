@@ -100,7 +100,11 @@ export interface OfferFilters {
 
 // ─── Alerts ──────────────────────────────────────────────────────────────────
 
-export type AlertType = 'CPM_THRESHOLD' | 'DESTINATION' | 'PROGRAM_PROMO';
+export type AlertType =
+  | 'CPM_THRESHOLD'
+  | 'DESTINATION'
+  | 'PROGRAM_PROMO'
+  | 'BONUS_THRESHOLD';
 export type CabinClass = 'ECONOMY' | 'BUSINESS' | 'FIRST';
 export type AlertChannel = 'PUSH' | 'EMAIL' | 'IN_APP';
 

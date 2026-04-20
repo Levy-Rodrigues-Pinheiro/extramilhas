@@ -26,6 +26,7 @@ const ALERT_TYPE_CONFIG: Record<
   CPM_THRESHOLD: { icon: 'trending-down-outline', label: 'Limite de CPM', color: '#818CF8' },
   DESTINATION: { icon: 'map-outline', label: 'Destino Específico', color: '#22c55e' },
   PROGRAM_PROMO: { icon: 'flash-outline', label: 'Promoção de Programa', color: '#eab308' },
+  BONUS_THRESHOLD: { icon: 'gift-outline', label: 'Bônus de transferência', color: '#8B5CF6' },
 };
 
 const CABIN_CLASS_LABELS: Record<string, string> = {
@@ -55,6 +56,14 @@ function buildConditionSummary(alert: AlertType): string {
 
   if (type === 'PROGRAM_PROMO') {
     return condition.programId ? 'Promoção de programa' : 'Qualquer promoção';
+  }
+
+  if (type === 'BONUS_THRESHOLD') {
+    const c = condition as any;
+    const from = c.fromProgramSlug || 'qualquer';
+    const to = c.toProgramSlug || 'qualquer';
+    const min = c.minPercent ?? 0;
+    return `${from} → ${to} · ≥ ${min}%`;
   }
 
   return 'Alerta configurado';

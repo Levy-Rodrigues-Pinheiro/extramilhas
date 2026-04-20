@@ -51,7 +51,45 @@ export class IntelAgentService {
     await this.runAll();
   }
 
+  /**
+   * Auto-disable: source com ≥10 reviewed + accuracy <20% é desativado
+   * automaticamente. Evita queimar tokens em fonte ruim. Admin re-ativa
+   * manual se quiser dar outra chance.
+   */
+  async autoDisableLowAccuracySources() {
+    const sources = (await (this.prisma as any).intelSource.findMany({
+      where: { isActive: true },
+    })) as any[];
+    for (const s of sources) {
+      const [approved, rejected] = await Promise.all([
+        this.prisma.bonusReport.count({
+          where: { intelSourceId: s.id, status: 'APPROVED' } as any,
+        }),
+        this.prisma.bonusReport.count({
+          where: { intelSourceId: s.id, status: 'REJECTED' } as any,
+        }),
+      ]);
+      const reviewed = approved + rejected;
+      if (reviewed < 10) continue;
+      const accuracy = (approved / reviewed) * 100;
+      if (accuracy < 20) {
+        await (this.prisma as any).intelSource.update({
+          where: { id: s.id },
+          data: { isActive: false },
+        });
+        this.logger.warn(
+          `Auto-disabled "${s.name}" (${approved}/${reviewed} = ${accuracy.toFixed(1)}% accuracy)`,
+        );
+      }
+    }
+  }
+
   async runAll() {
+    // Antes da varredura, desativa fontes ruins pra não queimar $
+    await this.autoDisableLowAccuracySources().catch((err) =>
+      this.logger.error(`autoDisable failed: ${(err as Error).message}`),
+    );
+
     const sources = (await (this.prisma as any).intelSource.findMany({
       where: { isActive: true },
     })) as any[];

@@ -7,6 +7,15 @@ import { createPaginatedResult, getPaginationSkip } from '../common/dto/paginati
 import { ContentService, CreateArticleDto, UpdateArticleDto } from '../content/content.service';
 import { PushService } from '../push/push.service';
 
+function csvEscape(s: string | null | undefined): string {
+  if (!s) return '';
+  // Se tem vírgula, aspas ou newline, cerca com aspas e escapa aspas internas
+  if (/[,"\n]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
 function classifyFromCpm(cpm: number): OfferClassification {
   if (cpm < 20) return OfferClassification.IMPERDIVEL;
   if (cpm <= 30) return OfferClassification.BOA;
@@ -180,6 +189,62 @@ export class AdminService {
         })),
       },
     };
+  }
+
+  // ─── CSV exports ─────────────────────────────────────────────────────────
+
+  async exportUsersCsv(): Promise<string> {
+    const users = await this.prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        subscriptionPlan: true,
+        subscriptionExpiresAt: true,
+        createdAt: true,
+        lastActiveAt: true,
+      } as any,
+      orderBy: { createdAt: 'desc' },
+    });
+    const lines = [
+      'id,email,name,plan,expiresAt,createdAt,lastActiveAt',
+      ...users.map((u: any) =>
+        [
+          u.id,
+          csvEscape(u.email),
+          csvEscape(u.name),
+          u.subscriptionPlan,
+          u.subscriptionExpiresAt?.toISOString() ?? '',
+          u.createdAt?.toISOString() ?? '',
+          u.lastActiveAt?.toISOString?.() ?? '',
+        ].join(','),
+      ),
+    ];
+    return lines.join('\n');
+  }
+
+  async exportBonusReportsCsv(): Promise<string> {
+    const reports = await this.prisma.bonusReport.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+    });
+    const lines = [
+      'id,fromProgram,toProgram,bonusPercent,status,reporterEmail,intelSourceId,createdAt,reviewedAt',
+      ...reports.map((r: any) =>
+        [
+          r.id,
+          r.fromProgramSlug,
+          r.toProgramSlug,
+          r.bonusPercent,
+          r.status,
+          csvEscape(r.reporterEmail ?? ''),
+          r.intelSourceId ?? '',
+          r.createdAt?.toISOString() ?? '',
+          r.reviewedAt?.toISOString() ?? '',
+        ].join(','),
+      ),
+    ];
+    return lines.join('\n');
   }
 
   // ─── Users ───────────────────────────────────────────────────────────────────

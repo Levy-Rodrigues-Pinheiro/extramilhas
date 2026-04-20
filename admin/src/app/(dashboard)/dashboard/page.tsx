@@ -114,8 +114,30 @@ export default function DashboardPage() {
         }))
       : MOCK_CHART_DATA
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://milhasextras-api.fly.dev/api/v1'
+
   return (
     <div className="space-y-6 bg-[#0B1120]">
+      {/* Export bar */}
+      <div className="flex items-center justify-end gap-2">
+        <a
+          href={`${API_BASE}/admin/export/users.csv`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border border-[#1E293B] bg-[#141C2F] px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-[#1E293B] transition"
+        >
+          📥 Users CSV
+        </a>
+        <a
+          href={`${API_BASE}/admin/export/bonus-reports.csv`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border border-[#1E293B] bg-[#141C2F] px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-[#1E293B] transition"
+        >
+          📥 Reports CSV
+        </a>
+      </div>
+
       {/* Metric Cards - linha principal */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard

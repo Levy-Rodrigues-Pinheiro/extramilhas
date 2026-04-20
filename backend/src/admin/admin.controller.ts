@@ -8,6 +8,7 @@ import {
   Body,
   Param,
   Query,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -118,6 +119,30 @@ export class AdminController {
   async getDashboard() {
     const result = await this.adminService.getDashboardMetrics();
     return successResponse(result);
+  }
+
+  @Get('export/users.csv')
+  @ApiOperation({ summary: 'Export CSV de users (análise externa)' })
+  async exportUsersCsv(@Res() res: any) {
+    const csv = await this.adminService.exportUsersCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="users-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+    res.send(csv);
+  }
+
+  @Get('export/bonus-reports.csv')
+  @ApiOperation({ summary: 'Export CSV de bonus reports' })
+  async exportReportsCsv(@Res() res: any) {
+    const csv = await this.adminService.exportBonusReportsCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="bonus-reports-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+    res.send(csv);
   }
 
   // ─── Users ───────────────────────────────────────────────────────────────────
