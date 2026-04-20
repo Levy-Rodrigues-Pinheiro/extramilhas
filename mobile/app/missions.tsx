@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMissions, useClaimMission, Mission } from '../src/hooks/useMissions';
 import { haptic } from '../src/lib/haptic';
+import { SkeletonCard } from '../src/components/Skeleton';
 
 /**
  * Missões — desafios opcionais que dão dias Premium grátis quando
@@ -71,7 +72,13 @@ export default function MissionsScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#8B5CF6" />}
       >
-        {isLoading && <ActivityIndicator color="#8B5CF6" style={{ marginTop: 40 }} />}
+        {isLoading && (
+          <View>
+            {[0, 1, 2].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        )}
 
         {!isLoading && data?.missions?.length === 0 && (
           <View style={styles.empty}>

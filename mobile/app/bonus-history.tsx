@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import api from '../src/lib/api';
+import { SkeletonCard } from '../src/components/Skeleton';
 
 interface HistoryReport {
   id: string;
@@ -116,7 +117,13 @@ export default function BonusHistoryScreen() {
           </View>
         )}
 
-        {isLoading && <ActivityIndicator color="#8B5CF6" style={{ marginTop: 40 }} />}
+        {isLoading && (
+          <View>
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        )}
 
         {!isLoading && groupedByDay.length === 0 && (
           <View style={styles.empty}>

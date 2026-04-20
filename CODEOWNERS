@@ -1,0 +1,14 @@
+# Todas mudanças notificam o owner principal.
+# Substituir @levyrodrigues pelo seu username real no GitHub.
+* @levyrodrigues
+
+# Backend
+/backend/ @levyrodrigues
+/backend/prisma/ @levyrodrigues
+
+# Mobile
+/mobile/ @levyrodrigues
+
+# Infra sensitive
+/.github/ @levyrodrigues
+/docs/ @levyrodrigues

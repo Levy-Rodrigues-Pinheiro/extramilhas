@@ -17,6 +17,7 @@ import {
   useMarkAllNotificationsRead,
   InAppNotification,
 } from '../src/hooks/useNotificationFeed';
+import { SkeletonCard } from '../src/components/Skeleton';
 
 /**
  * Notification Center — histórico in-app de pushes recebidas.
@@ -74,7 +75,13 @@ export default function NotificationsFeedScreen() {
           <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#8B5CF6" />
         }
       >
-        {isLoading && <ActivityIndicator color="#8B5CF6" style={{ marginTop: 40 }} />}
+        {isLoading && (
+          <View>
+            {[0, 1, 2].map((i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </View>
+        )}
 
         {!isLoading && (data?.notifications?.length ?? 0) === 0 && (
           <View style={styles.empty}>

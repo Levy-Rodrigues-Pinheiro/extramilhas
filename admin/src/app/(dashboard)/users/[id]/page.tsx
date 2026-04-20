@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LoadingPage } from '@/components/loading-spinner'
+import { Breadcrumbs } from '@/components/breadcrumbs'
 import { useToast } from '@/hooks/use-toast'
 import api from '@/lib/api'
 
@@ -103,6 +104,8 @@ export default function UserDetailPage() {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs items={[{ label: 'Usuários', href: '/users' }, { label: user.name }]} />
+
       <Button
         variant="ghost"
         size="sm"

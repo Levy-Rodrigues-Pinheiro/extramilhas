@@ -76,6 +76,18 @@ async function bootstrap() {
     }),
   );
 
+  // Gzip response bodies — JSON comprime ~5-10x, economia grande de banda
+  // especialmente em respostas grandes (lista de offers, partnerships).
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const compression = require('compression');
+  app.use(compression());
+
+  // Body size limit: 1MB default. Ajustável se precisar upload maior.
+  // Previne DoS accidental com payload enorme.
+  const express = require('express');
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
   // Ordem importa: Prisma filter primeiro pra pegar P2xxx antes do generic
   app.useGlobalFilters(new PrismaExceptionFilter(), new HttpExceptionFilter());
 
