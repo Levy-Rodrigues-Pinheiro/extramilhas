@@ -19,6 +19,7 @@ import { useProfile, useUpdateBalances } from '../../src/hooks/useProfile';
 import { usePrograms } from '../../src/hooks/usePrograms';
 import { PlanBadge } from '../../src/components/PlanBadge';
 import { MilesInput } from '../../src/components/MilesInput';
+import { OnboardingTour } from '../../src/components/OnboardingTour';
 import { Colors } from '../../src/lib/theme';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -40,6 +41,7 @@ export default function ProfileScreen() {
 
   const [balances, setBalances] = useState<Record<string, number>>({});
   const [balancesInitialized, setBalancesInitialized] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
 
   const profile = profileData?.user ?? user;
   const milesBalances = profileData?.milesBalances ?? [];
@@ -162,6 +164,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/articles'),
     },
     {
+      icon: 'help-circle-outline',
+      label: 'Ver tour guiado',
+      showChevron: true,
+      onPress: () => setTourOpen(true),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,
@@ -172,6 +180,9 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {tourOpen && (
+        <OnboardingTour force onFinish={() => setTourOpen(false)} />
+      )}
       <ScrollView
         style={styles.flex}
         contentContainerStyle={styles.scrollContent}

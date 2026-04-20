@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTransferCalculator, TransferCalcResult } from '../src/hooks/useArbitrage';
@@ -32,14 +33,50 @@ const PROGRAMS = [
 ];
 
 export default function TransferCalculatorScreen() {
-  const [fromProgram, setFromProgram] = useState('livelo');
-  const [points, setPoints] = useState('10000');
+  const params = useLocalSearchParams<{ from?: string; points?: string }>();
+  const [fromProgram, setFromProgram] = useState(
+    PROGRAMS.find((p) => p.slug === params.from)?.slug ?? 'livelo',
+  );
+  const [points, setPoints] = useState(params.points ?? '10000');
   const calc = useTransferCalculator();
+
+  // Deep link: se abriu com `?from=livelo&points=50000`, já calcula
+  useEffect(() => {
+    if (params.from && params.points) {
+      const numPoints = parseInt(String(params.points).replace(/\D/g, ''), 10);
+      if (numPoints && numPoints >= 100) {
+        calc.mutate({ fromProgramSlug: String(params.from), points: numPoints });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCalculate = () => {
     const numPoints = parseInt(points.replace(/\D/g, ''), 10);
     if (!numPoints || numPoints < 100) return;
     calc.mutate({ fromProgramSlug: fromProgram, points: numPoints });
+  };
+
+  const shareResult = async () => {
+    if (!calc.data) return;
+    const best = calc.data.results.find((r) => r.recommendation === 'TRANSFERIR');
+    const header = best
+      ? `💰 ${calc.data.inputPoints.toLocaleString('pt-BR')} pts ${calc.data.fromProgram.name} → vale R$ ${calc.data.inputValueBrl.toFixed(2)}\n` +
+        `🎯 Melhor destino: ${best.toProgram.name} (${best.recommendation})\n\n`
+      : `💰 Calculei ${calc.data.inputPoints.toLocaleString('pt-BR')} pts ${calc.data.fromProgram.name} = R$ ${calc.data.inputValueBrl.toFixed(2)}\n\n`;
+
+    const link = `https://milhasextras.com.br/app/calculator?from=${encodeURIComponent(
+      calc.data.fromProgram.slug,
+    )}&points=${encodeURIComponent(String(calc.data.inputPoints))}`;
+
+    const message =
+      header +
+      `Calcule o seu no Milhas Extras:\n${link}`;
+    try {
+      await Share.share({ message });
+    } catch {
+      /* user cancelou */
+    }
   };
 
   return (
@@ -56,6 +93,17 @@ export default function TransferCalculatorScreen() {
             <Text style={styles.title}>Vale a pena transferir?</Text>
             <Text style={styles.subtitle}>Calcula valor real em cada destino</Text>
           </View>
+          {calc.data && (
+            <TouchableOpacity
+              onPress={shareResult}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Compartilhar cálculo"
+              hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            >
+              <Ionicons name="share-social-outline" size={22} color="#25D366" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">

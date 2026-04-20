@@ -18,6 +18,7 @@ import { useMyLeaderboardStats, TIER_META } from '../../src/hooks/useLeaderboard
 import { PaywallUpsellBanner } from '../../src/components/PaywallGate';
 import { useMissions } from '../../src/hooks/useMissions';
 import { FirstRunTip } from '../../src/components/FirstRunTip';
+import { OnboardingTour } from '../../src/components/OnboardingTour';
 import { useNotificationFeed } from '../../src/hooks/useNotificationFeed';
 import { useTranslation } from 'react-i18next';
 
@@ -69,6 +70,9 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Tour completo (4 slides) — 1x após welcome-quiz */}
+      <OnboardingTour />
+
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
