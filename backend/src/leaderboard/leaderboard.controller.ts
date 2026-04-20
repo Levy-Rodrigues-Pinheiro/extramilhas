@@ -12,11 +12,17 @@ export class LeaderboardController {
 
   @Public()
   @Get('reporters')
-  @ApiOperation({ summary: 'Ranking público de reporters (top N por reports aprovados)' })
-  async top(@Query('limit') limitRaw?: string) {
+  @ApiOperation({
+    summary: 'Ranking de reporters. window=month filtra pra mês corrente; default=all',
+  })
+  async top(
+    @Query('limit') limitRaw?: string,
+    @Query('window') windowRaw?: string,
+  ) {
     const limit = Math.max(1, Math.min(100, parseInt(limitRaw || '20', 10) || 20));
-    const reporters = await this.leaderboard.topReporters(limit);
-    return successResponse({ count: reporters.length, reporters });
+    const window: 'all' | 'month' = windowRaw === 'month' ? 'month' : 'all';
+    const reporters = await this.leaderboard.topReporters(limit, window);
+    return successResponse({ count: reporters.length, reporters, window });
   }
 
   @UseGuards(JwtAuthGuard)

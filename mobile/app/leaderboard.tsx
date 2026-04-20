@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
   useMyLeaderboardStats,
   TIER_META,
   ReporterTier,
+  LeaderboardWindow,
 } from '../src/hooks/useLeaderboard';
 
 /**
@@ -27,8 +28,14 @@ import {
  * push personalizado que chega quando cada report é aprovado.
  */
 export default function LeaderboardScreen() {
-  const top = useLeaderboard(50);
+  const [window, setWindow] = useState<LeaderboardWindow>('all');
+  const top = useLeaderboard(50, window);
   const me = useMyLeaderboardStats();
+
+  const monthLabel = new Date().toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
 
   const refreshing = top.isFetching || me.isFetching;
   const onRefresh = () => {
@@ -119,8 +126,40 @@ export default function LeaderboardScreen() {
           </View>
         </View>
 
+        {/* Toggle de janela */}
+        <View style={styles.windowToggle}>
+          <TouchableOpacity
+            onPress={() => setWindow('all')}
+            style={[styles.toggleBtn, window === 'all' && styles.toggleBtnActive]}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                window === 'all' && styles.toggleTextActive,
+              ]}
+            >
+              All-time
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setWindow('month')}
+            style={[styles.toggleBtn, window === 'month' && styles.toggleBtnActive]}
+          >
+            <Text
+              style={[
+                styles.toggleText,
+                window === 'month' && styles.toggleTextActive,
+              ]}
+            >
+              {monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Ranking */}
-        <Text style={styles.sectionTitle}>Top 50 all-time</Text>
+        <Text style={styles.sectionTitle}>
+          {window === 'month' ? `Top 50 em ${monthLabel}` : 'Top 50 all-time'}
+        </Text>
 
         {top.isLoading ? (
           <ActivityIndicator color="#8B5CF6" style={{ marginTop: 40 }} />
@@ -220,6 +259,22 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase', letterSpacing: 0.5,
     marginBottom: 10,
   },
+
+  windowToggle: {
+    flexDirection: 'row', gap: 6, marginBottom: 14,
+    padding: 3,
+    backgroundColor: '#1E293B', borderRadius: 10,
+    borderWidth: 1, borderColor: '#334155',
+  },
+  toggleBtn: {
+    flex: 1, paddingVertical: 8, alignItems: 'center',
+    borderRadius: 7,
+  },
+  toggleBtnActive: {
+    backgroundColor: '#3B2F66',
+  },
+  toggleText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
+  toggleTextActive: { color: '#A78BFA' },
 
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

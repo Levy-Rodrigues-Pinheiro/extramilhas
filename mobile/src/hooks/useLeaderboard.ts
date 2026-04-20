@@ -18,12 +18,20 @@ export interface MyStats {
   nextTier: { needed: number; threshold: number; name: ReporterTier } | null;
 }
 
-export function useLeaderboard(limit = 20) {
+export type LeaderboardWindow = 'all' | 'month';
+
+export function useLeaderboard(limit = 20, window: LeaderboardWindow = 'all') {
   return useQuery({
-    queryKey: ['leaderboard', 'reporters', limit],
+    queryKey: ['leaderboard', 'reporters', limit, window],
     queryFn: async () => {
-      const { data } = await api.get(`/leaderboard/reporters?limit=${limit}`);
-      return data as { count: number; reporters: LeaderboardEntry[] };
+      const { data } = await api.get(
+        `/leaderboard/reporters?limit=${limit}&window=${window}`,
+      );
+      return data as {
+        count: number;
+        reporters: LeaderboardEntry[];
+        window: LeaderboardWindow;
+      };
     },
     staleTime: 60_000,
   });

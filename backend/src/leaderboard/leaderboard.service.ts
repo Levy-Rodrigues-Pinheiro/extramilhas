@@ -55,15 +55,25 @@ export class LeaderboardService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Top N reporters all-time (aprovados). Anonimiza nome.
+   * Top N reporters. Por padrão all-time, mas aceita filtro de janela
+   * temporal ('month' = do primeiro dia do mês atual até agora).
    * Barato: é um groupBy + join simples. Cacheável se crescer.
    */
-  async topReporters(limit = 20) {
+  async topReporters(limit = 20, window: 'all' | 'month' = 'all') {
+    const createdAtFilter =
+      window === 'month'
+        ? (() => {
+            const now = new Date();
+            return { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+          })()
+        : undefined;
+
     const grouped = await this.prisma.bonusReport.groupBy({
       by: ['reporterId'],
       where: {
         status: 'APPROVED',
         reporterId: { not: null },
+        ...(createdAtFilter ? { createdAt: createdAtFilter } : {}),
       },
       _count: { _all: true },
       orderBy: { _count: { reporterId: 'desc' } },

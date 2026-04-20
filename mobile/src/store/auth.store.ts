@@ -132,7 +132,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: true,
         isLoading: false,
       });
-      router.replace('/(tabs)');
+      // Novo usuário vai direto pro quiz de onboarding — maximiza conversão
+      // (carteira cadastrada = valor aparece na home, arbitragem personalizada)
+      router.replace('/welcome-quiz' as any);
     } catch (error) {
       set({ isLoading: false });
       throw error;
