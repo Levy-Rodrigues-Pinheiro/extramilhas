@@ -1,0 +1,30 @@
+name: Smoke tests (prod)
+
+# Roda 2 vezes ao dia + sob demanda pra validar que prod não regrediu.
+# Executa tests/e2e/backend-smoke.sh contra https://milhasextras-api.fly.dev.
+# Se qualquer check falhar, job vermelho → notifica no GitHub.
+
+on:
+  schedule:
+    # 9h UTC e 21h UTC — cobre manhã e noite BRT
+    - cron: '0 9,21 * * *'
+  workflow_dispatch: # permite rodar manualmente pela UI do GitHub
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+
+jobs:
+  smoke:
+    name: Smoke backend prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Só roda depois de CI passar (workflow_run) ou em schedule/manual
+    if: >
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke suite
+        run: bash tests/e2e/backend-smoke.sh https://milhasextras-api.fly.dev/api/v1

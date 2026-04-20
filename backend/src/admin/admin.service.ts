@@ -191,6 +191,27 @@ export class AdminService {
     };
   }
 
+  // ─── Debug / Snapshots ───────────────────────────────────────────────────
+
+  async listRecentSnapshots(limit = 30) {
+    const logs = await this.prisma.auditLog.findMany({
+      where: { action: 'SNAPSHOT', entityType: 'database' },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return logs.map((l) => {
+      let parsed: any = null;
+      try {
+        parsed = l.after ? JSON.parse(l.after) : null;
+      } catch {}
+      return {
+        id: l.id,
+        createdAt: l.createdAt,
+        data: parsed,
+      };
+    });
+  }
+
   // ─── CSV exports ─────────────────────────────────────────────────────────
 
   async exportUsersCsv(): Promise<string> {
@@ -293,17 +314,71 @@ export class AdminService {
   }
 
   async getUserById(id: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id },
       include: {
         preferences: true,
         milesBalances: { include: { program: { select: { name: true, slug: true } } } },
-        _count: { select: { alerts: true, savedOffers: true } },
+        _count: {
+          select: {
+            alerts: true,
+            savedOffers: true,
+            bonusReports: true,
+            deviceTokens: true,
+            notifications: true,
+          } as any,
+        },
       },
-    });
+    })) as any;
 
     if (!user) throw new NotFoundException('User not found');
-    return user;
+
+    // Enrichment: stats adicionais (queries paralelas)
+    const [
+      reportsApproved,
+      reportsRejected,
+      referralsCount,
+      notificationsUnread,
+      lastLoginProxy,
+    ] = await Promise.all([
+      this.prisma.bonusReport.count({
+        where: { reporterId: id, status: 'APPROVED' },
+      }),
+      this.prisma.bonusReport.count({
+        where: { reporterId: id, status: 'REJECTED' },
+      }),
+      this.prisma.user.count({ where: { referredById: id } as any }),
+      this.prisma.notification.count({ where: { userId: id, isRead: false } }),
+      this.prisma.deviceToken.findFirst({
+        where: { userId: id },
+        orderBy: { lastUsedAt: 'desc' },
+        select: { lastUsedAt: true },
+      }),
+    ]);
+
+    // Calcula valor total da carteira
+    const walletTotalBrl = user.milesBalances.reduce(
+      (acc: number, b: any) => acc + (b.balance / 1000) * Number(b.program.avgCpmCurrent || 0),
+      0,
+    );
+
+    return {
+      ...user,
+      enrichedStats: {
+        reportsApproved,
+        reportsRejected,
+        accuracyPercent:
+          reportsApproved + reportsRejected > 0
+            ? parseFloat(
+                ((reportsApproved / (reportsApproved + reportsRejected)) * 100).toFixed(1),
+              )
+            : null,
+        referralsCount,
+        notificationsUnread,
+        lastActive: lastLoginProxy?.lastUsedAt ?? user.lastActiveAt ?? null,
+        walletTotalBrl: parseFloat(walletTotalBrl.toFixed(2)),
+      },
+    };
   }
 
   async updateUserPlan(id: string, plan: SubscriptionPlan) {

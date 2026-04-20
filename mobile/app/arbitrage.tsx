@@ -100,6 +100,16 @@ export default function ArbitrageScreen() {
           </>
         )}
 
+        {/* Link pro histórico completo */}
+        <TouchableOpacity
+          onPress={() => router.push('/bonus-history' as any)}
+          activeOpacity={0.85}
+          style={historyLink.box}
+        >
+          <Ionicons name="time-outline" size={18} color="#A78BFA" />
+          <Text style={historyLink.text}>Ver histórico dos últimos 90 dias →</Text>
+        </TouchableOpacity>
+
         {/* CTA Reportar bônus — sempre visível, não só quando vazio */}
         <TouchableOpacity
           onPress={() => router.push('/report-bonus' as any)}
@@ -119,6 +129,17 @@ export default function ArbitrageScreen() {
     </SafeAreaView>
   );
 }
+
+const historyLink = StyleSheet.create({
+  box: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center',
+    paddingVertical: 12, marginTop: 16,
+    borderRadius: 10,
+    borderWidth: 1, borderColor: '#3B2F66',
+    backgroundColor: '#1E1B4B',
+  },
+  text: { color: '#A78BFA', fontSize: 13, fontWeight: '600' },
+});
 
 const cta = StyleSheet.create({
   box: {

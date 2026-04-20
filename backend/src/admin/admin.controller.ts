@@ -147,6 +147,14 @@ export class AdminController {
     });
   }
 
+  @Get('debug/snapshots')
+  @ApiOperation({ summary: 'Últimos N snapshots de counts (canary de data loss)' })
+  async debugSnapshots(@Query('limit') limitRaw?: string) {
+    const limit = Math.min(90, parseInt(limitRaw || '30', 10) || 30);
+    const snapshots = await this.adminService.listRecentSnapshots(limit);
+    return successResponse({ count: snapshots.length, snapshots });
+  }
+
   @Get('export/users.csv')
   @ApiOperation({ summary: 'Export CSV de users (análise externa)' })
   async exportUsersCsv(@Res() res: any) {

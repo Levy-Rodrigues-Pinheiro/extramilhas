@@ -300,4 +300,46 @@ export class SchedulerService {
       this.logger.log(`Cleanup: removed ${deleted.count} stale device tokens`);
     }
   }
+
+  /**
+   * Snapshot diário 6h UTC — grava counts de tabelas chave como AuditLog.
+   * Útil pra detectar data loss: se amanhã User.count dropa de 500 pra 30,
+   * temos evidência histórica. Supabase já faz backup físico, isso é
+   * canary verification complementar.
+   */
+  @Cron('0 6 * * *')
+  async snapshotDataCounts() {
+    if (!this.isEnabled()) return;
+    try {
+      const [users, reports, partnerships, offers, devices] = await Promise.all([
+        this.prisma.user.count(),
+        this.prisma.bonusReport.count(),
+        this.prisma.transferPartnership.count(),
+        this.prisma.offer.count({ where: { isDeleted: false } }),
+        this.prisma.deviceToken.count(),
+      ]);
+      const firstAdmin = await this.prisma.user.findFirst({ where: { isAdmin: true } });
+      if (!firstAdmin) return;
+      await this.prisma.auditLog.create({
+        data: {
+          adminId: firstAdmin.id,
+          action: 'SNAPSHOT',
+          entityType: 'database',
+          after: JSON.stringify({
+            users,
+            bonusReports: reports,
+            transferPartnerships: partnerships,
+            activeOffers: offers,
+            deviceTokens: devices,
+            at: new Date().toISOString(),
+          }),
+        },
+      });
+      this.logger.log(
+        `Snapshot: ${users}u / ${reports}r / ${partnerships}p / ${offers}o / ${devices}d`,
+      );
+    } catch (err) {
+      this.logger.error(`Snapshot failed: ${(err as Error).message}`);
+    }
+  }
 }

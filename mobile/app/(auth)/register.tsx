@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useApplyReferralCode } from '../../src/hooks/useReferral';
 import {
   View,
   Text,
@@ -20,6 +22,8 @@ import { Colors } from '../../src/lib/theme';
 
 export default function RegisterScreen() {
   const { register, isLoading } = useAuthStore();
+  const params = useLocalSearchParams<{ ref?: string }>();
+  const applyReferral = useApplyReferralCode();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -28,6 +32,17 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Referral code vindo da URL (deep link /register?ref=XYZ) ou digitado
+  const [referralCode, setReferralCode] = useState(
+    typeof params.ref === 'string' ? params.ref.toUpperCase() : '',
+  );
+  const [referralApplied, setReferralApplied] = useState(false);
+
+  useEffect(() => {
+    if (typeof params.ref === 'string' && params.ref && !referralCode) {
+      setReferralCode(params.ref.toUpperCase());
+    }
+  }, [params.ref]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -60,6 +75,15 @@ export default function RegisterScreen() {
 
     try {
       await register(name.trim(), email.trim().toLowerCase(), password);
+      // Pós-register: se tem código, tenta aplicar (silencioso se falhar)
+      if (referralCode && referralCode.length >= 6) {
+        try {
+          await applyReferral.mutateAsync(referralCode.toUpperCase());
+          setReferralApplied(true);
+        } catch {
+          // ignore — user ainda se registrou com sucesso
+        }
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Erro ao criar conta. Tente novamente.';
@@ -216,6 +240,33 @@ export default function RegisterScreen() {
             {errors.confirmPassword ? (
               <Text style={styles.errorText}>{errors.confirmPassword}</Text>
             ) : null}
+          </View>
+
+          {/* Referral code (opcional, preenche de deep link) */}
+          <View style={styles.fieldContainer}>
+            <Text style={styles.label}>
+              Código de indicação <Text style={{ color: '#64748B' }}>(opcional)</Text>
+            </Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="gift-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: ABCD123"
+                placeholderTextColor="#475569"
+                value={referralCode}
+                onChangeText={(v) => setReferralCode(v.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={12}
+              />
+            </View>
+            {referralCode.length > 0 && referralCode.length < 6 && (
+              <Text style={styles.errorText}>Mínimo 6 caracteres</Text>
+            )}
+            {referralApplied && (
+              <Text style={[styles.errorText, { color: '#10B981' }]}>
+                ✓ Código aplicado — 30d Premium pra vocês dois
+              </Text>
+            )}
           </View>
 
           {/* Register Button */}
