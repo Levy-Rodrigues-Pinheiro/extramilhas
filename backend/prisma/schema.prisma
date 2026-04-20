@@ -393,6 +393,10 @@ model IntelSource {
   lastRunAt     DateTime?
   // Custo acumulado em USD (atualizado por run)
   costUsd       Float    @default(0)
+  // SHA-256 do texto extraído na última run bem-sucedida. Se o hash novo
+  // bate o anterior, skippa LLM call (página não mudou, não tem bônus novo).
+  // Economia típica: ~60-80% dos calls (blogs atualizam 1x/semana).
+  lastContentHash String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

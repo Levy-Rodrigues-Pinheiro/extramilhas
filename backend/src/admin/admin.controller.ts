@@ -375,6 +375,7 @@ export class AdminController {
       dto.title,
       dto.body,
       dto.targetPlan,
+      dto.deepLink,
     );
     return successResponse(result);
   }

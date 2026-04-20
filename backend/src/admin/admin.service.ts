@@ -655,6 +655,7 @@ export class AdminService {
     title: string,
     body: string,
     targetPlan: 'ALL' | SubscriptionPlan = 'ALL',
+    deepLink?: string,
   ) {
     const where =
       targetPlan === 'ALL' ? {} : { subscriptionPlan: targetPlan as SubscriptionPlan };
@@ -663,10 +664,41 @@ export class AdminService {
       where,
       select: { id: true },
     });
-
     const userIds = users.map((u) => u.id);
+
+    // Dupla entrega: NotificationsService (in-app DB) + PushService (Expo)
     await this.notificationsService.broadcastPush(userIds, title, body);
 
-    return { message: `Broadcast sent to ${userIds.length} user(s).`, count: userIds.length };
+    // Push real via devices ativos dos users targeted
+    const cutoff = new Date(Date.now() - 30 * 86400_000);
+    const devices = await this.prisma.deviceToken.findMany({
+      where: {
+        userId: { in: userIds },
+        lastUsedAt: { gte: cutoff },
+      },
+      select: { token: true },
+    });
+    let pushResult = { sent: 0, errors: 0 };
+    if (devices.length > 0) {
+      pushResult = await this.push.sendToTokens(
+        devices.map((d) => d.token),
+        {
+          title,
+          body,
+          data: deepLink ? { type: 'admin_broadcast', deepLink } : { type: 'admin_broadcast' },
+        },
+      );
+    }
+
+    this.logger.log(
+      `Broadcast: ${userIds.length} users targeted, ${pushResult.sent} pushes delivered (${pushResult.errors} errors)`,
+    );
+    return {
+      message: `Broadcast: ${userIds.length} users · ${pushResult.sent} pushes entregues`,
+      usersCount: userIds.length,
+      devicesCount: devices.length,
+      pushSent: pushResult.sent,
+      pushErrors: pushResult.errors,
+    };
   }
 }

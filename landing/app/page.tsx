@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { LiveBonuses } from './components/LiveBonuses';
 import { SocialProofStats } from './components/SocialProofStats';
+import { FAQ } from './components/FAQ';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://milhasextras-api.fly.dev/api/v1';
 
@@ -240,6 +241,9 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
+      {/* FAQ (SEO + confiança) */}
+      <FAQ />
+
       <footer className="px-6 py-12 border-t border-slate-800 text-center text-slate-500 text-sm">
         <p>© 2026 Milhas Extras · feito com ❤️ pra quem viaja com milhas</p>
         <p className="mt-2 text-xs">

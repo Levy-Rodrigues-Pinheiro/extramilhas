@@ -313,7 +313,7 @@ export class SchedulerService {
     try {
       const cutoff = new Date(Date.now() - 30 * 86400_000);
       const result = await (this.prisma as any).liveFlightCache.deleteMany({
-        where: { updatedAt: { lt: cutoff } },
+        where: { fetchedAt: { lt: cutoff } },
       });
       if (result.count > 0) {
         this.logger.log(

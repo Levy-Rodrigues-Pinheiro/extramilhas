@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
+import { createHash } from 'crypto';
 import { LlmExtractor, ExtractedBonus } from './llm-extractor.service';
 import { TelegramAdapter } from './telegram-adapter.service';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -185,6 +186,29 @@ export class IntelAgentService {
         text = scoped.replace(/\s+/g, ' ').trim();
       }
 
+      // 3a. Content hash check — se texto é IDÊNTICO ao da última run
+      // bem-sucedida, skippa LLM (página não mudou, não tem bônus novo).
+      // Economia típica: 60-80% dos calls em blogs que atualizam 1x/semana.
+      const contentHash = createHash('sha256').update(text).digest('hex');
+      if (source.lastContentHash && source.lastContentHash === contentHash) {
+        await (this.prisma as any).intelAgentRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'skipped',
+            finishedAt: new Date(),
+            htmlBytes: html.length,
+            inputPreview: text.slice(0, 500),
+            errorMessage: 'content unchanged (hash match)',
+          },
+        });
+        await (this.prisma as any).intelSource.update({
+          where: { id: source.id },
+          data: { lastRunAt: new Date() },
+        });
+        this.logger.log(`[${source.name}] skip: content hash unchanged`);
+        return { runId: run.id, status: 'skipped', newReportsCount: 0, costUsd: 0 };
+      }
+
       // 3. Pre-filter
       if (!this.llm.hasRelevantKeywords(text)) {
         await (this.prisma as any).intelAgentRun.update({
@@ -280,6 +304,7 @@ export class IntelAgentService {
         data: {
           lastRunAt: new Date(),
           costUsd: { increment: extraction.costUsd },
+          lastContentHash: contentHash,
         },
       });
 

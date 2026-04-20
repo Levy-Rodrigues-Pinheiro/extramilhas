@@ -95,6 +95,63 @@ export class HealthController {
     return body;
   }
 
+  @Public()
+  @Get('extended')
+  @ApiOperation({ summary: 'Health detalhado + counts de tabelas (ops dashboard)' })
+  async extended() {
+    const started = Date.now();
+    const [
+      users,
+      bonusReports,
+      partnerships,
+      offers,
+      devices,
+      intelSources,
+      cacheFresh,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.bonusReport.count(),
+      this.prisma.transferPartnership.count(),
+      this.prisma.offer.count({ where: { isActive: true, isDeleted: false } }),
+      this.prisma.deviceToken.count(),
+      (this.prisma as any).intelSource.count({ where: { isActive: true } }),
+      this.prisma.liveFlightCache.count({
+        where: { fetchedAt: { gte: new Date(Date.now() - 86400_000) } },
+      }),
+    ]);
+
+    return {
+      status: 'ok',
+      service: 'milhasextras-backend',
+      uptime: process.uptime(),
+      latencyMs: Date.now() - started,
+      counts: {
+        users,
+        bonusReports,
+        activePartnerships: partnerships,
+        activeOffers: offers,
+        deviceTokens: devices,
+        activeIntelSources: intelSources,
+        cacheFresh24h: cacheFresh,
+      },
+      config: {
+        nodeEnv: process.env.NODE_ENV,
+        schedulerEnabled:
+          process.env.SCHEDULER_ENABLED !== 'false' &&
+          process.env.NODE_ENV === 'production',
+        scraperEnabled: this.scraperEnabled,
+        integrations: {
+          sentry: !!process.env.SENTRY_DSN,
+          posthog: !!process.env.POSTHOG_API_KEY,
+          anthropic: !!process.env.ANTHROPIC_API_KEY,
+          twilio: !!process.env.TWILIO_ACCOUNT_SID,
+          stripe: !!process.env.STRIPE_SECRET_KEY,
+        },
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   private async checkComponent(
     name: string,
     fn: () => Promise<void>,

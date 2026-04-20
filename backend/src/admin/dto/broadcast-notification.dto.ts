@@ -21,4 +21,9 @@ export class BroadcastNotificationDto {
   @IsOptional()
   @IsIn(['ALL', SubscriptionPlan.FREE, SubscriptionPlan.PREMIUM, SubscriptionPlan.PRO])
   targetPlan?: 'ALL' | SubscriptionPlan = 'ALL';
+
+  @ApiPropertyOptional({ example: '/arbitrage', description: 'Deep link opcional ao tocar o push' })
+  @IsOptional()
+  @IsString()
+  deepLink?: string;
 }
