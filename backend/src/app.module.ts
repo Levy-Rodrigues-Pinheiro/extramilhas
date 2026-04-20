@@ -31,6 +31,7 @@ import { ReferralModule } from './referral/referral.module';
 import { AnalyticsModule } from './common/analytics.module';
 import { MissionsModule } from './missions/missions.module';
 import { IntelAgentModule } from './intel-agent/intel-agent.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -124,6 +125,7 @@ import { IntelAgentModule } from './intel-agent/intel-agent.module';
     AnalyticsModule,
     MissionsModule,
     IntelAgentModule,
+    ReviewsModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

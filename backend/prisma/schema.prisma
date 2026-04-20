@@ -551,6 +551,23 @@ model UserMission {
   @@map("user_missions")
 }
 
+/// Avaliação de uma transfer partnership (bônus) — user diz se "funcionou"
+/// pra ele. Alimenta score de credibilidade das ofertas no feed.
+/// 1 review por user por partnership (unique).
+model OfferReview {
+  id            String   @id @default(uuid())
+  userId        String
+  partnershipId String // TransferPartnership.id
+  // Simples pra começar: "funcionou" / "não funcionou". Pode virar 1-5 estrelas depois.
+  worked        Boolean
+  comment       String?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, partnershipId])
+  @@index([partnershipId])
+  @@map("offer_reviews")
+}
+
 model FamilyMemberBalance {
   id             String    @id @default(uuid())
   familyMemberId String

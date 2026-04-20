@@ -3,6 +3,14 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 
+function safeJson(s: string): any {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Lista conservadora de rotas populares a pré-aquecer.
  * Ordem de prioridade: rotas domésticas hot → LATAM → longo-curso.
@@ -416,6 +424,136 @@ export class SchedulerService {
     }
   }
 
+
+  /**
+   * Avaliação de alertas personalizados — roda a cada 30 min.
+   *
+   * Para cada alert ativo do user:
+   *   - BONUS_THRESHOLD: checa se existe TransferPartnership ativo com
+   *     currentBonus >= threshold. Se sim, dispara push.
+   *   - CPM_THRESHOLD:   checa se existe Offer recente (últimos 7d, ativa)
+   *     com cpm <= threshold.
+   *   - DESTINATION:     checa AwardChart OU LiveFlightCache FRESH pra rota
+   *     alvo.
+   *
+   * Dedup: lastTriggeredAt no Alert — se disparou nas últimas 12h, pula.
+   */
+  @Cron('*/30 * * * *')
+  async evaluateAlerts() {
+    if (!this.isEnabled()) return;
+    try {
+      const now = Date.now();
+      const twelveHoursAgo = new Date(now - 12 * 3600 * 1000);
+
+      const alerts = await this.prisma.alert.findMany({
+        where: {
+          isActive: true,
+          OR: [{ lastTriggeredAt: null }, { lastTriggeredAt: { lt: twelveHoursAgo } }],
+        },
+      });
+
+      if (alerts.length === 0) return;
+
+      let triggered = 0;
+      for (const a of alerts) {
+        const conditions = typeof a.conditions === 'string' ? safeJson(a.conditions) : (a.conditions as any);
+        let match: { title: string; body: string; deepLink: string; data: any } | null = null;
+
+        if (a.type === 'BONUS_THRESHOLD') {
+          const min = Number(conditions?.minBonus ?? conditions?.bonusPercent ?? 50);
+          const match_ = await this.prisma.transferPartnership.findFirst({
+            where: { isActive: true, currentBonus: { gte: min } },
+            orderBy: { currentBonus: 'desc' },
+            include: { fromProgram: true, toProgram: true },
+          });
+          if (match_) {
+            match = {
+              title: `🎁 Bônus ${Math.round(Number(match_.currentBonus))}% ativo!`,
+              body: `${match_.fromProgram.name} → ${match_.toProgram.name}. Configurado pelo seu alerta.`,
+              deepLink: '/arbitrage',
+              data: { partnershipId: match_.id, alertId: a.id },
+            };
+          }
+        } else if (a.type === 'CPM_THRESHOLD') {
+          const maxCpm = Number(conditions?.maxCpm ?? conditions?.targetCpm ?? 20);
+          const sevenDaysAgo = new Date(now - 7 * 86400_000);
+          const offer = await this.prisma.offer.findFirst({
+            where: {
+              isActive: true,
+              isDeleted: false,
+              cpm: { lte: maxCpm },
+              createdAt: { gte: sevenDaysAgo },
+            },
+            orderBy: { cpm: 'asc' },
+            include: { program: true },
+          });
+          if (offer) {
+            match = {
+              title: `💰 Oferta abaixo do seu CPM alvo!`,
+              body: `${offer.title} · CPM R$${Number(offer.cpm).toFixed(2)}`,
+              deepLink: `/offer/${offer.id}`,
+              data: { offerId: offer.id, alertId: a.id },
+            };
+          }
+        } else if (a.type === 'DESTINATION') {
+          const origin = String(conditions?.origin ?? '').toUpperCase();
+          const destination = String(conditions?.destination ?? '').toUpperCase();
+          if (origin && destination) {
+            const chart = await this.prisma.awardChart.findFirst({
+              where: { origin, destination, isActive: true },
+              orderBy: { milesRequired: 'asc' },
+              include: { program: true },
+            });
+            if (chart) {
+              match = {
+                title: `✈️ Rota ${origin}→${destination} disponível!`,
+                body: `${chart.program.name}: ${chart.milesRequired.toLocaleString('pt-BR')} milhas. Configurado pelo seu alerta.`,
+                deepLink: '/arbitrage',
+                data: { chartId: chart.id, alertId: a.id },
+              };
+            }
+          }
+        }
+
+        if (!match) continue;
+
+        // Envia push (via PushService) + grava AlertHistory + atualiza lastTriggeredAt
+        const devices = await this.prisma.deviceToken.findMany({
+          where: {
+            userId: a.userId,
+            lastUsedAt: { gte: new Date(now - 60 * 86400_000) },
+          },
+          select: { token: true },
+        });
+        if (devices.length === 0) continue;
+
+        await this.push.sendToTokens(
+          devices.map((d) => d.token),
+          {
+            title: match.title,
+            body: match.body,
+            data: { type: 'alert_match', deepLink: match.deepLink, ...match.data },
+          },
+        );
+        await this.prisma.alertHistory.create({
+          data: {
+            alertId: a.id,
+            offerId: match.data.offerId ?? null,
+            channel: 'push',
+          },
+        });
+        await this.prisma.alert.update({
+          where: { id: a.id },
+          data: { lastTriggeredAt: new Date() },
+        });
+        triggered++;
+      }
+
+      this.logger.log(`evaluateAlerts: ${alerts.length} avaliados, ${triggered} disparados`);
+    } catch (err) {
+      this.logger.error(`evaluateAlerts failed: ${(err as Error).message}`);
+    }
+  }
 
   @Cron('0 4 * * 0') // every Sunday 04:00
   async cleanupDeadTokens() {

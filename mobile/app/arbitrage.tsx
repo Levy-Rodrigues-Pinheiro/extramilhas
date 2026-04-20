@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { useTransferBonuses, TransferOpportunity } from '../src/hooks/useArbitrage';
 import { PaywallUpsellBanner, LockedOpportunityCard } from '../src/components/PaywallGate';
 import { FirstRunTip } from '../src/components/FirstRunTip';
+import { ReviewCompact } from '../src/components/ReviewCompact';
 
 type SortMode = 'best' | 'newest' | 'expiring';
 type FilterMode = 'all' | 'my_programs' | 'top_only';
@@ -502,6 +503,9 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
             <Ionicons name="share-social-outline" size={18} color="#25D366" />
           </TouchableOpacity>
         </View>
+
+        {/* Review compact: funcionou ou não + agregado */}
+        <ReviewCompact partnershipId={o.id} />
       </LinearGradient>
     </View>
   );
