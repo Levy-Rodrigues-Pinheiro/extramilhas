@@ -176,6 +176,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/(tabs)/compare' as any),
     },
     {
+      icon: 'stats-chart-outline',
+      label: 'Meu histórico e dashboard',
+      showChevron: true,
+      onPress: () => router.push('/dashboard' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

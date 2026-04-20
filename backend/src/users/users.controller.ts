@@ -200,6 +200,20 @@ export class UsersController {
     return successResponse(result);
   }
 
+  @Get('dashboard/stats')
+  @ApiOperation({ summary: 'Estatísticas agregadas do user: economia, transfers, alertas, missões' })
+  async getDashboardStats(@CurrentUser() user: any) {
+    const result = await this.usersService.getDashboardStats(user.id);
+    return successResponse(result);
+  }
+
+  @Get('dashboard/export')
+  @ApiOperation({ summary: 'Exporta dados do user como CSV (carteira + alertas + notificações)' })
+  async exportDashboardCsv(@CurrentUser() user: any) {
+    const result = await this.usersService.exportUserDataCsv(user.id);
+    return successResponse(result);
+  }
+
   @Get('miles-expiring')
   @ApiOperation({ summary: 'Get expiring miles balances (next 30 days)' })
   async getExpiringBalances(@CurrentUser() user: any) {

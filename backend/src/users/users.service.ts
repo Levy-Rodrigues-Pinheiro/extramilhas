@@ -378,6 +378,170 @@ export class UsersService {
     });
   }
 
+  /**
+   * Dashboard pessoal: número de alertas recebidos, transferências sugeridas
+   * realizadas (aproximado via notificações lidas de tipo="arbitrage"),
+   * economia estimada com base em bônus ativos casados com saldo do user.
+   *
+   * Nota: "economia" aqui é uma ESTIMATIVA (não temos tracking real de
+   * transferências feitas fora do app). Calcula: se user tem X pontos num
+   * programa que hoje tem bônus Y%, economia hipotética = X * CPM * Y%.
+   */
+  async getDashboardStats(userId: string) {
+    const now = new Date();
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const [
+      balances,
+      notifTotal,
+      notifThisYear,
+      notifLastMonth,
+      alertsCount,
+      activeBonuses,
+      missionsClaimed,
+    ] = await Promise.all([
+      this.prisma.userMilesBalance.findMany({
+        where: { userId },
+        include: { program: true },
+      }),
+      this.prisma.notification.count({ where: { userId } }),
+      this.prisma.notification.count({ where: { userId, createdAt: { gte: yearStart } } }),
+      this.prisma.notification.count({ where: { userId, createdAt: { gte: monthStart } } }),
+      this.prisma.alert.count({ where: { userId } }),
+      this.prisma.transferPartnership.findMany({
+        where: { isActive: true, currentBonus: { gt: 0 } },
+        include: { fromProgram: true, toProgram: true },
+      }),
+      (this.prisma as any).userMission.count({
+        where: { userId, rewardClaimedAt: { not: null } },
+      }),
+    ]);
+
+    // Estimativa de economia: para cada programa com saldo, pega o maior
+    // bônus ativo como fromProgram e calcula ganho em R$.
+    let estimatedSavings = 0;
+    for (const b of balances) {
+      const bonusForThis = activeBonuses.find((ab) => ab.fromProgramId === b.programId);
+      if (bonusForThis) {
+        const cpm = bonusForThis.toProgram.avgCpmCurrent || 25;
+        const multiplier = 1 + Number(bonusForThis.currentBonus) / 100;
+        // ganho = pontos * multiplier extras * cpm/1000
+        const gain = b.balance * (multiplier - 1) * (cpm / 1000);
+        estimatedSavings += gain;
+      }
+    }
+
+    return {
+      savingsTotal: Math.round(estimatedSavings * 100) / 100,
+      savingsEstimateNote:
+        'Estimativa baseada em bônus ATIVOS hoje cruzados com seu saldo atual. Não reflete transferências reais.',
+      notifications: {
+        total: notifTotal,
+        thisYear: notifThisYear,
+        lastMonth: notifLastMonth,
+      },
+      alertsConfigured: alertsCount,
+      missionsCompleted: missionsClaimed,
+      walletPrograms: balances.length,
+      walletTotalMiles: balances.reduce((s, b) => s + b.balance, 0),
+      generatedAt: now.toISOString(),
+    };
+  }
+
+  /**
+   * Exporta dados do user em CSV (LGPD-friendly: todos os dados que temos dele).
+   * Retorna o CSV como string junto com um filename sugerido. O mobile decide
+   * se compartilha (Share.share) ou salva.
+   */
+  async exportUserDataCsv(userId: string) {
+    const [user, balances, alerts, notifications, family] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, name: true, createdAt: true, subscriptionPlan: true },
+      }),
+      this.prisma.userMilesBalance.findMany({
+        where: { userId },
+        include: { program: { select: { name: true, slug: true } } },
+      }),
+      this.prisma.alert.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } }),
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 500, // limitamos pra não estourar payload
+      }),
+      this.prisma.familyMember.findMany({
+        where: { userId },
+        include: { balances: { include: { program: true } } },
+      }),
+    ]);
+
+    const lines: string[] = [];
+    const esc = (v: any) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+
+    lines.push('# USER');
+    lines.push('id,email,name,createdAt,plan');
+    if (user) {
+      lines.push(
+        [user.id, user.email, user.name, user.createdAt.toISOString(), user.subscriptionPlan]
+          .map(esc)
+          .join(','),
+      );
+    }
+    lines.push('');
+
+    lines.push('# WALLET BALANCES');
+    lines.push('program,balance,expiresAt,updatedAt');
+    for (const b of balances) {
+      lines.push(
+        [b.program.name, b.balance, b.expiresAt?.toISOString() ?? '', b.updatedAt.toISOString()]
+          .map(esc)
+          .join(','),
+      );
+    }
+    lines.push('');
+
+    lines.push('# ALERTS');
+    lines.push('type,conditions,isActive,createdAt,lastTriggeredAt');
+    for (const a of alerts) {
+      lines.push(
+        [
+          a.type,
+          a.conditions,
+          a.isActive,
+          a.createdAt.toISOString(),
+          a.lastTriggeredAt?.toISOString() ?? '',
+        ]
+          .map(esc)
+          .join(','),
+      );
+    }
+    lines.push('');
+
+    lines.push('# FAMILY MEMBERS');
+    lines.push('name,relationship,programs_count,total_miles');
+    for (const m of family) {
+      const total = m.balances.reduce((s, b) => s + b.balance, 0);
+      lines.push([m.name, m.relationship, m.balances.length, total].map(esc).join(','));
+    }
+    lines.push('');
+
+    lines.push('# NOTIFICATIONS (last 500)');
+    lines.push('type,title,body,isRead,createdAt');
+    for (const n of notifications) {
+      lines.push(
+        [n.type, n.title, n.body, n.isRead, n.createdAt.toISOString()].map(esc).join(','),
+      );
+    }
+
+    const csv = lines.join('\n');
+    const filename = `milhas-extras-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    return { csv, filename };
+  }
+
   async getExpiringBalances(userId: string) {
     const thirtyDaysLater = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const now = new Date();
