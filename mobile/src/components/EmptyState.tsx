@@ -12,8 +12,12 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
-    <View style={styles.container}>
-      <View style={styles.iconContainer}>
+    <View
+      style={styles.container}
+      accessibilityRole="summary"
+      accessibilityLabel={description ? `${title}. ${description}` : title}
+    >
+      <View style={styles.iconContainer} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Ionicons name={icon} size={48} color={Colors.primary.light} />
       </View>
       <Text style={styles.title}>{title}</Text>

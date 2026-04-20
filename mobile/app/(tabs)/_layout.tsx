@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { Colors } from '../../src/lib/theme';
 import { useNotificationFeed } from '../../src/hooks/useNotificationFeed';
 
@@ -29,6 +30,7 @@ function TabIcon({
  * o foco é monetização via arbitragem.
  */
 export default function TabsLayout() {
+  const { t } = useTranslation();
   // Unread count pra badge no tab Perfil (aponta pra Notification Center)
   const notifFeed = useNotificationFeed();
   const unreadCount = notifFeed.data?.unreadCount ?? 0;
@@ -66,46 +68,53 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Início',
+          title: t('home.greeting').replace('👋', '').trim() || 'Início',
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="home" focused={focused} color={color} />
           ),
+          tabBarAccessibilityLabel: 'Início',
         }}
       />
       <Tabs.Screen
         name="wallet"
         options={{
-          title: 'Carteira',
+          title: t('wallet.title'),
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="wallet" focused={focused} color={color} />
           ),
+          tabBarAccessibilityLabel: t('wallet.title'),
         }}
       />
       <Tabs.Screen
         name="calculator"
         options={{
-          title: 'Calc',
+          title: t('home.quick_calc'),
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="calculator" focused={focused} color={color} />
           ),
+          tabBarAccessibilityLabel: t('home.quick_calc'),
         }}
       />
       <Tabs.Screen
         name="alerts"
         options={{
-          title: 'Alertas',
+          title: t('home.quick_alerts'),
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="notifications" focused={focused} color={color} />
           ),
+          tabBarAccessibilityLabel: t('alerts_screen.title'),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Perfil',
+          title: t('profile.title'),
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="person" focused={focused} color={color} />
           ),
+          tabBarAccessibilityLabel: unreadCount > 0
+            ? `${t('profile.title')}, ${unreadCount} notificações não lidas`
+            : t('profile.title'),
           tabBarBadge: unreadCount > 0 ? (unreadCount > 9 ? '9+' : unreadCount) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: '#EC4899',

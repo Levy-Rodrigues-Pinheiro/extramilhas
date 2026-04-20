@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { ProgramLogo } from './ProgramLogo';
 
 interface MilesInputProps {
@@ -16,6 +17,7 @@ export function MilesInput({
   balance,
   onChange,
 }: MilesInputProps) {
+  const { t } = useTranslation();
   const [focused, setFocused] = useState(false);
 
   const formatNumber = (n: number) =>
@@ -31,7 +33,7 @@ export function MilesInput({
       <ProgramLogo slug={programSlug} size={36} />
       <View style={styles.info}>
         <Text style={styles.programName}>{programName}</Text>
-        <Text style={styles.balanceLabel}>Saldo de milhas</Text>
+        <Text style={styles.balanceLabel}>{t('wallet.total_miles')}</Text>
       </View>
       <TextInput
         style={styles.input}
@@ -42,6 +44,8 @@ export function MilesInput({
         placeholderTextColor="#475569"
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
+        accessibilityLabel={`${t('wallet.total_miles')} ${programName}`}
+        accessibilityHint={t('wallet.placeholder_miles')}
       />
     </View>
   );

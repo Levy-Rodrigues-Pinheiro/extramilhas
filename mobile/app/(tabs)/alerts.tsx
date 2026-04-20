@@ -131,6 +131,9 @@ function AlertCard({ alert }: { alert: AlertType }) {
           style={styles.deleteButton}
           activeOpacity={0.7}
           disabled={deleteAlert.isPending}
+          accessibilityRole="button"
+          accessibilityLabel="Excluir alerta"
+          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
         >
           {deleteAlert.isPending ? (
             <ActivityIndicator size="small" color="#ef4444" />
@@ -170,6 +173,9 @@ export default function AlertsScreen() {
           style={styles.addButton}
           onPress={() => router.push('/alerts/create')}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Criar novo alerta"
+          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
         >
           <Ionicons name="add" size={22} color="#fff" />
         </TouchableOpacity>
