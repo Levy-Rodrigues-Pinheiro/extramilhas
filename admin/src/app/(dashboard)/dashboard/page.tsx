@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Users, CreditCard, Tag, Bell } from 'lucide-react'
+import { Users, CreditCard, Tag, Bell, Megaphone, Smartphone, Trophy, TrendingUp } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -97,6 +97,14 @@ export default function DashboardPage() {
   const recentOffers: Offer[] = metrics?.recentOffers?.slice(0, 5) ?? []
   const recentUsers: User[] = metrics?.recentUsers?.slice(0, 5) ?? []
 
+  // Stats das novas features (graceful pra builds antigas do backend)
+  const m: any = metrics || {}
+  const growth = m.growth || {}
+  const crowd = m.crowdsource || {}
+  const push = m.push || {}
+  const topReporters: Array<{ userId: string; name: string; email: string; approvedCount: number }> =
+    crowd.topReporters || []
+
   const chartData =
     metrics?.userGrowth && metrics.userGrowth.length > 0
       ? metrics.userGrowth.map((d) => ({
@@ -108,7 +116,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 bg-[#0B1120]">
-      {/* Metric Cards */}
+      {/* Metric Cards - linha principal */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Total Usuários"
@@ -135,6 +143,127 @@ export default function DashboardPage() {
           iconClassName="bg-yellow-600/20"
         />
       </div>
+
+      {/* Metric Cards - growth + features novas */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          title="Novos (7d)"
+          value={growth.newUsersThisWeek ?? 0}
+          subtitle={`${growth.newUsersThisMonth ?? 0} nos últimos 30d`}
+          icon={TrendingUp}
+          iconClassName="bg-cyan-600/20"
+        />
+        <MetricCard
+          title="Taxa de Conversão"
+          value={`${growth.conversionRate ?? 0}%`}
+          subtitle="Free → Premium/Pro"
+          icon={CreditCard}
+          iconClassName="bg-fuchsia-600/20"
+        />
+        <MetricCard
+          title="Reports Pendentes"
+          value={crowd.reportsPending ?? 0}
+          subtitle={`${crowd.reportsApprovedThisMonth ?? 0} aprovados (30d)`}
+          icon={Megaphone}
+          iconClassName="bg-amber-600/20"
+        />
+        <MetricCard
+          title="Devices Ativos (7d)"
+          value={push.devicesActive7d ?? 0}
+          subtitle={`${push.devicesTotal ?? 0} registrados`}
+          icon={Smartphone}
+          iconClassName="bg-indigo-600/20"
+        />
+      </div>
+
+      {/* Crowdsource insight: conversão crowd → paid */}
+      {crowd.uniqueReporters > 0 && (
+        <Card className="bg-[#141C2F] border-[#1E293B]">
+          <CardHeader>
+            <CardTitle className="text-white text-base flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-amber-400" />
+              Crowdsource → Monetização
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div>
+                <p className="text-xs text-gray-400">Reporters únicos</p>
+                <p className="text-2xl font-bold text-white">{crowd.uniqueReporters}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Viraram assinantes</p>
+                <p className="text-2xl font-bold text-emerald-400">{crowd.reportersPaidCount}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Taxa de conversão</p>
+                <p className="text-2xl font-bold text-fuchsia-400">
+                  {crowd.reporterToPaidRate ?? 0}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Reports totais</p>
+                <p className="text-2xl font-bold text-white">{crowd.reportsAllTime ?? 0}</p>
+              </div>
+            </div>
+
+            {topReporters.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase font-semibold mb-2">
+                  Top 5 reporters
+                </p>
+                <div className="space-y-2">
+                  {topReporters.map((r, i) => (
+                    <div
+                      key={r.userId}
+                      className="flex items-center justify-between p-2 rounded bg-gray-800/30"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">
+                          {['🥇', '🥈', '🥉', '🏅', '🏅'][i]}
+                        </span>
+                        <div>
+                          <p className="text-sm text-white font-medium">{r.name}</p>
+                          <p className="text-xs text-gray-500">{r.email}</p>
+                        </div>
+                      </div>
+                      <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">
+                        {r.approvedCount} aprovados
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Push stats por plataforma */}
+      {push.byPlatform && push.byPlatform.length > 0 && (
+        <Card className="bg-[#141C2F] border-[#1E293B]">
+          <CardHeader>
+            <CardTitle className="text-white text-base flex items-center gap-2">
+              <Smartphone className="h-4 w-4 text-indigo-400" />
+              Distribuição por Plataforma
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {push.byPlatform.map((p: { platform: string; count: number }) => (
+                <div key={p.platform} className="p-3 rounded bg-gray-800/30">
+                  <p className="text-xs text-gray-400 uppercase">{p.platform}</p>
+                  <p className="text-xl font-bold text-white">{p.count}</p>
+                </div>
+              ))}
+              <div className="p-3 rounded bg-gray-800/30">
+                <p className="text-xs text-gray-400 uppercase">Ativos 30d</p>
+                <p className="text-xl font-bold text-emerald-400">{push.devicesActive30d ?? 0}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Line Chart */}
       <Card className="bg-[#141C2F] border-[#1E293B]">

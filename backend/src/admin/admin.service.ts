@@ -25,8 +25,13 @@ export class AdminService {
   async getDashboardMetrics() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+    const weekAgo = new Date(Date.now() - 7 * 86400_000);
+    const monthAgo = new Date(Date.now() - 30 * 86400_000);
 
+    // Agrupo as queries por responsabilidade pra facilitar manutenção —
+    // o Promise.all faz tudo em paralelo então o custo é ~1 round-trip.
     const [
+      // Usuários e assinantes (legados)
       totalUsers,
       activeSubscribers,
       premiumCount,
@@ -35,11 +40,23 @@ export class AdminService {
       alertsTriggeredToday,
       recentOffers,
       recentUsers,
+      // Growth
+      newUsersThisWeek,
+      newUsersThisMonth,
+      // Crowdsource (BonusReport)
+      reportsPending,
+      reportsApprovedThisMonth,
+      reportsAllTime,
+      // Engagement (DeviceToken)
+      devicesTotal,
+      devicesActive30d,
+      devicesActive7d,
+      devicesByPlatform,
+      // Reporters top 5 (leaderboard compacto)
+      topReportersGrouped,
     ] = await Promise.all([
       this.prisma.user.count(),
-      this.prisma.user.count({
-        where: { subscriptionPlan: { not: SubscriptionPlan.FREE } },
-      }),
+      this.prisma.user.count({ where: { subscriptionPlan: { not: SubscriptionPlan.FREE } } }),
       this.prisma.user.count({ where: { subscriptionPlan: SubscriptionPlan.PREMIUM } }),
       this.prisma.user.count({ where: { subscriptionPlan: SubscriptionPlan.PRO } }),
       this.prisma.offer.count({ where: { isActive: true, isDeleted: false } }),
@@ -55,9 +72,63 @@ export class AdminService {
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
+      this.prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
+      this.prisma.user.count({ where: { createdAt: { gte: monthAgo } } }),
+      this.prisma.bonusReport.count({ where: { status: 'PENDING' } }),
+      this.prisma.bonusReport.count({
+        where: { status: 'APPROVED', createdAt: { gte: monthAgo } },
+      }),
+      this.prisma.bonusReport.count(),
+      this.prisma.deviceToken.count(),
+      this.prisma.deviceToken.count({ where: { lastUsedAt: { gte: monthAgo } } }),
+      this.prisma.deviceToken.count({ where: { lastUsedAt: { gte: weekAgo } } }),
+      this.prisma.deviceToken.groupBy({
+        by: ['platform'],
+        _count: { _all: true },
+      }),
+      this.prisma.bonusReport.groupBy({
+        by: ['reporterId'],
+        where: { status: 'APPROVED', reporterId: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { reporterId: 'desc' } },
+        take: 5,
+      }),
     ]);
 
+    // Resolve os nomes dos top reporters
+    const topReporterIds = topReportersGrouped.map((g) => g.reporterId!).filter(Boolean);
+    const topReporterUsers = topReporterIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: topReporterIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+    const userById = new Map(topReporterUsers.map((u) => [u.id, u]));
+    const topReporters = topReportersGrouped.map((g) => ({
+      userId: g.reporterId!,
+      name: userById.get(g.reporterId!)?.name ?? 'Desconhecido',
+      email: userById.get(g.reporterId!)?.email ?? '',
+      approvedCount: g._count._all,
+    }));
+
+    // Conversão crowd→paid: % de usuários que reportaram E pagam
+    const reportersTotal = await this.prisma.bonusReport.findMany({
+      where: { reporterId: { not: null } },
+      select: { reporterId: true },
+      distinct: ['reporterId'],
+    });
+    const reportersUserIds = reportersTotal.map((r) => r.reporterId!).filter(Boolean);
+    const reportersPaidCount = reportersUserIds.length
+      ? await this.prisma.user.count({
+          where: {
+            id: { in: reportersUserIds },
+            subscriptionPlan: { not: SubscriptionPlan.FREE },
+          },
+        })
+      : 0;
+
     return {
+      // ── Legado ─────────────────────
       totalUsers,
       activeSubscribers,
       premiumCount,
@@ -66,6 +137,38 @@ export class AdminService {
       alertsTriggeredToday,
       recentOffers,
       recentUsers,
+      // ── Growth ─────────────────────
+      growth: {
+        newUsersThisWeek,
+        newUsersThisMonth,
+        conversionRate:
+          totalUsers > 0
+            ? parseFloat(((activeSubscribers / totalUsers) * 100).toFixed(2))
+            : 0,
+      },
+      // ── Crowdsource ────────────────
+      crowdsource: {
+        reportsPending,
+        reportsApprovedThisMonth,
+        reportsAllTime,
+        uniqueReporters: reportersUserIds.length,
+        reportersPaidCount,
+        reporterToPaidRate:
+          reportersUserIds.length > 0
+            ? parseFloat(((reportersPaidCount / reportersUserIds.length) * 100).toFixed(2))
+            : 0,
+        topReporters,
+      },
+      // ── Push notifications ─────────
+      push: {
+        devicesTotal,
+        devicesActive30d,
+        devicesActive7d,
+        byPlatform: devicesByPlatform.map((p) => ({
+          platform: p.platform,
+          count: p._count._all,
+        })),
+      },
     };
   }
 

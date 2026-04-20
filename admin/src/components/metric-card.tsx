@@ -9,6 +9,7 @@ interface MetricCardProps {
   icon: LucideIcon
   change?: number
   changeLabel?: string
+  subtitle?: string
   className?: string
   iconClassName?: string
 }
@@ -19,6 +20,7 @@ export function MetricCard({
   icon: Icon,
   change,
   changeLabel,
+  subtitle,
   className,
   iconClassName,
 }: MetricCardProps) {
@@ -43,6 +45,9 @@ export function MetricCard({
                 {isPositive ? '+' : ''}
                 {change}% {changeLabel || 'vs mês anterior'}
               </p>
+            )}
+            {subtitle && (
+              <p className="text-xs text-gray-500">{subtitle}</p>
             )}
           </div>
           <div
