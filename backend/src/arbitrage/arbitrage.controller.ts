@@ -1,6 +1,8 @@
 import { Body, Controller, Get, HttpException, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, Min, Max } from 'class-validator';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Public } from '../common/decorators/public.decorator';
 import { successResponse } from '../common/helpers/response.helper';
@@ -32,7 +34,29 @@ class CalculateTransferDto {
 @ApiTags('Arbitrage')
 @Controller('arbitrage')
 export class ArbitrageController {
-  constructor(private readonly arbitrage: ArbitrageService) {}
+  constructor(
+    private readonly arbitrage: ArbitrageService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /**
+   * Tenta extrair userId do header Authorization sem bloquear se ausente/inválido.
+   * Usado em endpoints @Public que personalizam quando autenticado.
+   */
+  private tryGetUserId(req: any): string | null {
+    const auth = req.headers?.authorization;
+    if (!auth || !auth.startsWith('Bearer ')) return null;
+    try {
+      const token = auth.slice(7);
+      const payload = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('JWT_SECRET'),
+      });
+      return payload?.sub || payload?.id || null;
+    } catch {
+      return null;
+    }
+  }
 
   @Public()
   @Post('calculate')
@@ -65,9 +89,8 @@ export class ArbitrageController {
       'personaliza com saldos do UserMilesBalance.',
   })
   async transferBonuses(@Req() req: any) {
-    // JwtAuthGuard está como global-optional no app. Tenta extrair userId do token.
-    const userId = req.user?.id || req.user?.userId || null;
-    const data = await this.arbitrage.transferBonusOpportunities(userId);
+    const userId = this.tryGetUserId(req);
+    const data = await this.arbitrage.transferBonusOpportunities(userId ?? undefined);
     return successResponse({
       count: data.length,
       opportunities: data,
