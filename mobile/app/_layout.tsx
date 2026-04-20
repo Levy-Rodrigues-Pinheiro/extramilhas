@@ -11,6 +11,7 @@ import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initSentry } from '../src/lib/sentry';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { initAnalytics } from '../src/lib/analytics';
+import '../src/lib/i18n'; // side-effect: inicializa i18n
 
 // Arma push notifications (permissão + token + listeners).
 // Extraído como componente vazio só pra poder usar o hook dentro do provider tree.
