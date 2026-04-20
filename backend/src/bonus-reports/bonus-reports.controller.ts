@@ -33,6 +33,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { successResponse } from '../common/helpers/response.helper';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { LeaderboardService, tierFor } from '../leaderboard/leaderboard.service';
 
 class CreateBonusReportDto {
   @ApiProperty({ example: 'livelo' })
@@ -103,6 +104,7 @@ export class BonusReportsController {
     private jwtService: JwtService,
     private configService: ConfigService,
     private push: PushService,
+    private leaderboard: LeaderboardService,
   ) {}
 
   private tryGetUserId(req: any): string | null {
@@ -335,6 +337,40 @@ export class BonusReportsController {
         },
       })
       .catch((err) => this.logger.error(`Push broadcast failed: ${err.message}`));
+
+    // Push dedicado pro reporter: reforço positivo + feedback de tier.
+    // Só se ele tem conta (reporterId) — anônimos via email não têm push.
+    if (report.reporterId) {
+      (async () => {
+        try {
+          const stats = await this.leaderboard.myStats(report.reporterId!);
+          const prevTier = tierFor(stats.approvedCount - 1);
+          const leveledUp = stats.tier !== prevTier && stats.approvedCount > 1;
+          const title = leveledUp
+            ? `🏆 Seu report foi aprovado — você virou ${stats.tier}!`
+            : '✅ Seu report foi aprovado!';
+          const body = leveledUp
+            ? `Parabéns! Você agora é tier ${stats.tier} (${stats.approvedCount} reports aprovados). O app inteiro te agradece.`
+            : stats.nextTier
+              ? `+1 pro seu ranking (${stats.approvedCount} aprovados). Faltam ${stats.nextTier.needed} pra virar ${stats.nextTier.name}.`
+              : `+1 pro seu ranking (${stats.approvedCount} aprovados). Você é lenda 🐐`;
+          await this.push.sendToUser(report.reporterId!, {
+            title,
+            body,
+            data: {
+              type: 'report_approved',
+              reportId: id,
+              tier: stats.tier,
+              rank: stats.rank,
+              leveledUp,
+              deepLink: '/leaderboard',
+            },
+          });
+        } catch (err) {
+          this.logger.error(`Reporter push failed: ${(err as Error).message}`);
+        }
+      })();
+    }
 
     return successResponse({ report: updated, partnership });
   }

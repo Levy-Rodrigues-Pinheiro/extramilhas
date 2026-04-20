@@ -94,6 +94,18 @@ export default function ProfileScreen() {
       onPress: () => router.push('/arbitrage' as any),
     },
     {
+      icon: 'trophy-outline',
+      label: 'Ranking de Reporters',
+      showChevron: true,
+      onPress: () => router.push('/leaderboard' as any),
+    },
+    {
+      icon: 'megaphone-outline',
+      label: 'Reportar um bônus',
+      showChevron: true,
+      onPress: () => router.push('/report-bonus' as any),
+    },
+    {
       icon: 'people-outline',
       label: 'Família',
       showChevron: true,

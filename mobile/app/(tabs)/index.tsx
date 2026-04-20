@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTransferBonuses } from '../../src/hooks/useArbitrage';
 import { useWallet } from '../../src/hooks/useWallet';
+import { useMyLeaderboardStats, TIER_META } from '../../src/hooks/useLeaderboard';
 
 /**
  * Home — dashboard focado em arbitragem de milhas.
@@ -29,6 +30,7 @@ import { useWallet } from '../../src/hooks/useWallet';
 export default function HomeScreen() {
   const wallet = useWallet();
   const bonuses = useTransferBonuses();
+  const leaderboard = useMyLeaderboardStats();
 
   const refreshing = wallet.isRefetching || bonuses.isRefetching;
   const refetchAll = () => {
@@ -117,6 +119,31 @@ export default function HomeScreen() {
             onPress={() => router.push('/(tabs)/alerts')}
           />
         </View>
+
+        {/* Meu tier (só pra quem já tem aprovados — evita ruído pra novato) */}
+        {leaderboard.data && leaderboard.data.approvedCount > 0 && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/leaderboard' as any)}
+            style={styles.tierCard}
+          >
+            <Text style={styles.tierEmoji}>{TIER_META[leaderboard.data.tier].emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.tierTitle}>
+                Você é tier {TIER_META[leaderboard.data.tier].label}
+              </Text>
+              <Text style={styles.tierSub}>
+                {leaderboard.data.approvedCount} report
+                {leaderboard.data.approvedCount !== 1 ? 's' : ''} aprovado
+                {leaderboard.data.approvedCount !== 1 ? 's' : ''}
+                {leaderboard.data.rank !== null && ` · #${leaderboard.data.rank}`}
+                {leaderboard.data.nextTier &&
+                  ` · faltam ${leaderboard.data.nextTier.needed} pra ${TIER_META[leaderboard.data.nextTier.name].label}`}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#64748B" />
+          </TouchableOpacity>
+        )}
 
         {/* Top oportunidades */}
         <View style={styles.section}>
@@ -299,6 +326,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   badgeDotText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+  tierCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 14, marginBottom: 16,
+    backgroundColor: '#1E293B',
+    borderRadius: 12, borderWidth: 1, borderColor: '#334155',
+  },
+  tierEmoji: { fontSize: 32 },
+  tierTitle: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
+  tierSub: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
 
   section: { marginBottom: 20 },
   sectionHeader: {

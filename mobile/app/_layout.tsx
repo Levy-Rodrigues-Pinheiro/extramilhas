@@ -101,6 +101,8 @@ export default function RootLayout() {
             <Stack.Screen name="transfers" options={{ headerShown: false }} />
             <Stack.Screen name="value-compare" options={{ headerShown: false }} />
             <Stack.Screen name="family" options={{ headerShown: false }} />
+            <Stack.Screen name="report-bonus" options={{ headerShown: false, animation: 'slide_from_bottom', presentation: 'modal' }} />
+            <Stack.Screen name="leaderboard" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

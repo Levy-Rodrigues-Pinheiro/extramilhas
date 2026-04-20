@@ -25,6 +25,7 @@ import { ArbitrageModule } from './arbitrage/arbitrage.module';
 import { WaitlistModule } from './waitlist/waitlist.module';
 import { BonusReportsModule } from './bonus-reports/bonus-reports.module';
 import { PushModule } from './push/push.module';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
 
 @Module({
   imports: [
@@ -112,6 +113,7 @@ import { PushModule } from './push/push.module';
     WaitlistModule,
     BonusReportsModule,
     PushModule,
+    LeaderboardModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators
