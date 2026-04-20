@@ -82,7 +82,17 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // Menu focado em milhas. Removidas entradas que viraram tabs (Carteira,
+  // Calculadora) ou que pertencem ao mundo de viagens (Explorar,
+  // Histórico de Preços, Milhas vs Dinheiro). Voltam quando a feature
+  // de simulador for repriorizada.
   const menuItems: MenuItem[] = [
+    {
+      icon: 'trending-up-outline',
+      label: 'Oportunidades de arbitragem',
+      showChevron: true,
+      onPress: () => router.push('/arbitrage' as any),
+    },
     {
       icon: 'people-outline',
       label: 'Família',
@@ -96,46 +106,10 @@ export default function ProfileScreen() {
       onPress: () => router.push('/transfers'),
     },
     {
-      icon: 'calculator-outline',
-      label: 'Milhas vs Dinheiro',
-      showChevron: true,
-      onPress: () => router.push('/value-compare'),
-    },
-    {
-      icon: 'compass-outline',
-      label: 'Explorar',
-      showChevron: true,
-      onPress: () => router.push('/explore'),
-    },
-    {
-      icon: 'wallet-outline',
-      label: 'Minha Carteira de Milhas',
-      showChevron: true,
-      onPress: () => router.push('/wallet' as any),
-    },
-    {
-      icon: 'trending-up-outline',
-      label: 'Oportunidades de arbitragem',
-      showChevron: true,
-      onPress: () => router.push('/arbitrage' as any),
-    },
-    {
-      icon: 'calculator-outline',
-      label: 'Vale a pena transferir?',
-      showChevron: true,
-      onPress: () => router.push('/transfer-calculator' as any),
-    },
-    {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,
       onPress: () => router.push('/preferences' as any),
-    },
-    {
-      icon: 'bar-chart-outline',
-      label: 'Histórico de Preços',
-      showChevron: true,
-      onPress: () => router.push('/price-history/smiles'),
     },
     {
       icon: 'book-outline',

@@ -18,6 +18,15 @@ function TabIcon({
   return <Ionicons name={focused ? name : (`${name}-outline` as IoniconName)} size={22} color={color} />;
 }
 
+/**
+ * Tab bar focada 100% em milhas.
+ *
+ * Início (arbitragem) | Carteira | Calculadora | Alertas | Perfil
+ *
+ * Telas legacy (simulator, compare) ainda existem em arquivo mas estão
+ * ocultadas via `href: null` — podem voltar quando/se fizer sentido. Hoje
+ * o foco é monetização via arbitragem.
+ */
 export default function TabsLayout() {
   return (
     <Tabs
@@ -59,29 +68,29 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="wallet"
+        options={{
+          title: 'Carteira',
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="wallet" focused={focused} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="calculator"
+        options={{
+          title: 'Calc',
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="calculator" focused={focused} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="alerts"
         options={{
           title: 'Alertas',
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="notifications" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="simulator"
-        options={{
-          title: 'Simular',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="map" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="compare"
-        options={{
-          title: 'Comparar',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="bar-chart" focused={focused} color={color} />
           ),
         }}
       />
@@ -94,6 +103,10 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* OCULTAS — telas mantidas em arquivo mas removidas do tab bar */}
+      <Tabs.Screen name="simulator" options={{ href: null }} />
+      <Tabs.Screen name="compare" options={{ href: null }} />
     </Tabs>
   );
 }

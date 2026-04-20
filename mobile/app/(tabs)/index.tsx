@@ -1,335 +1,359 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
   StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   RefreshControl,
-  StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useInfiniteOffers } from '../../src/hooks/useOffers';
-import { useExpiringBalances } from '../../src/hooks/useProfile';
-import { useAppStore } from '../../src/store/app.store';
-import { OfferCard } from '../../src/components/OfferCard';
-import { ProgramChip } from '../../src/components/ProgramChip';
-import { ExpirationWarning } from '../../src/components/ExpirationWarning';
-import { EmptyState } from '../../src/components/EmptyState';
-import { OfferListSkeleton } from '../../src/components/LoadingSkeleton';
-import { Colors, Gradients } from '../../src/lib/theme';
-import type { Offer } from '../../src/types';
+import { useTransferBonuses } from '../../src/hooks/useArbitrage';
+import { useWallet } from '../../src/hooks/useWallet';
 
-const PROGRAMS = [
-  { label: 'Todos', slug: '' },
-  { label: 'Smiles', slug: 'smiles' },
-  { label: 'Livelo', slug: 'livelo' },
-  { label: 'TudoAzul', slug: 'tudoazul' },
-  { label: 'Latam Pass', slug: 'latampass' },
-  { label: 'Esfera', slug: 'esfera' },
-];
-
+/**
+ * Home — dashboard focado em arbitragem de milhas.
+ *
+ * Hierarquia visual:
+ * 1. Saudação + valor da carteira (orgulho/familiaridade)
+ * 2. Quick actions (calc, oportunidades, alertas)
+ * 3. Top oportunidades de transferência (CTA principal)
+ * 4. CTA pra cadastrar saldo (se carteira vazia)
+ *
+ * Substitui o feed de ofertas — pivot pra monetização via arbitragem.
+ */
 export default function HomeScreen() {
-  const { selectedPrograms, searchQuery, toggleProgram, setSearchQuery, setSelectedPrograms } =
-    useAppStore();
+  const wallet = useWallet();
+  const bonuses = useTransferBonuses();
 
-  const { data: expiringBalances } = useExpiringBalances();
-
-  const [refreshing, setRefreshing] = useState(false);
-
-  const filters = {
-    programs: selectedPrograms.length > 0 ? selectedPrograms : undefined,
-    search: searchQuery || undefined,
+  const refreshing = wallet.isRefetching || bonuses.isRefetching;
+  const refetchAll = () => {
+    wallet.refetch();
+    bonuses.refetch();
   };
 
-  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteOffers(filters);
-
-  const rawOffers: Offer[] = data?.pages.flatMap((p) => p.data) ?? [];
-  const allOffers = selectedPrograms.length > 0
-    ? rawOffers.filter((o) => o.program?.slug && selectedPrograms.includes(o.program.slug))
-    : rawOffers;
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
-
-  const handleLoadMore = () => {
-    if (hasNextPage && !isFetchingNextPage) {
-      fetchNextPage();
-    }
-  };
-
-  const handleProgramSelect = (slug: string) => {
-    if (slug === '') {
-      setSelectedPrograms([]);
-    } else {
-      toggleProgram(slug);
-    }
-  };
-
-  const isProgramSelected = (slug: string) => {
-    if (slug === '') return selectedPrograms.length === 0;
-    return selectedPrograms.includes(slug);
-  };
-
-  const renderOffer = ({ item }: { item: Offer }) => (
-    <OfferCard
-      offer={item}
-      onSave={(id) => router.push(`/offer/${id}`)}
-    />
-  );
-
-  const renderHeader = () => (
-    <View>
-      {/* Expiring balances warning */}
-      {expiringBalances && expiringBalances.length > 0 && (
-        <View style={{ marginTop: 12 }}>
-          <ExpirationWarning balances={expiringBalances} />
-        </View>
-      )}
-
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search-outline" size={18} color={Colors.text.muted} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Buscar ofertas..."
-          placeholderTextColor={Colors.text.muted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-            <Ionicons name="close-circle" size={18} color={Colors.text.secondary} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Program chips */}
-      <FlatList
-        data={PROGRAMS}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.slug || 'all'}
-        contentContainerStyle={styles.chipsContainer}
-        renderItem={({ item }) => (
-          <ProgramChip
-            label={item.label}
-            slug={item.slug || undefined}
-            selected={isProgramSelected(item.slug)}
-            onPress={() => handleProgramSelect(item.slug)}
-          />
-        )}
-        style={styles.chipsList}
-      />
-
-      {/* Section title */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Ofertas disponíveis</Text>
-        {allOffers.length > 0 && (
-          <Text style={styles.sectionCount}>{allOffers.length} ofertas</Text>
-        )}
-      </View>
-    </View>
-  );
-
-  const renderEmpty = () => {
-    if (isLoading) return <OfferListSkeleton />;
-    if (isError) {
-      return (
-        <EmptyState
-          icon="wifi-outline"
-          title="Erro ao carregar"
-          description="Não foi possível carregar as ofertas. Verifique sua conexão e tente novamente."
-        />
-      );
-    }
-    return (
-      <EmptyState
-        icon="pricetag-outline"
-        title="Nenhuma oferta encontrada"
-        description="Tente ajustar os filtros ou volte mais tarde para novas ofertas."
-      />
-    );
-  };
-
-  const renderFooter = () => {
-    if (!isFetchingNextPage) return null;
-    return (
-      <View style={styles.loadingMore}>
-        <Text style={styles.loadingMoreText}>Carregando mais...</Text>
-      </View>
-    );
-  };
+  const totalValue = wallet.data?.summary.totalValueBrl ?? 0;
+  const programsCount = wallet.data?.summary.programsCount ?? 0;
+  const topOpportunities = (bonuses.data?.opportunities || [])
+    .filter((o) => o.classification !== 'NORMAL')
+    .slice(0, 3);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.bg.primary} />
-
-      {/* Top header with gradient */}
-      <LinearGradient
-        colors={[Colors.bg.primary, Colors.bg.card]}
-        style={styles.topHeader}
-      >
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoText}>Milhas</Text>
-          <Text style={styles.logoAccent}>Extras</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.7}
-            onPress={() => router.push('/explore')}
-          >
-            <Ionicons name="compass-outline" size={20} color={Colors.text.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.7}
-            onPress={() => router.push('/(tabs)/alerts')}
-          >
-            <Ionicons name="notifications-outline" size={20} color={Colors.text.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            activeOpacity={0.7}
-            onPress={() => router.push('/alerts/create')}
-          >
-            <Ionicons name="options-outline" size={20} color={Colors.text.primary} />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      <FlatList
-        data={isLoading ? [] : allOffers}
-        keyExtractor={(item) => item.id}
-        renderItem={renderOffer}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmpty}
-        ListFooterComponent={renderFooter}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
+      <ScrollView
+        contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={Colors.primary.start}
-            colors={[Colors.primary.start]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={refetchAll} tintColor="#8B5CF6" />
         }
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-      />
+      >
+        {/* Greeting */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Olá! 👋</Text>
+            <Text style={styles.subtitle}>Suas milhas, sua arbitragem</Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+            <View style={styles.avatarBox}>
+              <Ionicons name="person" size={20} color="#8B5CF6" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Hero: valor da carteira (clicável → vai pra carteira) */}
+        <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/(tabs)/wallet' as any)}>
+          <LinearGradient
+            colors={['#8B5CF6', '#3B82F6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.hero}
+          >
+            <View style={styles.heroTop}>
+              <Text style={styles.heroLabel}>Sua carteira vale</Text>
+              <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
+            </View>
+            {wallet.isLoading ? (
+              <ActivityIndicator color="#fff" style={{ marginTop: 12 }} />
+            ) : (
+              <>
+                <Text style={styles.heroValue}>
+                  R$ {totalValue.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </Text>
+                <Text style={styles.heroSub}>
+                  {programsCount === 0
+                    ? 'Cadastre seus saldos →'
+                    : `${programsCount} programa${programsCount !== 1 ? 's' : ''}`}
+                </Text>
+              </>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Quick actions */}
+        <View style={styles.quickRow}>
+          <QuickAction
+            icon="calculator"
+            label="Vale a pena?"
+            color="#10B981"
+            onPress={() => router.push('/(tabs)/calculator' as any)}
+          />
+          <QuickAction
+            icon="trending-up"
+            label="Oportunidades"
+            color="#F59E0B"
+            badge={topOpportunities.length}
+            onPress={() => router.push('/arbitrage' as any)}
+          />
+          <QuickAction
+            icon="notifications"
+            label="Alertas"
+            color="#3B82F6"
+            onPress={() => router.push('/(tabs)/alerts')}
+          />
+        </View>
+
+        {/* Top oportunidades */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>🔥 Bônus ativos agora</Text>
+            <TouchableOpacity onPress={() => router.push('/arbitrage' as any)}>
+              <Text style={styles.sectionLink}>Ver todos →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {bonuses.isLoading && (
+            <View style={styles.loaderBox}>
+              <ActivityIndicator color="#8B5CF6" />
+            </View>
+          )}
+
+          {!bonuses.isLoading && topOpportunities.length === 0 && (
+            <View style={styles.emptyBox}>
+              <Ionicons name="time-outline" size={28} color="#64748B" />
+              <Text style={styles.emptyText}>
+                Nenhum bônus de transferência ativo agora.
+              </Text>
+              <Text style={styles.emptySub}>
+                Te avisamos por push quando aparecer um.
+              </Text>
+            </View>
+          )}
+
+          {topOpportunities.map((op) => (
+            <TouchableOpacity
+              key={op.id}
+              activeOpacity={0.85}
+              onPress={() => router.push('/arbitrage' as any)}
+              style={styles.opCard}
+            >
+              <View style={styles.opCardHeader}>
+                <View
+                  style={[
+                    styles.opBadge,
+                    {
+                      backgroundColor:
+                        op.classification === 'IMPERDIVEL' ? '#10B98125' : '#F59E0B25',
+                      borderColor: op.classification === 'IMPERDIVEL' ? '#10B981' : '#F59E0B',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.opBadgeText,
+                      {
+                        color: op.classification === 'IMPERDIVEL' ? '#10B981' : '#F59E0B',
+                      },
+                    ]}
+                  >
+                    {op.classification === 'IMPERDIVEL' ? '🔥 IMPERDÍVEL' : '⚡ BOA'}
+                  </Text>
+                </View>
+                <Text style={styles.opBonus}>+{op.currentBonus.toFixed(0)}%</Text>
+              </View>
+              <Text style={styles.opTitle}>
+                {op.fromProgram.name} → {op.toProgram.name}
+              </Text>
+              <Text style={styles.opGain}>
+                Ganho de {op.gainPercent.toFixed(1)}% em valor
+              </Text>
+              {op.userSourceBalance != null && op.potentialValueGain != null && (
+                <View style={styles.opPersonal}>
+                  <Ionicons name="wallet" size={12} color="#10B981" />
+                  <Text style={styles.opPersonalText}>
+                    Você ganha <Text style={styles.opPersonalBold}>R$ {op.potentialValueGain.toFixed(2)}</Text> com seu saldo
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* CTA Carteira (se vazia) */}
+        {programsCount === 0 && !wallet.isLoading && (
+          <View style={styles.ctaBox}>
+            <Ionicons name="wallet-outline" size={36} color="#8B5CF6" />
+            <Text style={styles.ctaTitle}>Cadastre seus saldos</Text>
+            <Text style={styles.ctaSub}>
+              Só leva 30 segundos. As oportunidades ficam personalizadas pro SEU saldo —
+              calculamos quanto VOCÊ ganha em R$.
+            </Text>
+            <TouchableOpacity
+              style={styles.ctaBtn}
+              onPress={() => router.push('/(tabs)/wallet' as any)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#3B82F6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaBtnGradient}
+              >
+                <Text style={styles.ctaBtnText}>+ Adicionar primeiro saldo</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+function QuickAction({
+  icon,
+  label,
+  color,
+  badge,
+  onPress,
+}: {
+  icon: any;
+  label: string;
+  color: string;
+  badge?: number;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.quickAction}>
+      <View style={[styles.quickIcon, { backgroundColor: `${color}20` }]}>
+        <Ionicons name={icon} size={22} color={color} />
+        {badge != null && badge > 0 && (
+          <View style={styles.badgeDot}>
+            <Text style={styles.badgeDotText}>{badge}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={styles.quickLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors.bg.primary,
+  safe: { flex: 1, backgroundColor: '#0F172A' },
+  content: { padding: 16, paddingBottom: 120 },
+
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 16,
   },
-  topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+  greeting: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  subtitle: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
+  avatarBox: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#1E293B',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#334155',
   },
-  logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+
+  hero: { borderRadius: 18, padding: 20, marginBottom: 16 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroLabel: {
+    color: 'rgba(255,255,255,0.85)', fontSize: 12,
+    textTransform: 'uppercase', fontWeight: '700', letterSpacing: 0.5,
   },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.text.primary,
-    letterSpacing: -0.5,
+  heroValue: {
+    color: '#fff', fontSize: 32, fontWeight: '800',
+    marginTop: 8, letterSpacing: -1,
   },
-  logoAccent: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.primary.light,
-    letterSpacing: -0.5,
+  heroSub: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 4 },
+
+  quickRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    marginBottom: 24, gap: 8,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  quickAction: { flex: 1, alignItems: 'center' },
+  quickIcon: {
+    width: 56, height: 56, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
   },
-  headerButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.bg.card,
-    alignItems: 'center',
-    justifyContent: 'center',
+  quickLabel: { color: '#CBD5E1', fontSize: 11, fontWeight: '600', marginTop: 6 },
+  badgeDot: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: '#EF4444',
+    minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
   },
-  listContent: {
-    paddingBottom: 90,
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.bg.card,
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    height: 46,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: Colors.text.primary,
-    height: '100%',
-  },
-  chipsList: {
-    marginVertical: 12,
-  },
-  chipsContainer: {
-    paddingHorizontal: 16,
-  },
+  badgeDotText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+  section: { marginBottom: 20 },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.text.primary,
+  sectionTitle: { color: '#F1F5F9', fontSize: 16, fontWeight: '700' },
+  sectionLink: { color: '#8B5CF6', fontSize: 13, fontWeight: '600' },
+
+  loaderBox: { paddingVertical: 30, alignItems: 'center' },
+  emptyBox: {
+    alignItems: 'center', padding: 24, gap: 6,
+    backgroundColor: '#1E293B', borderRadius: 12,
+    borderWidth: 1, borderColor: '#334155',
   },
-  sectionCount: {
-    fontSize: 13,
-    color: Colors.text.secondary,
+  emptyText: { color: '#CBD5E1', fontSize: 13, textAlign: 'center' },
+  emptySub: { color: '#64748B', fontSize: 11, textAlign: 'center' },
+
+  opCard: {
+    backgroundColor: '#1E293B', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#334155', marginBottom: 10,
   },
-  loadingMore: {
-    paddingVertical: 16,
-    alignItems: 'center',
+  opCardHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 8,
   },
-  loadingMoreText: {
-    fontSize: 13,
-    color: Colors.text.secondary,
+  opBadge: {
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 10, borderWidth: 1,
   },
+  opBadgeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  opBonus: {
+    color: '#A78BFA', fontSize: 14, fontWeight: '800',
+    backgroundColor: '#3B2F66', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6,
+  },
+  opTitle: { color: '#F1F5F9', fontSize: 15, fontWeight: '700' },
+  opGain: { color: '#94A3B8', fontSize: 12, marginTop: 4 },
+  opPersonal: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 10, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: '#334155',
+  },
+  opPersonalText: { color: '#CBD5E1', fontSize: 12, flex: 1 },
+  opPersonalBold: { color: '#10B981', fontWeight: '700' },
+
+  ctaBox: {
+    backgroundColor: '#1E293B', borderRadius: 16, padding: 24,
+    alignItems: 'center', gap: 10,
+    borderWidth: 1, borderColor: '#334155', marginTop: 8,
+  },
+  ctaTitle: { color: '#F1F5F9', fontSize: 17, fontWeight: '700' },
+  ctaSub: {
+    color: '#94A3B8', fontSize: 13, textAlign: 'center', lineHeight: 18,
+  },
+  ctaBtn: { borderRadius: 10, overflow: 'hidden', marginTop: 6, width: '100%' },
+  ctaBtnGradient: { paddingVertical: 13, alignItems: 'center' },
+  ctaBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
