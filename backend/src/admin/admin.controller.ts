@@ -121,6 +121,32 @@ export class AdminController {
     return successResponse(result);
   }
 
+  @Post('debug/throw')
+  @HttpCode(500)
+  @ApiOperation({ summary: 'Dispara erro proposital pra testar Sentry' })
+  async debugThrow() {
+    // Pega ref direto do Sentry e manda evento manual
+    try {
+      const Sentry = require('@sentry/node');
+      Sentry.captureException(new Error('ADMIN_DEBUG_THROW manual test'));
+    } catch {}
+    throw new Error('ADMIN_DEBUG_THROW: erro proposital pra validar Sentry');
+  }
+
+  @Get('debug/status')
+  @ApiOperation({ summary: 'Status das integrações opcionais (Sentry/PostHog/Stripe/etc)' })
+  async debugStatus() {
+    return successResponse({
+      sentry: !!process.env.SENTRY_DSN,
+      posthog: !!process.env.POSTHOG_API_KEY,
+      stripe: !!process.env.STRIPE_SECRET_KEY,
+      twilio: !!process.env.TWILIO_ACCOUNT_SID,
+      anthropic: !!process.env.ANTHROPIC_API_KEY,
+      scheduler: process.env.SCHEDULER_ENABLED !== 'false' && process.env.NODE_ENV === 'production',
+      nodeEnv: process.env.NODE_ENV,
+    });
+  }
+
   @Get('export/users.csv')
   @ApiOperation({ summary: 'Export CSV de users (análise externa)' })
   async exportUsersCsv(@Res() res: any) {

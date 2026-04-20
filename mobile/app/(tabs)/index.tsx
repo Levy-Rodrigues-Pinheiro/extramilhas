@@ -16,6 +16,7 @@ import { useTransferBonuses } from '../../src/hooks/useArbitrage';
 import { useWallet } from '../../src/hooks/useWallet';
 import { useMyLeaderboardStats, TIER_META } from '../../src/hooks/useLeaderboard';
 import { PaywallUpsellBanner } from '../../src/components/PaywallGate';
+import { useMissions } from '../../src/hooks/useMissions';
 
 /**
  * Home — dashboard focado em arbitragem de milhas.
@@ -32,6 +33,21 @@ export default function HomeScreen() {
   const wallet = useWallet();
   const bonuses = useTransferBonuses();
   const leaderboard = useMyLeaderboardStats();
+  const missions = useMissions();
+
+  // Missão mais próxima de completar (>=50% progresso, não claimed)
+  const nearCompletion = React.useMemo(() => {
+    const list = missions.data?.missions ?? [];
+    return list
+      .filter((m) => !m.claimed && m.progress / m.targetCount >= 0.5 && m.progress < m.targetCount)
+      .sort((a, b) => b.progress / b.targetCount - a.progress / a.targetCount)[0];
+  }, [missions.data]);
+
+  // Missão pronta pra claim (overrides o nearCompletion — prioridade)
+  const readyToClaim = React.useMemo(() => {
+    const list = missions.data?.missions ?? [];
+    return list.find((m) => !m.claimed && m.progress >= m.targetCount);
+  }, [missions.data]);
 
   const refreshing = wallet.isRefetching || bonuses.isRefetching;
   const refetchAll = () => {
@@ -120,6 +136,53 @@ export default function HomeScreen() {
             onPress={() => router.push('/(tabs)/alerts')}
           />
         </View>
+
+        {/* Missão pronta pra claim → CTA dourado de "Resgatar X dias Premium" */}
+        {readyToClaim && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/missions' as any)}
+            style={styles.missionReady}
+          >
+            <LinearGradient
+              colors={['#F59E0B', '#F97316']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.missionReadyInner}
+            >
+              <Ionicons name="gift" size={22} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.missionReadyTitle}>
+                  🎉 Missão completa: {readyToClaim.title}
+                </Text>
+                <Text style={styles.missionReadySub}>
+                  Toque pra resgatar +{readyToClaim.rewardDays}d Premium
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        {/* Missão em progresso >=50% → nudge sutil */}
+        {!readyToClaim && nearCompletion && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/missions' as any)}
+            style={styles.missionNudge}
+          >
+            <Ionicons name="trophy" size={18} color="#A78BFA" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.missionNudgeTitle}>{nearCompletion.title}</Text>
+              <Text style={styles.missionNudgeSub}>
+                {nearCompletion.progress}/{nearCompletion.targetCount} · faltam{' '}
+                {nearCompletion.targetCount - nearCompletion.progress} pra ganhar{' '}
+                +{nearCompletion.rewardDays}d Premium
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#64748B" />
+          </TouchableOpacity>
+        )}
 
         {/* Meu tier (só pra quem já tem aprovados — evita ruído pra novato) */}
         {leaderboard.data && leaderboard.data.approvedCount > 0 && (
@@ -331,6 +394,23 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   badgeDotText: { color: '#fff', fontSize: 10, fontWeight: '700' },
+
+  missionReady: { marginBottom: 12, borderRadius: 14, overflow: 'hidden' },
+  missionReadyInner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 14,
+  },
+  missionReadyTitle: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  missionReadySub: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginTop: 2 },
+
+  missionNudge: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 12, marginBottom: 12,
+    backgroundColor: '#1E1B4B',
+    borderRadius: 10, borderWidth: 1, borderColor: '#3B2F66',
+  },
+  missionNudgeTitle: { color: '#F1F5F9', fontSize: 13, fontWeight: '700' },
+  missionNudgeSub: { color: '#A78BFA', fontSize: 11, marginTop: 2 },
 
   tierCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

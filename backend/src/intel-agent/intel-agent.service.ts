@@ -308,6 +308,84 @@ export class IntelAgentService {
     }
   }
 
+  /**
+   * Preview — dry run de extração sem salvar nada. Útil pro admin testar
+   * nova URL antes de adicionar como IntelSource. Mesma pipeline (fetch
+   * → scope → pré-filtro → LLM) mas NÃO persiste reports nem IntelAgentRun.
+   */
+  async previewUrl(params: {
+    url: string;
+    sourceType?: string;
+    scopeSelector?: string;
+  }) {
+    let text: string;
+    let htmlBytes = 0;
+
+    if (params.sourceType === 'telegram') {
+      const handle = params.url.startsWith('telegram:')
+        ? params.url.slice('telegram:'.length).replace(/^@/, '')
+        : params.url.replace(/^@/, '').replace(/^https?:\/\/t\.me\/s?\//, '');
+      text = await this.telegram.fetchChannelText(handle);
+      htmlBytes = text.length;
+    } else {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 15_000);
+      const res = await fetch(params.url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (compatible; MilhasExtrasBot/1.0; +https://milhasextras.com.br/bot)',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
+        },
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      htmlBytes = html.length;
+
+      let scoped = html;
+      if (params.scopeSelector) {
+        try {
+          const $ = cheerio.load(html);
+          const el = $(params.scopeSelector);
+          scoped = el.length ? el.text() : $('body').text();
+        } catch {}
+      } else {
+        const $ = cheerio.load(html);
+        scoped = $('body').text();
+      }
+      text = scoped.replace(/\s+/g, ' ').trim();
+    }
+
+    const hasKeywords = this.llm.hasRelevantKeywords(text);
+    if (!hasKeywords) {
+      return {
+        htmlBytes,
+        textLength: text.length,
+        inputPreview: text.slice(0, 1000),
+        hasRelevantKeywords: false,
+        extractedBonuses: [],
+        costUsd: 0,
+        hint: 'Sem keywords relevantes — o agente não chamaria o LLM nessa fonte. Refine scopeSelector ou escolha outra URL.',
+      };
+    }
+
+    const extraction = await this.llm.extract(text);
+    return {
+      htmlBytes,
+      textLength: text.length,
+      inputPreview: text.slice(0, 1000),
+      hasRelevantKeywords: true,
+      extractedBonuses: extraction.bonuses,
+      costUsd: extraction.costUsd,
+      modelUsed: extraction.modelUsed,
+      hint:
+        extraction.bonuses.length > 0
+          ? `✅ LLM encontrou ${extraction.bonuses.length} bônus(es). Salvar esta fonte parece bom.`
+          : '⚠️ Tem keywords mas LLM não extraiu bônus concretos. Talvez só menções históricas.',
+    };
+  }
+
   async listSources() {
     const sources = await (this.prisma as any).intelSource.findMany({
       orderBy: [{ isActive: 'desc' }, { lastRunAt: 'desc' }],

@@ -59,7 +59,9 @@ export default function IntelAgentPage() {
   const [running, setRunning] = useState<string | null>(null)
   const [runningAll, setRunningAll] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState({ name: '', url: '', scopeSelector: '' })
+  const [form, setForm] = useState({ name: '', url: '', scopeSelector: '', sourceType: 'html' })
+  const [previewing, setPreviewing] = useState(false)
+  const [preview, setPreview] = useState<any>(null)
   const { toast } = useToast()
 
   const fetchData = useCallback(async () => {
@@ -119,13 +121,37 @@ export default function IntelAgentPage() {
         name: form.name,
         url: form.url,
         scopeSelector: form.scopeSelector || undefined,
+        sourceType: form.sourceType || 'html',
       })
       toast({ title: 'Fonte adicionada' })
-      setForm({ name: '', url: '', scopeSelector: '' })
+      setForm({ name: '', url: '', scopeSelector: '', sourceType: 'html' })
+      setPreview(null)
       setAddOpen(false)
       fetchData()
     } catch (e: any) {
       toast({ title: 'Erro', description: e?.response?.data?.message || 'URL inválida', variant: 'destructive' })
+    }
+  }
+
+  const testUrl = async () => {
+    if (!form.url) return
+    setPreviewing(true)
+    setPreview(null)
+    try {
+      const { data } = await api.post('/admin/intel-agent/preview', {
+        url: form.url,
+        scopeSelector: form.scopeSelector || undefined,
+        sourceType: form.sourceType || 'html',
+      })
+      setPreview(data)
+    } catch (e: any) {
+      toast({
+        title: 'Falha no teste',
+        description: e?.response?.data?.message || 'Erro',
+        variant: 'destructive',
+      })
+    } finally {
+      setPreviewing(false)
     }
   }
 
@@ -224,22 +250,78 @@ export default function IntelAgentPage() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             className="w-full rounded-md border bg-background px-3 py-2 text-sm"
           />
-          <input
-            placeholder="URL (https://...)"
-            value={form.url}
-            onChange={(e) => setForm({ ...form, url: e.target.value })}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-          />
-          <input
-            placeholder="scope CSS selector opcional (ex: main.post-content)"
-            value={form.scopeSelector}
-            onChange={(e) => setForm({ ...form, scopeSelector: e.target.value })}
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-          />
           <div className="flex gap-2">
-            <Button size="sm" onClick={addSource}>Criar</Button>
-            <Button size="sm" variant="outline" onClick={() => setAddOpen(false)}>Cancelar</Button>
+            <select
+              value={form.sourceType}
+              onChange={(e) => setForm({ ...form, sourceType: e.target.value })}
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+            >
+              <option value="html">HTML</option>
+              <option value="telegram">Telegram</option>
+            </select>
+            <input
+              placeholder={form.sourceType === 'telegram' ? 'telegram:handle (ex: telegram:pontosmais)' : 'URL (https://...)'}
+              value={form.url}
+              onChange={(e) => setForm({ ...form, url: e.target.value })}
+              className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
+            />
           </div>
+          {form.sourceType === 'html' && (
+            <input
+              placeholder="scope CSS selector opcional (ex: main.post-content)"
+              value={form.scopeSelector}
+              onChange={(e) => setForm({ ...form, scopeSelector: e.target.value })}
+              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            />
+          )}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={addSource} disabled={!form.name || !form.url}>
+              Criar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={testUrl}
+              disabled={previewing || !form.url}
+              className="gap-2"
+            >
+              {previewing ? (
+                <RefreshCw className="h-3 w-3 animate-spin" />
+              ) : (
+                '🧪'
+              )}
+              Testar URL
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setAddOpen(false); setPreview(null); }}>
+              Cancelar
+            </Button>
+          </div>
+
+          {/* Preview result */}
+          {preview && (
+            <div className="mt-2 rounded-md border border-blue-500/30 bg-blue-500/5 p-3 space-y-2">
+              <p className="text-xs font-semibold text-blue-400">{preview.hint}</p>
+              <div className="text-[11px] text-muted-foreground">
+                {preview.htmlBytes} bytes · {preview.textLength} chars extraídos · custo ${preview.costUsd?.toFixed(4) ?? '0.0000'}
+              </div>
+              {preview.extractedBonuses?.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium">Bônus extraídos:</p>
+                  {preview.extractedBonuses.map((b: any, i: number) => (
+                    <div key={i} className="rounded bg-slate-800/50 p-2 text-xs font-mono">
+                      <strong className="text-emerald-400">+{b.bonusPercent}%</strong> {b.fromProgramSlug}→{b.toProgramSlug}
+                      {b.expiresAt && <span className="text-muted-foreground"> · até {b.expiresAt}</span>}
+                      <div className="text-[10px] text-muted-foreground mt-1">"{b.notes}"</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <details className="cursor-pointer">
+                <summary className="text-[11px] text-muted-foreground">Ver texto enviado ao LLM (primeiros 1000 chars)</summary>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-slate-900 p-2 text-[10px]">{preview.inputPreview}</pre>
+              </details>
+            </div>
+          )}
         </div>
       )}
 

@@ -6,7 +6,33 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
+// Sentry init — rodado ANTES de criar app pra capturar qualquer erro cedo
+// Sem SENTRY_DSN → no-op, zero overhead.
+function initSentry() {
+  const dsn = process.env.SENTRY_DSN;
+  if (!dsn) return;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Sentry = require('@sentry/node');
+    Sentry.init({
+      dsn,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: 0.1, // 10% de transactions — barato
+      beforeSend(event: any) {
+        // Não manda errors de 401/404 comuns pro Sentry (ruído)
+        const status = event?.tags?.statusCode;
+        if (status === 401 || status === 404) return null;
+        return event;
+      },
+    });
+    console.log('[sentry] initialized');
+  } catch (err) {
+    console.warn('[sentry] init failed:', (err as Error).message);
+  }
+}
+
 async function bootstrap() {
+  initSentry();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   // Faz o NestJS usar o Pino logger — todos os `Logger` internos pegam junto
   app.useLogger(app.get(Logger));
