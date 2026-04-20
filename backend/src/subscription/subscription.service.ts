@@ -174,6 +174,45 @@ export class SubscriptionService {
     return { portalUrl: session.url, isMock: false };
   }
 
+  /**
+   * Free trial 7 dias — 1 por conta, sem cartão.
+   * Bloqueia se user já usou trial antes ou se já é Premium/Pro ativo.
+   * Converte conversion funnel: hard paywall → soft "experimenta grátis".
+   */
+  async activateTrial(userId: string) {
+    const user = (await this.prisma.user.findUnique({
+      where: { id: userId },
+    })) as any;
+    if (!user) throw new NotFoundException('User not found');
+
+    if (user.trialStartedAt) {
+      throw new Error('Você já usou seu trial. Ative a assinatura Premium.');
+    }
+    if (user.subscriptionPlan !== 'FREE') {
+      throw new Error('Você já tem um plano ativo.');
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 7 * 86400_000);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        subscriptionPlan: SubscriptionPlan.PREMIUM,
+        subscriptionExpiresAt: expiresAt,
+        trialStartedAt: now,
+      } as any,
+    });
+
+    this.logger.log(`Trial activated: user=${userId} expires=${expiresAt.toISOString()}`);
+    return {
+      activated: true,
+      plan: 'PREMIUM',
+      expiresAt: expiresAt.toISOString(),
+      trialDays: 7,
+    };
+  }
+
   async cancelSubscription(userId: string) {
     await this.prisma.user.update({
       where: { id: userId },

@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { track } from '../lib/analytics';
+import { useActivateTrial } from '../hooks/useSubscription';
+import { haptic } from '../lib/haptic';
 
 /**
  * Banner persuasivo mostrado abaixo das oportunidades visíveis quando há
@@ -13,7 +15,8 @@ import { track } from '../lib/analytics';
  * benefício claro, CTA singular pra /subscription.
  */
 export function PaywallUpsellBanner({ lockedCount }: { lockedCount: number }) {
-  // Dispara evento quando o banner é renderizado (proxy de "paywall_shown")
+  const trial = useActivateTrial();
+
   React.useEffect(() => {
     if (lockedCount > 0) {
       track('paywall_shown', { lockedCount, surface: 'arbitrage_banner' });
@@ -22,32 +25,59 @@ export function PaywallUpsellBanner({ lockedCount }: { lockedCount: number }) {
 
   if (lockedCount <= 0) return null;
 
-  const handleClick = () => {
+  const handleUpgrade = () => {
     track('paywall_upgrade_clicked', { lockedCount });
     router.push('/subscription');
   };
 
+  const handleStartTrial = async () => {
+    try {
+      haptic.tap();
+      const res = await trial.mutateAsync();
+      haptic.success();
+      track('trial_activated', { lockedCount });
+      Alert.alert(
+        '🎉 Trial ativado!',
+        `7 dias de Premium grátis. Expira em ${new Date(res.expiresAt).toLocaleDateString('pt-BR')}. Sem cobrança — você decide se quer continuar depois.`,
+      );
+    } catch (err: any) {
+      haptic.error();
+      Alert.alert(
+        'Não foi possível',
+        err?.response?.data?.message ||
+          'Você já usou seu trial. Assine Premium pra continuar desbloqueando.',
+      );
+    }
+  };
+
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={handleClick}
-      style={styles.outer}
-    >
+    <View style={styles.outer}>
+      {/* CTA principal: trial 7d grátis (soft paywall) */}
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={handleStartTrial}
+        disabled={trial.isPending}
+        accessibilityLabel="Ativar trial Premium 7 dias grátis"
+        accessibilityRole="button"
+      >
       <LinearGradient
-        colors={['#7C3AED', '#3B82F6']}
+        colors={['#F59E0B', '#F97316']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.bannerInner}
       >
         <View style={styles.iconBox}>
-          <Ionicons name="lock-closed" size={24} color="#fff" />
+          {trial.isPending ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Ionicons name="gift" size={24} color="#fff" />
+          )}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>
-            +{lockedCount} oportunidade{lockedCount !== 1 ? 's' : ''} ocultas
-          </Text>
+          <Text style={styles.title}>🎁 Experimente 7 dias grátis</Text>
           <Text style={styles.sub}>
-            Desbloqueie TODOS os bônus + alertas em tempo real no Premium
+            Desbloqueie +{lockedCount} oportunidade{lockedCount !== 1 ? 's' : ''} + alertas
+            ilimitados. Sem cobrança, sem cartão.
           </Text>
         </View>
         <View style={styles.arrow}>
@@ -55,6 +85,14 @@ export function PaywallUpsellBanner({ lockedCount }: { lockedCount: number }) {
         </View>
       </LinearGradient>
     </TouchableOpacity>
+
+    {/* Link secundário: quem já usou trial ou quer pagar direto */}
+    <TouchableOpacity onPress={handleUpgrade} style={styles.secondaryLink}>
+      <Text style={styles.secondaryText}>
+        Já usou o trial? Ver planos Premium →
+      </Text>
+    </TouchableOpacity>
+  </View>
   );
 }
 
@@ -83,6 +121,15 @@ export function LockedOpportunityCard({ index }: { index: number }) {
 
 const styles = StyleSheet.create({
   outer: { marginBottom: 12 },
+  secondaryLink: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  secondaryText: {
+    color: '#A78BFA',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   bannerInner: {
     flexDirection: 'row',
     alignItems: 'center',

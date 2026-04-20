@@ -19,6 +19,7 @@ import { PaywallUpsellBanner } from '../../src/components/PaywallGate';
 import { useMissions } from '../../src/hooks/useMissions';
 import { FirstRunTip } from '../../src/components/FirstRunTip';
 import { useNotificationFeed } from '../../src/hooks/useNotificationFeed';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Home — dashboard focado em arbitragem de milhas.
@@ -38,6 +39,7 @@ export default function HomeScreen() {
   const missions = useMissions();
   const notifFeed = useNotificationFeed();
   const notifUnread = notifFeed.data?.unreadCount ?? 0;
+  const { t } = useTranslation();
 
   // Missão mais próxima de completar (>=50% progresso, não claimed)
   const nearCompletion = React.useMemo(() => {
@@ -84,12 +86,21 @@ export default function HomeScreen() {
         {/* Greeting */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Olá! 👋</Text>
-            <Text style={styles.subtitle}>Suas milhas, sua arbitragem</Text>
+            <Text style={styles.greeting}>{t('home.greeting')}</Text>
+            <Text style={styles.subtitle}>{t('home.subtitle')}</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {/* Bell icon com badge de notif não-lidas */}
-            <TouchableOpacity onPress={() => router.push('/notifications-feed' as any)}>
+            <TouchableOpacity
+              onPress={() => router.push('/notifications-feed' as any)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                notifUnread > 0
+                  ? `${notifUnread} notificações não lidas`
+                  : 'Caixa de notificações'
+              }
+              hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+            >
               <View style={styles.avatarBox}>
                 <Ionicons name="notifications" size={20} color="#A78BFA" />
                 {notifUnread > 0 && (
@@ -101,7 +112,12 @@ export default function HomeScreen() {
                 )}
               </View>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+            <TouchableOpacity
+              onPress={() => router.push('/(tabs)/profile')}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir meu perfil"
+              hitSlop={{ top: 6, right: 6, bottom: 6, left: 6 }}
+            >
               <View style={styles.avatarBox}>
                 <Ionicons name="person" size={20} color="#8B5CF6" />
               </View>
@@ -118,7 +134,7 @@ export default function HomeScreen() {
             style={styles.hero}
           >
             <View style={styles.heroTop}>
-              <Text style={styles.heroLabel}>Sua carteira vale</Text>
+              <Text style={styles.heroLabel}>{t('home.wallet_label')}</Text>
               <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
             </View>
             {wallet.isLoading ? (
@@ -145,20 +161,20 @@ export default function HomeScreen() {
         <View style={styles.quickRow}>
           <QuickAction
             icon="calculator"
-            label="Vale a pena?"
+            label={t('home.quick_calc')}
             color="#10B981"
             onPress={() => router.push('/(tabs)/calculator' as any)}
           />
           <QuickAction
             icon="trending-up"
-            label="Oportunidades"
+            label={t('home.quick_opportunities')}
             color="#F59E0B"
             badge={topOpportunities.length}
             onPress={() => router.push('/arbitrage' as any)}
           />
           <QuickAction
             icon="notifications"
-            label="Alertas"
+            label={t('home.quick_alerts')}
             color="#3B82F6"
             onPress={() => router.push('/(tabs)/alerts')}
           />

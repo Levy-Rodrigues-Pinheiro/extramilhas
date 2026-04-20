@@ -289,6 +289,79 @@ export class SchedulerService {
     );
   }
 
+  /**
+   * Alerta de expiração de pontos — diário 8h UTC (~5h BRT).
+   * Busca UserMilesBalance com expiresAt entre 7d-45d à frente + balance>0.
+   * Agrupa por user → 1 push por user mesmo com múltiplos saldos expirando.
+   */
+  @Cron('0 8 * * *')
+  async pointsExpirationAlert() {
+    if (!this.isEnabled()) return;
+    try {
+      const soonFrom = new Date(Date.now() + 7 * 86400_000);
+      const soonTo = new Date(Date.now() + 45 * 86400_000);
+
+      const expiring = await this.prisma.userMilesBalance.findMany({
+        where: {
+          expiresAt: { gte: soonFrom, lte: soonTo },
+          balance: { gt: 0 },
+        },
+        include: { program: { select: { name: true } } },
+      });
+
+      if (expiring.length === 0) return;
+
+      const byUser = new Map<string, typeof expiring>();
+      for (const b of expiring) {
+        const arr = byUser.get(b.userId) || [];
+        arr.push(b);
+        byUser.set(b.userId, arr);
+      }
+
+      let sent = 0;
+      for (const [userId, balances] of byUser) {
+        const devices = await this.prisma.deviceToken.findMany({
+          where: {
+            userId,
+            lastUsedAt: { gte: new Date(Date.now() - 60 * 86400_000) },
+          },
+          select: { token: true },
+        });
+        if (devices.length === 0) continue;
+
+        const nearest = balances
+          .slice()
+          .sort((a, b) => (a.expiresAt?.getTime() ?? 0) - (b.expiresAt?.getTime() ?? 0))[0];
+        const daysLeft = Math.ceil(
+          ((nearest.expiresAt?.getTime() ?? Date.now()) - Date.now()) / 86400_000,
+        );
+        const totalPoints = balances.reduce((s, b) => s + b.balance, 0);
+
+        const title =
+          balances.length === 1
+            ? `⏰ Seus pontos ${nearest.program.name} expiram em ${daysLeft}d`
+            : `⏰ ${balances.length} saldos seus expirando em breve`;
+        const body = `${totalPoints.toLocaleString('pt-BR')} pontos totais — transfira agora pra não perder.`;
+
+        const result = await this.push.sendToTokens(
+          devices.map((d) => d.token),
+          {
+            title,
+            body,
+            data: { type: 'points_expiring', deepLink: '/arbitrage', daysLeft, totalPoints },
+          },
+        );
+        if (result.sent > 0) sent++;
+      }
+
+      this.logger.log(
+        `Expiration alert: ${byUser.size} users com saldo expirando, ${sent} pushes entregues`,
+      );
+    } catch (err) {
+      this.logger.error(`Expiration alert failed: ${(err as Error).message}`);
+    }
+  }
+
   @Cron('0 4 * * 0') // every Sunday 04:00
   async cleanupDeadTokens() {
     if (!this.isEnabled()) return;

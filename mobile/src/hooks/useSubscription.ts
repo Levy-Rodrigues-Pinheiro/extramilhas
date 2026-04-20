@@ -47,3 +47,26 @@ export function useCancelSubscription() {
     },
   });
 }
+
+/**
+ * Trial Premium 7 dias — sem cartão, 1 por conta.
+ * Ativa user com subscriptionPlan=PREMIUM por 7d.
+ */
+export function useActivateTrial() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<{
+        activated: boolean;
+        plan: string;
+        expiresAt: string;
+        trialDays: number;
+      }>('/subscription/trial', {});
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [SUB_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['arbitrage'] });
+    },
+  });
+}

@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useFamily, useAddFamilyMember, useDeleteFamilyMember } from '../src/hooks/useFamily';
+import { useFamily, useAddFamilyMember, useDeleteFamilyMember, useUpdateFamilyBalance } from '../src/hooks/useFamily';
 import { ProgramLogo } from '../src/components/ProgramLogo';
 import { EmptyState } from '../src/components/EmptyState';
 import { Colors, Gradients } from '../src/lib/theme';
@@ -22,11 +22,43 @@ export default function FamilyScreen() {
   const { data: members, isLoading, isError } = useFamily();
   const addMember = useAddFamilyMember();
   const deleteMember = useDeleteFamilyMember();
+  const updateBalance = useUpdateFamilyBalance();
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newRelationship, setNewRelationship] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingBalance, setEditingBalance] = useState<{ memberId: string; programId: string } | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const startEditBalance = (memberId: string, programId: string, currentBalance: number) => {
+    setEditingBalance({ memberId, programId });
+    setEditValue(String(currentBalance ?? 0));
+  };
+
+  const cancelEditBalance = () => {
+    setEditingBalance(null);
+    setEditValue('');
+  };
+
+  const saveEditBalance = async () => {
+    if (!editingBalance) return;
+    const parsed = parseInt(editValue.replace(/\D/g, ''), 10);
+    if (isNaN(parsed) || parsed < 0) {
+      Alert.alert('Valor inválido', 'Digite um saldo válido em milhas (ex: 50000).');
+      return;
+    }
+    try {
+      await updateBalance.mutateAsync({
+        memberId: editingBalance.memberId,
+        programId: editingBalance.programId,
+        balance: parsed,
+      });
+      cancelEditBalance();
+    } catch {
+      Alert.alert('Erro', 'Não foi possível atualizar o saldo. Tente novamente.');
+    }
+  };
 
   const handleAdd = async () => {
     if (!newName.trim() || !newRelationship.trim()) {
@@ -105,19 +137,76 @@ export default function FamilyScreen() {
         {isExpanded && (
           <View style={styles.memberBalances}>
             {(item.balances ?? []).length > 0 ? (
-              (item.balances ?? []).map((bal: any, idx: number) => (
-                <View key={idx} style={styles.balanceRow}>
-                  <View style={styles.balanceLeft}>
-                    <ProgramLogo slug={bal.program?.slug ?? ''} size={24} />
-                    <Text style={styles.balanceProgramName}>
-                      {bal.program?.name ?? 'Programa'}
-                    </Text>
+              (item.balances ?? []).map((bal: any, idx: number) => {
+                const isEditing =
+                  editingBalance?.memberId === item.id &&
+                  editingBalance?.programId === bal.program?.id;
+                return (
+                  <View key={idx} style={styles.balanceRow}>
+                    <View style={styles.balanceLeft}>
+                      <ProgramLogo slug={bal.program?.slug ?? ''} size={24} />
+                      <Text style={styles.balanceProgramName}>
+                        {bal.program?.name ?? 'Programa'}
+                      </Text>
+                    </View>
+                    {isEditing ? (
+                      <View style={styles.editRow}>
+                        <TextInput
+                          style={styles.editInput}
+                          value={editValue}
+                          onChangeText={setEditValue}
+                          keyboardType="numeric"
+                          placeholder="0"
+                          placeholderTextColor={Colors.text.muted}
+                          autoFocus
+                          accessibilityLabel="Saldo em milhas"
+                        />
+                        <TouchableOpacity
+                          onPress={saveEditBalance}
+                          disabled={updateBalance.isPending}
+                          style={styles.editIconButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Salvar saldo"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {updateBalance.isPending ? (
+                            <ActivityIndicator size="small" color={Colors.primary.light} />
+                          ) : (
+                            <Ionicons name="checkmark" size={18} color={Colors.green.primary} />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={cancelEditBalance}
+                          style={styles.editIconButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Cancelar edição"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close" size={18} color={Colors.red.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() =>
+                          startEditBalance(item.id, bal.program?.id ?? '', bal.balance ?? 0)
+                        }
+                        disabled={!bal.program?.id}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Editar saldo de ${bal.program?.name ?? 'programa'}: ${(bal.balance ?? 0).toLocaleString('pt-BR')} milhas`}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <View style={styles.balanceValueRow}>
+                          <Text style={styles.balanceValue}>
+                            {(bal.balance ?? 0).toLocaleString('pt-BR')} mi
+                          </Text>
+                          <Ionicons name="pencil" size={12} color={Colors.text.muted} />
+                        </View>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                  <Text style={styles.balanceValue}>
-                    {(bal.balance ?? 0).toLocaleString('pt-BR')} mi
-                  </Text>
-                </View>
-              ))
+                );
+              })
             ) : (
               <Text style={styles.noBalances}>Nenhum saldo cadastrado</Text>
             )}
@@ -403,6 +492,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: Colors.text.primary,
+  },
+  balanceValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editInput: {
+    minWidth: 90,
+    height: 36,
+    paddingHorizontal: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    backgroundColor: Colors.bg.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border.default,
+    textAlign: 'right',
+  },
+  editIconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.bg.surface,
+    borderWidth: 1,
+    borderColor: Colors.border.subtle,
   },
   noBalances: {
     fontSize: 13,

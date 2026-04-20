@@ -20,6 +20,7 @@ model User {
   subscriptionPlan      String   @default("FREE")
   subscriptionExpiresAt DateTime?
   stripeCustomerId      String?  @unique // linka User <-> customer Stripe p/ webhooks de cancel/update
+  trialStartedAt        DateTime? // único trial por conta; preenchido quando user ativa 7d grátis
   refreshToken          String?
   whatsappPhone         String?
   isAdmin               Boolean  @default(false)

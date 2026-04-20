@@ -68,6 +68,15 @@ export class SubscriptionController {
     return successResponse(result);
   }
 
+  @Post('trial')
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Ativa trial Premium de 7 dias (1 por conta, sem cartão)' })
+  async activateTrial(@CurrentUser() user: any) {
+    const result = await this.subscriptionService.activateTrial(user.id);
+    return successResponse(result);
+  }
+
   @Post('portal')
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)

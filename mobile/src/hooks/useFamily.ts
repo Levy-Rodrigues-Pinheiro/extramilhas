@@ -24,3 +24,27 @@ export function useDeleteFamilyMember() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['family'] }),
   });
 }
+
+export function useUpdateFamilyBalance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      memberId: string;
+      programId: string;
+      balance: number;
+      expiresAt?: string;
+    }) => {
+      const { data } = await api.put(`/users/family/${params.memberId}/balance`, {
+        programId: params.programId,
+        balance: params.balance,
+        expiresAt: params.expiresAt,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['family'] });
+      qc.invalidateQueries({ queryKey: ['wallet'] });
+      qc.invalidateQueries({ queryKey: ['arbitrage'] });
+    },
+  });
+}

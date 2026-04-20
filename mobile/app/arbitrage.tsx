@@ -271,12 +271,15 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
           </View>
         )}
 
-        {/* CTAs duplos: principal = ir transferir no site do programa, secundário = share */}
+        {/* CTAs duplos: principal = ir transferir, secundário = share.
+            A11y: labels descrevem AÇÃO, hitSlop aumenta tap target. */}
         <View style={styles.ctaRow}>
           <TouchableOpacity
             onPress={() => openTransferFlow(o)}
             activeOpacity={0.85}
             style={styles.transferBtn}
+            accessibilityRole="link"
+            accessibilityLabel={`Abrir site do ${o.fromProgram.name} pra transferir ${o.currentBonus.toFixed(0)}% de bônus`}
           >
             <LinearGradient
               colors={['#8B5CF6', '#3B82F6']}
@@ -292,6 +295,9 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
             onPress={() => shareOpportunity(o)}
             activeOpacity={0.7}
             style={styles.shareBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Compartilhar esta oportunidade"
+            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
           >
             <Ionicons name="share-social-outline" size={18} color="#25D366" />
           </TouchableOpacity>
