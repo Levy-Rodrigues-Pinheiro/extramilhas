@@ -170,6 +170,12 @@ export default function ProfileScreen() {
       onPress: () => setTourOpen(true),
     },
     {
+      icon: 'git-compare-outline',
+      label: 'Comparar programas',
+      showChevron: true,
+      onPress: () => router.push('/(tabs)/compare' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

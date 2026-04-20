@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Share,
   Linking,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,6 +20,9 @@ import { useTransferBonuses, TransferOpportunity } from '../src/hooks/useArbitra
 import { PaywallUpsellBanner, LockedOpportunityCard } from '../src/components/PaywallGate';
 import { FirstRunTip } from '../src/components/FirstRunTip';
 
+type SortMode = 'best' | 'newest' | 'expiring';
+type FilterMode = 'all' | 'my_programs' | 'top_only';
+
 /**
  * Arbitragem de milhas — tela dedicada.
  *
@@ -28,6 +32,46 @@ import { FirstRunTip } from '../src/components/FirstRunTip';
 export default function ArbitrageScreen() {
   const { t } = useTranslation();
   const { data, isLoading, isRefetching, refetch, error } = useTransferBonuses();
+
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('best');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+
+  const visible = useMemo(() => {
+    if (!data?.opportunities) return [];
+    let list = [...data.opportunities];
+
+    // Filtros
+    if (filterMode === 'my_programs') {
+      list = list.filter((o) => (o.userSourceBalance ?? 0) > 0);
+    } else if (filterMode === 'top_only') {
+      list = list.filter((o) => o.classification === 'IMPERDIVEL');
+    }
+
+    // Search (nome do programa origem ou destino)
+    const q = search.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (o) =>
+          o.fromProgram.name.toLowerCase().includes(q) ||
+          o.toProgram.name.toLowerCase().includes(q),
+      );
+    }
+
+    // Sort
+    if (sortMode === 'best') {
+      list.sort((a, b) => b.gainPercent - a.gainPercent);
+    } else if (sortMode === 'expiring') {
+      list.sort((a, b) => {
+        const ax = a.expiresAt ? new Date(a.expiresAt).getTime() : Infinity;
+        const bx = b.expiresAt ? new Date(b.expiresAt).getTime() : Infinity;
+        return ax - bx;
+      });
+    }
+    // 'newest' = mantém ordem original (backend já ordena por createdAt desc)
+
+    return list;
+  }, [data, search, sortMode, filterMode]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -123,7 +167,96 @@ export default function ArbitrageScreen() {
               </Text>
             </View>
 
-            {data.opportunities.map((op) => (
+            {/* Search + filters + sort */}
+            <View style={filters.box}>
+              <View style={filters.searchRow}>
+                <Ionicons name="search" size={16} color="#94A3B8" />
+                <TextInput
+                  style={filters.searchInput}
+                  placeholder={t('common.search')}
+                  placeholderTextColor="#64748B"
+                  value={search}
+                  onChangeText={setSearch}
+                  accessibilityLabel={t('common.search')}
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearch('')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.close')}
+                    hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={filters.chipsRow}
+              >
+                {(
+                  [
+                    { key: 'all', label: t('arbitrage.filter_all') },
+                    { key: 'my_programs', label: t('arbitrage.filter_my_programs') },
+                    { key: 'top_only', label: t('arbitrage.filter_top_only') },
+                  ] as Array<{ key: FilterMode; label: string }>
+                ).map((f) => (
+                  <TouchableOpacity
+                    key={f.key}
+                    onPress={() => setFilterMode(f.key)}
+                    style={[filters.chip, filterMode === f.key && filters.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: filterMode === f.key }}
+                    accessibilityLabel={f.label}
+                  >
+                    <Text style={[filters.chipText, filterMode === f.key && filters.chipTextActive]}>
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                <View style={filters.divider} />
+                {(
+                  [
+                    { key: 'best', label: t('arbitrage.sort_best') },
+                    { key: 'newest', label: t('arbitrage.sort_newest') },
+                    { key: 'expiring', label: t('arbitrage.sort_expiring') },
+                  ] as Array<{ key: SortMode; label: string }>
+                ).map((s) => (
+                  <TouchableOpacity
+                    key={s.key}
+                    onPress={() => setSortMode(s.key)}
+                    style={[filters.chip, sortMode === s.key && filters.chipActive]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: sortMode === s.key }}
+                    accessibilityLabel={`${t('arbitrage.sort_by')}: ${s.label}`}
+                  >
+                    <Ionicons
+                      name={
+                        s.key === 'best' ? 'trending-up' : s.key === 'expiring' ? 'time-outline' : 'calendar-outline'
+                      }
+                      size={12}
+                      color={sortMode === s.key ? '#A78BFA' : '#64748B'}
+                    />
+                    <Text style={[filters.chipText, sortMode === s.key && filters.chipTextActive]}>
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {visible.length === 0 && (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ color: '#94A3B8', fontSize: 13 }}>
+                  {search
+                    ? `Nenhuma oportunidade com "${search}"`
+                    : 'Nenhuma oportunidade com esses filtros'}
+                </Text>
+              </View>
+            )}
+
+            {visible.map((op) => (
               <OpportunityCard key={op.id} opportunity={op} />
             ))}
 
@@ -168,6 +301,66 @@ export default function ArbitrageScreen() {
     </SafeAreaView>
   );
 }
+
+const filters = StyleSheet.create({
+  box: {
+    marginTop: 4,
+    marginBottom: 14,
+    gap: 8,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#141C2F',
+    borderWidth: 1,
+    borderColor: '#253349',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#F8FAFC',
+    paddingVertical: 0,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#253349',
+    backgroundColor: '#141C2F',
+  },
+  chipActive: {
+    borderColor: '#8B5CF6',
+    backgroundColor: '#3B2F66',
+  },
+  chipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  chipTextActive: {
+    color: '#A78BFA',
+  },
+  divider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#253349',
+    marginHorizontal: 4,
+  },
+});
 
 const historyLink = StyleSheet.create({
   box: {
