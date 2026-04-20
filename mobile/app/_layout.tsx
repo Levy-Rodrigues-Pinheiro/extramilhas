@@ -11,6 +11,8 @@ import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { initSentry } from '../src/lib/sentry';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { initAnalytics } from '../src/lib/analytics';
+import { hydrateOfflineCache, subscribeOfflineCache } from '../src/lib/offlineCache';
+import { OfflineBanner } from '../src/components/OfflineBanner';
 import '../src/lib/i18n'; // side-effect: inicializa i18n
 
 // Arma push notifications (permissão + token + listeners).
@@ -56,6 +58,13 @@ export default function RootLayout() {
     }
   }, [fontsLoaded]);
 
+  // Hidrata offline cache e começa a subscrever mudanças pra persistir
+  useEffect(() => {
+    hydrateOfflineCache(queryClient).catch(() => {});
+    const unsub = subscribeOfflineCache(queryClient);
+    return () => unsub();
+  }, []);
+
   if (!fontsLoaded) return null;
 
   return (
@@ -64,6 +73,7 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
           <PushBootstrap />
+          <OfflineBanner />
           <StatusBar style="light" backgroundColor={Colors.bg.primary} />
           <Stack
             screenOptions={{
