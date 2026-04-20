@@ -342,6 +342,19 @@ export class UsersService {
     return { message: 'Family member removed' };
   }
 
+  async deleteFamilyMemberBalance(userId: string, memberId: string, programId: string) {
+    const member = await this.prisma.familyMember.findFirst({
+      where: { id: memberId, userId },
+    });
+    if (!member) {
+      throw new NotFoundException('Family member not found');
+    }
+    await this.prisma.familyMemberBalance.deleteMany({
+      where: { familyMemberId: memberId, programId },
+    });
+    return { message: 'Balance removed' };
+  }
+
   async updateFamilyMemberBalance(userId: string, memberId: string, programId: string, balance: number, expiresAt?: string) {
     const member = await this.prisma.familyMember.findFirst({
       where: { id: memberId, userId },

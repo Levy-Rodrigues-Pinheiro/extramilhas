@@ -188,6 +188,18 @@ export class UsersController {
     return successResponse(result, 'Balance updated');
   }
 
+  @Delete('family/:id/balance/:programId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove programa específico do saldo de um membro' })
+  async deleteFamilyMemberBalance(
+    @CurrentUser() user: any,
+    @Param('id') id: string,
+    @Param('programId') programId: string,
+  ) {
+    const result = await this.usersService.deleteFamilyMemberBalance(user.id, id, programId);
+    return successResponse(result);
+  }
+
   @Get('miles-expiring')
   @ApiOperation({ summary: 'Get expiring miles balances (next 30 days)' })
   async getExpiringBalances(@CurrentUser() user: any) {

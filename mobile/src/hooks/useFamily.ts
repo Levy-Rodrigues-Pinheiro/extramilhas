@@ -25,6 +25,23 @@ export function useDeleteFamilyMember() {
   });
 }
 
+export function useDeleteFamilyBalance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { memberId: string; programId: string }) => {
+      const { data } = await api.delete(
+        `/users/family/${params.memberId}/balance/${params.programId}`,
+      );
+      return data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['family'] });
+      qc.invalidateQueries({ queryKey: ['wallet'] });
+      qc.invalidateQueries({ queryKey: ['arbitrage'] });
+    },
+  });
+}
+
 export function useUpdateFamilyBalance() {
   const qc = useQueryClient();
   return useMutation({

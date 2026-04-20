@@ -20,5 +20,6 @@ import { OfficialUrlService } from './official-url.service';
     FlightCacheService,
     OfficialUrlService,
   ],
+  exports: [FlightCacheService],
 })
 export class SimulatorModule {}

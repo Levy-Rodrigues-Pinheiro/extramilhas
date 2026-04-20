@@ -82,7 +82,37 @@ export class SchedulerService {
       this.logger.log('[scheduler disabled] skip preWarmScraperCache');
       return;
     }
-    this.logger.log(`Pre-warming cache for ${POPULAR_ROUTES.length} routes...`);
+
+    // Mescla rotas hardcoded (estáticas, Brasil-centric) com rotas reais
+    // buscadas por users nos últimos 14d (data-driven). Dedup por par O/D.
+    const seen = new Set<string>();
+    const routes: Array<{ origin: string; destination: string }> = [];
+    for (const r of POPULAR_ROUTES) {
+      const key = `${r.origin}→${r.destination}`;
+      if (!seen.has(key)) { seen.add(key); routes.push(r); }
+    }
+    try {
+      const since = new Date(Date.now() - 14 * 86400_000);
+      const dynamic = await (this.prisma as any).searchLog.groupBy({
+        by: ['origin', 'destination'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+        orderBy: { _count: { origin: 'desc' } },
+        take: 30,
+      });
+      for (const d of dynamic) {
+        const key = `${d.origin}→${d.destination}`;
+        if (!seen.has(key) && d.origin && d.destination) {
+          seen.add(key);
+          routes.push({ origin: d.origin, destination: d.destination });
+        }
+      }
+      this.logger.log(
+        `Pre-warming cache: ${POPULAR_ROUTES.length} hardcoded + ${routes.length - POPULAR_ROUTES.length} data-driven = ${routes.length} total`,
+      );
+    } catch (err) {
+      this.logger.warn(`SearchLog groupBy falhou, usando só rotas hardcoded: ${(err as Error).message}`);
+    }
 
     const scraperUrl =
       process.env.SCRAPER_URL || 'http://localhost:3002';
@@ -93,7 +123,7 @@ export class SchedulerService {
 
     // Serializado — não queremos derrubar o scraper com 26 calls paralelos.
     // Com 20s timeout cada, pior caso são ~9min; temos a madrugada inteira.
-    for (const route of POPULAR_ROUTES) {
+    for (const route of routes) {
       try {
         const tomorrow = new Date(Date.now() + 86400_000);
         const dateStr = tomorrow.toISOString().slice(0, 10);
@@ -293,23 +323,36 @@ export class SchedulerService {
    * Alerta de expiração de pontos — diário 8h UTC (~5h BRT).
    * Busca UserMilesBalance com expiresAt entre 7d-45d à frente + balance>0.
    * Agrupa por user → 1 push por user mesmo com múltiplos saldos expirando.
+   *
+   * Dedup: só considera saldos com lastExpirationAlertAt null ou >7d atrás.
+   * Evita spam diário idêntico até o vencimento real. Após enviar, atualiza
+   * o timestamp em todos os saldos que compuseram o push (não só o nearest).
    */
   @Cron('0 8 * * *')
   async pointsExpirationAlert() {
     if (!this.isEnabled()) return;
     try {
-      const soonFrom = new Date(Date.now() + 7 * 86400_000);
-      const soonTo = new Date(Date.now() + 45 * 86400_000);
+      const now = Date.now();
+      const soonFrom = new Date(now + 7 * 86400_000);
+      const soonTo = new Date(now + 45 * 86400_000);
+      const alertCutoff = new Date(now - 7 * 86400_000); // só re-alerta após 7d
 
       const expiring = await this.prisma.userMilesBalance.findMany({
         where: {
           expiresAt: { gte: soonFrom, lte: soonTo },
           balance: { gt: 0 },
-        },
+          OR: [
+            { lastExpirationAlertAt: null },
+            { lastExpirationAlertAt: { lt: alertCutoff } },
+          ],
+        } as any,
         include: { program: { select: { name: true } } },
       });
 
-      if (expiring.length === 0) return;
+      if (expiring.length === 0) {
+        this.logger.log('Expiration alert: nenhum saldo novo pra alertar (todos já notificados nos últimos 7d)');
+        return;
+      }
 
       const byUser = new Map<string, typeof expiring>();
       for (const b of expiring) {
@@ -319,11 +362,12 @@ export class SchedulerService {
       }
 
       let sent = 0;
+      const alertedBalanceIds: string[] = [];
       for (const [userId, balances] of byUser) {
         const devices = await this.prisma.deviceToken.findMany({
           where: {
             userId,
-            lastUsedAt: { gte: new Date(Date.now() - 60 * 86400_000) },
+            lastUsedAt: { gte: new Date(now - 60 * 86400_000) },
           },
           select: { token: true },
         });
@@ -333,7 +377,7 @@ export class SchedulerService {
           .slice()
           .sort((a, b) => (a.expiresAt?.getTime() ?? 0) - (b.expiresAt?.getTime() ?? 0))[0];
         const daysLeft = Math.ceil(
-          ((nearest.expiresAt?.getTime() ?? Date.now()) - Date.now()) / 86400_000,
+          ((nearest.expiresAt?.getTime() ?? now) - now) / 86400_000,
         );
         const totalPoints = balances.reduce((s, b) => s + b.balance, 0);
 
@@ -351,16 +395,27 @@ export class SchedulerService {
             data: { type: 'points_expiring', deepLink: '/arbitrage', daysLeft, totalPoints },
           },
         );
-        if (result.sent > 0) sent++;
+        if (result.sent > 0) {
+          sent++;
+          for (const b of balances) alertedBalanceIds.push(b.id);
+        }
+      }
+
+      if (alertedBalanceIds.length > 0) {
+        await this.prisma.userMilesBalance.updateMany({
+          where: { id: { in: alertedBalanceIds } },
+          data: { lastExpirationAlertAt: new Date() } as any,
+        });
       }
 
       this.logger.log(
-        `Expiration alert: ${byUser.size} users com saldo expirando, ${sent} pushes entregues`,
+        `Expiration alert: ${byUser.size} users com saldo expirando, ${sent} pushes entregues, ${alertedBalanceIds.length} saldos marcados`,
       );
     } catch (err) {
       this.logger.error(`Expiration alert failed: ${(err as Error).message}`);
     }
   }
+
 
   @Cron('0 4 * * 0') // every Sunday 04:00
   async cleanupDeadTokens() {

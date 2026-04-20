@@ -212,12 +212,16 @@ model ContentArticle {
 }
 
 model UserMilesBalance {
-  id        String   @id @default(uuid())
-  userId    String
-  programId String
-  balance   Int       @default(0)
-  expiresAt DateTime?
-  updatedAt DateTime  @updatedAt
+  id                     String    @id @default(uuid())
+  userId                 String
+  programId              String
+  balance                Int       @default(0)
+  expiresAt              DateTime?
+  // Última vez que mandamos push pra esse saldo por expiração. Cron diário
+  // filtra: só envia se null OU mais velho que 7d. Evita spam diário até
+  // o vencimento real.
+  lastExpirationAlertAt  DateTime?
+  updatedAt              DateTime  @updatedAt
 
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   program LoyaltyProgram @relation(fields: [programId], references: [id])
@@ -226,6 +230,7 @@ model UserMilesBalance {
   // Acesso hot: arbitrage.service.ts faz findMany({where: {userId}}) a cada
   // request de oportunidades. Unique composta não serve pra userId solo.
   @@index([userId])
+  @@index([lastExpirationAlertAt])
   @@map("user_miles_balances")
 }
 

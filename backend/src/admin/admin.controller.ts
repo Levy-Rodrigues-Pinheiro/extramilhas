@@ -27,6 +27,7 @@ import {
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { FlightCacheService } from '../simulator/flight-cache.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard, Role } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -110,7 +111,10 @@ class CreateArticleDto {
 @Roles(Role.ADMIN)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly flightCache: FlightCacheService,
+  ) {}
 
   // ─── Dashboard ───────────────────────────────────────────────────────────────
 
@@ -398,5 +402,22 @@ export class AdminController {
       dto.deepLink,
     );
     return successResponse(result);
+  }
+
+  // ─── Flight cache observability ────────────────────────────────────────
+
+  @Get('cache/stats')
+  @ApiOperation({ summary: 'Stats do LiveFlightCache: hit rate, fresh/stale, programas, rotas recentes' })
+  async getCacheStats() {
+    const result = await this.flightCache.stats();
+    return successResponse(result);
+  }
+
+  @Post('cache/cleanup')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Força limpeza manual do cache de voos (remove entries > staleTTL)' })
+  async cleanupCache() {
+    const removed = await this.flightCache.cleanupStale();
+    return successResponse({ removed });
   }
 }
