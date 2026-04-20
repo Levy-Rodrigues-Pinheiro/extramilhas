@@ -48,6 +48,20 @@ export class UsersController {
     return successResponse(result, 'Profile updated successfully');
   }
 
+  @Delete('me')
+  @ApiOperation({
+    summary: 'Delete conta do user corrente (LGPD). Soft delete + anonimização.',
+  })
+  async deleteMe(@CurrentUser() user: any, @Body() body: { confirmEmail: string }) {
+    if (body?.confirmEmail !== user.email) {
+      throw new BadRequestException(
+        'confirmEmail precisa ser idêntico ao email da conta (confirmação de deleção)',
+      );
+    }
+    await this.usersService.deleteAccount(user.id);
+    return successResponse({ deleted: true }, 'Conta excluída. Dados anonimizados.');
+  }
+
   @Put('password')
   @ApiOperation({ summary: 'Change current user password' })
   async changePassword(

@@ -41,6 +41,8 @@ interface AgentSummary {
 interface IntelRun {
   id: string
   sourceId: string
+  inputPreview: string | null
+  llmOutputRaw: string | null
   startedAt: string
   finishedAt: string | null
   status: 'running' | 'ok' | 'skipped' | 'error'
@@ -450,27 +452,71 @@ export default function IntelAgentPage() {
                 : r.status === 'error'
                 ? 'text-red-400'
                 : 'text-slate-400'
+            const hasDetail = r.inputPreview || r.llmOutputRaw || r.errorMessage
             return (
-              <div key={r.id} className="flex items-center gap-3 p-3">
-                <StatusIcon className={`h-4 w-4 shrink-0 ${statusColor}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{r.source.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {new Date(r.startedAt).toLocaleString('pt-BR')}
-                    {r.errorMessage && ` · ${r.errorMessage.slice(0, 80)}`}
-                  </p>
-                </div>
-                {r.status === 'ok' && (
-                  <div className="text-right text-xs">
-                    <p className="font-semibold">
-                      {r.newReportsCount} novos / {r.extractedCount} extraídos
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      ${r.costUsd.toFixed(4)}
+              <details key={r.id} className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-3 p-3 hover:bg-slate-800/30">
+                  <StatusIcon className={`h-4 w-4 shrink-0 ${statusColor}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{r.source.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {new Date(r.startedAt).toLocaleString('pt-BR')}
+                      {r.errorMessage && ` · ${r.errorMessage.slice(0, 80)}`}
                     </p>
                   </div>
+                  {r.status === 'ok' && (
+                    <div className="text-right text-xs">
+                      <p className="font-semibold">
+                        {r.newReportsCount} novos / {r.extractedCount} extraídos
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        ${r.costUsd.toFixed(4)}
+                      </p>
+                    </div>
+                  )}
+                  {hasDetail && (
+                    <span className="text-xs text-slate-500 transition-transform group-open:rotate-90">
+                      ▶
+                    </span>
+                  )}
+                </summary>
+                {hasDetail && (
+                  <div className="space-y-3 border-t border-border bg-slate-950/50 px-4 py-3">
+                    {r.errorMessage && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-red-400">Erro</p>
+                        <p className="font-mono text-xs text-red-300">{r.errorMessage}</p>
+                      </div>
+                    )}
+                    {r.inputPreview && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-slate-400">
+                          Input preview (500 chars)
+                        </p>
+                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-slate-900 p-2 text-[10px]">
+                          {r.inputPreview}
+                        </pre>
+                      </div>
+                    )}
+                    {r.llmOutputRaw && (
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase text-purple-400">
+                          LLM output (JSON bonuses extraídos)
+                        </p>
+                        <pre className="mt-1 max-h-40 overflow-auto rounded bg-slate-900 p-2 text-[10px]">
+                          {(() => {
+                            try {
+                              return JSON.stringify(JSON.parse(r.llmOutputRaw!), null, 2)
+                            } catch {
+                              return r.llmOutputRaw
+                            }
+                          })()}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </div>
+              </details>
             )
           })}
         </div>

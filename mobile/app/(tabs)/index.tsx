@@ -18,6 +18,7 @@ import { useMyLeaderboardStats, TIER_META } from '../../src/hooks/useLeaderboard
 import { PaywallUpsellBanner } from '../../src/components/PaywallGate';
 import { useMissions } from '../../src/hooks/useMissions';
 import { FirstRunTip } from '../../src/components/FirstRunTip';
+import { useNotificationFeed } from '../../src/hooks/useNotificationFeed';
 
 /**
  * Home — dashboard focado em arbitragem de milhas.
@@ -35,6 +36,8 @@ export default function HomeScreen() {
   const bonuses = useTransferBonuses();
   const leaderboard = useMyLeaderboardStats();
   const missions = useMissions();
+  const notifFeed = useNotificationFeed();
+  const notifUnread = notifFeed.data?.unreadCount ?? 0;
 
   // Missão mais próxima de completar (>=50% progresso, não claimed)
   const nearCompletion = React.useMemo(() => {
@@ -84,11 +87,26 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>Olá! 👋</Text>
             <Text style={styles.subtitle}>Suas milhas, sua arbitragem</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
-            <View style={styles.avatarBox}>
-              <Ionicons name="person" size={20} color="#8B5CF6" />
-            </View>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {/* Bell icon com badge de notif não-lidas */}
+            <TouchableOpacity onPress={() => router.push('/notifications-feed' as any)}>
+              <View style={styles.avatarBox}>
+                <Ionicons name="notifications" size={20} color="#A78BFA" />
+                {notifUnread > 0 && (
+                  <View style={styles.bellBadge}>
+                    <Text style={styles.bellBadgeText}>
+                      {notifUnread > 9 ? '9+' : notifUnread}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/profile')}>
+              <View style={styles.avatarBox}>
+                <Ionicons name="person" size={20} color="#8B5CF6" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Hero: valor da carteira (clicável → vai pra carteira) */}
@@ -371,7 +389,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#334155',
+    position: 'relative',
   },
+  bellBadge: {
+    position: 'absolute',
+    top: -2, right: -2,
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#EC4899',
+    paddingHorizontal: 4,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: '#0F172A',
+  },
+  bellBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
 
   hero: { borderRadius: 18, padding: 20, marginBottom: 16 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

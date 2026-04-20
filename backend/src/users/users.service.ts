@@ -45,6 +45,43 @@ export class UsersService {
     return { changed: true };
   }
 
+  /**
+   * LGPD delete: apaga dados pessoais, anonimiza user record pra preservar
+   * FKs em audit/bonus reports históricos.
+   */
+  async deleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User não encontrado');
+
+    const anonEmail = `deleted-${user.id}@anonymous.invalid`;
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: anonEmail,
+          name: 'Usuário Deletado',
+          passwordHash: null,
+          refreshToken: null,
+          whatsappPhone: null,
+          referralCode: null,
+          lastActiveAt: null,
+        } as any,
+      }),
+      this.prisma.deviceToken.deleteMany({ where: { userId } }),
+      this.prisma.userMilesBalance.deleteMany({ where: { userId } }),
+      this.prisma.familyMember.deleteMany({ where: { userId } }),
+      this.prisma.alert.deleteMany({ where: { userId } }),
+      this.prisma.savedOffer.deleteMany({ where: { userId } }),
+      this.prisma.userPreference.deleteMany({ where: { userId } }),
+      this.prisma.notification.deleteMany({ where: { userId } }),
+      this.prisma.bonusReport.updateMany({
+        where: { reporterId: userId },
+        data: { reporterEmail: null },
+      }),
+    ]);
+    return { deleted: true };
+  }
+
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     const user = await this.prisma.user.update({
       where: { id: userId },

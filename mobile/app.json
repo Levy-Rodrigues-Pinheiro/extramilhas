@@ -2,7 +2,7 @@
   "expo": {
     "name": "Milhas Extras",
     "slug": "milhasextras",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "milhasextras",
@@ -14,14 +14,29 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.milhasextras.app"
+      "bundleIdentifier": "com.milhasextras.app",
+      "associatedDomains": ["applinks:milhasextras.com.br"]
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f172a"
       },
-      "package": "com.milhasextras.app"
+      "package": "com.milhasextras.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "milhasextras.com.br",
+              "pathPrefix": "/r"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "plugins": [
       "expo-router",
