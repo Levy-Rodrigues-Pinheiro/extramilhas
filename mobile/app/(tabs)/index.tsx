@@ -316,31 +316,8 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* CTA Carteira (se vazia) */}
-        {programsCount === 0 && !wallet.isLoading && (
-          <View style={styles.ctaBox}>
-            <Ionicons name="wallet-outline" size={36} color="#8B5CF6" />
-            <Text style={styles.ctaTitle}>Cadastre seus saldos</Text>
-            <Text style={styles.ctaSub}>
-              Só leva 30 segundos. As oportunidades ficam personalizadas pro SEU saldo —
-              calculamos quanto VOCÊ ganha em R$.
-            </Text>
-            <TouchableOpacity
-              style={styles.ctaBtn}
-              onPress={() => router.push('/(tabs)/wallet' as any)}
-              activeOpacity={0.85}
-            >
-              <LinearGradient
-                colors={['#8B5CF6', '#3B82F6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.ctaBtnGradient}
-              >
-                <Text style={styles.ctaBtnText}>+ Adicionar primeiro saldo</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* (CTA box removido — hero card já tem "Cadastre seus saldos →"
+            com mesmo destino. Redundância confundia user.) */}
       </ScrollView>
     </SafeAreaView>
   );

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Share,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -68,10 +69,34 @@ export default function ArbitrageScreen() {
         {!isLoading && data && data.count === 0 && (
           <View style={styles.emptyBox}>
             <Ionicons name="trending-up-outline" size={48} color="#64748B" />
-            <Text style={styles.emptyTitle}>Nenhuma oportunidade ativa</Text>
+            <Text style={styles.emptyTitle}>Nenhum bônus ativo agora</Text>
             <Text style={styles.emptyText}>
-              Quando aparecer bônus de transferência entre programas, mostramos aqui.
+              Bônus de transferência aparecem e somem em horas. Configure um alerta e
+              seja o primeiro a saber — evita perder oportunidade boa.
             </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/alerts/create' as any)}
+              activeOpacity={0.85}
+              style={styles.emptyCta}
+            >
+              <LinearGradient
+                colors={['#8B5CF6', '#3B82F6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.emptyCtaGradient}
+              >
+                <Ionicons name="notifications" size={15} color="#fff" />
+                <Text style={styles.emptyCtaText}>Configurar alerta de bônus</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/bonus-history' as any)}
+              style={{ marginTop: 10 }}
+            >
+              <Text style={{ color: '#A78BFA', fontSize: 12, fontWeight: '600' }}>
+                Ver bônus recentes (últimos 30 dias) →
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -246,18 +271,54 @@ function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity 
           </View>
         )}
 
-        {/* Share button — spread orgânico via WhatsApp */}
-        <TouchableOpacity
-          onPress={() => shareOpportunity(o)}
-          activeOpacity={0.7}
-          style={styles.shareBtn}
-        >
-          <Ionicons name="share-social-outline" size={15} color="#25D366" />
-          <Text style={styles.shareText}>Compartilhar no WhatsApp</Text>
-        </TouchableOpacity>
+        {/* CTAs duplos: principal = ir transferir no site do programa, secundário = share */}
+        <View style={styles.ctaRow}>
+          <TouchableOpacity
+            onPress={() => openTransferFlow(o)}
+            activeOpacity={0.85}
+            style={styles.transferBtn}
+          >
+            <LinearGradient
+              colors={['#8B5CF6', '#3B82F6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.transferGradient}
+            >
+              <Ionicons name="open-outline" size={16} color="#fff" />
+              <Text style={styles.transferText}>Transferir em {o.fromProgram.name}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => shareOpportunity(o)}
+            activeOpacity={0.7}
+            style={styles.shareBtn}
+          >
+            <Ionicons name="share-social-outline" size={18} color="#25D366" />
+          </TouchableOpacity>
+        </View>
       </LinearGradient>
     </View>
   );
+}
+
+// URLs oficiais dos programas de origem — user pula direto pra fazer
+// transferência. Fallback em Google search quando desconhecido.
+const PROGRAM_URLS: Record<string, string> = {
+  livelo: 'https://www.livelo.com.br/transfira-seus-pontos',
+  esfera: 'https://www.esferasantanderbanespa.com.br/',
+  itau: 'https://www.itau.com.br/cartoes/programa-sempre-presente',
+  bradesco: 'https://www.bradesco.com.br/',
+  sicredi: 'https://www.sicredi.com.br/',
+};
+
+async function openTransferFlow(o: TransferOpportunity) {
+  const url = PROGRAM_URLS[o.fromProgram.slug];
+  if (url) {
+    await Linking.openURL(url).catch(() => {});
+    return;
+  }
+  const q = encodeURIComponent(`${o.fromProgram.name} transferir pontos ${o.toProgram.name}`);
+  await Linking.openURL(`https://www.google.com/search?q=${q}`).catch(() => {});
 }
 
 async function shareOpportunity(o: TransferOpportunity) {
@@ -295,17 +356,29 @@ const styles = StyleSheet.create({
   retryBtn: { backgroundColor: '#1E293B', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
   retryBtnText: { color: '#8B5CF6', fontWeight: '600' },
 
-  shareBtn: {
+  ctaRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  transferBtn: { flex: 1, borderRadius: 10, overflow: 'hidden' },
+  transferGradient: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6,
-    marginTop: 12, paddingVertical: 10,
-    borderRadius: 8,
+    gap: 8, paddingVertical: 12,
+  },
+  transferText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  shareBtn: {
+    width: 46, height: 46,
+    alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10,
     backgroundColor: '#064E3B',
     borderWidth: 1, borderColor: '#25D366',
   },
   shareText: { color: '#25D366', fontSize: 12, fontWeight: '600' },
 
   emptyBox: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 24, gap: 10 },
+  emptyCta: { marginTop: 12, borderRadius: 10, overflow: 'hidden' },
+  emptyCtaGradient: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 20, paddingVertical: 12,
+  },
+  emptyCtaText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   emptyTitle: { color: '#F1F5F9', fontSize: 16, fontWeight: '600' },
   emptyText: { color: '#94A3B8', fontSize: 13, textAlign: 'center', lineHeight: 18 },
 

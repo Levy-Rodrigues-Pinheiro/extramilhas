@@ -37,7 +37,8 @@ export default function WelcomeQuizScreen() {
   const { data: programs, isLoading: programsLoading } = usePrograms();
   const updateBalances = useUpdateBalances();
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // Step 0 = tela intro explicando arbitragem (antes era step 1 direto)
+  const [step, setStep] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [selectedPrograms, setSelectedPrograms] = useState<Set<string>>(new Set());
   const [balances, setBalances] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -112,14 +113,14 @@ export default function WelcomeQuizScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        {/* Progress bar */}
+        {/* Progress bar — step 0 não colore nenhum (é intro pré-quiz) */}
         <View style={styles.progressRow}>
           {[1, 2, 3, 4].map((n) => (
             <View
               key={n}
               style={[
                 styles.progressStep,
-                n <= step && styles.progressStepActive,
+                n <= step && step > 0 && styles.progressStepActive,
               ]}
             />
           ))}
@@ -129,13 +130,37 @@ export default function WelcomeQuizScreen() {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
+          {step === 0 && (
+            <>
+              <Text style={styles.emoji}>💡</Text>
+              <Text style={styles.title}>O que a gente faz</Text>
+              <Text style={styles.subtitle}>
+                Milhas valem diferente em cada programa. Quando Livelo oferece 100% de
+                bônus pra transferir pra Smiles, cada 1.000 pontos viram{' '}
+                <Text style={{ fontWeight: '800', color: '#A78BFA' }}>2.000 milhas</Text>.
+                É o que a gente chama de <Text style={{ fontWeight: '800' }}>arbitragem</Text> —
+                ganho real, em R$, sem você gastar nada a mais.
+              </Text>
+
+              <View style={styles.introBox}>
+                <IntroLine icon="flash" text="Notificamos no celular quando um bônus aparece" />
+                <IntroLine icon="calculator" text="Calculamos quanto VOCÊ ganha em R$ no seu saldo" />
+                <IntroLine icon="gift" text="Histórico, alertas, ranking, Premium grátis via missões" />
+              </View>
+
+              <PrimaryButton label="Entendi, vamos configurar" onPress={() => setStep(1)} />
+              <Text style={{ color: '#64748B', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+                Leva 30 segundos. Pode pular se quiser (botão em cima).
+              </Text>
+            </>
+          )}
+
           {step === 1 && (
             <>
               <Text style={styles.emoji}>👋</Text>
-              <Text style={styles.title}>Seja bem-vindo!</Text>
+              <Text style={styles.title}>Em quais programas você tem milhas?</Text>
               <Text style={styles.subtitle}>
-                Vamos deixar o app útil pra você em 30 segundos. Pra começar, em quais
-                programas você tem milhas?
+                Selecione os que você usa pra gente saber quais bônus importam pra você.
               </Text>
               <Text style={styles.hint}>Selecione todos que se aplicam</Text>
 
@@ -289,6 +314,17 @@ export default function WelcomeQuizScreen() {
   );
 }
 
+function IntroLine({ icon, text }: { icon: any; text: string }) {
+  return (
+    <View style={styles.introLine}>
+      <View style={styles.introIcon}>
+        <Ionicons name={icon} size={14} color="#A78BFA" />
+      </View>
+      <Text style={styles.introLineText}>{text}</Text>
+    </View>
+  );
+}
+
 function Benefit({ icon, text }: { icon: any; text: string }) {
   return (
     <View style={styles.benefit}>
@@ -341,6 +377,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
   },
   progressStepActive: { backgroundColor: '#8B5CF6' },
+
+  introBox: {
+    marginTop: 24, marginBottom: 8,
+    padding: 16, borderRadius: 12,
+    backgroundColor: '#1E293B',
+    borderWidth: 1, borderColor: '#334155',
+    gap: 12,
+  },
+  introLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  introIcon: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#3B2F66',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  introLineText: { color: '#CBD5E1', fontSize: 13, flex: 1 },
+
   skipBtn: { paddingHorizontal: 8, paddingVertical: 4 },
   skipText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
 

@@ -20,32 +20,43 @@ import type { AlertType, AlertChannel, CabinClass, CreateAlertPayload } from '..
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
-const ALERT_TYPES: { type: AlertType; label: string; description: string; icon: IoniconName; color: string }[] = [
+const ALERT_TYPES: {
+  type: AlertType;
+  label: string;
+  description: string;
+  example: string;
+  icon: IoniconName;
+  color: string;
+}[] = [
   {
     type: 'BONUS_THRESHOLD',
     label: 'Bônus de transferência',
-    description: 'Avisa quando Livelo→Smiles (ou qualquer par) atingir o bônus mínimo',
+    description: 'Te avisa quando um par de programas atingir o bônus mínimo que você definir.',
+    example: 'Ex: Livelo → Smiles com bônus ≥ 80%',
     icon: 'gift-outline',
     color: '#8B5CF6',
   },
   {
     type: 'CPM_THRESHOLD',
-    label: 'Limite de CPM',
-    description: 'Alerta quando o CPM cair abaixo do valor definido',
+    label: 'Preço das milhas',
+    description: 'Avisa quando milhas ficarem mais baratas do que o teto que você tolera.',
+    example: 'Ex: Smiles ≤ R$ 22 por 1.000 milhas',
     icon: 'trending-down-outline',
     color: '#818CF8',
   },
   {
     type: 'DESTINATION',
-    label: 'Destino Específico',
-    description: 'Alerta para passagens a um destino específico',
-    icon: 'map-pin-outline' as IoniconName,
+    label: 'Destino específico',
+    description: 'Avisa quando aparecer passagem pra um destino-alvo.',
+    example: 'Ex: GRU → CDG em classe econômica',
+    icon: 'map-outline',
     color: '#22c55e',
   },
   {
     type: 'PROGRAM_PROMO',
-    label: 'Promoção de Programa',
-    description: 'Alerta sobre promoções de um programa',
+    label: 'Promoções de programa',
+    description: 'Qualquer promoção (bônus de compra, conversão, etc) do programa escolhido.',
+    example: 'Ex: toda promoção da Livelo',
     icon: 'flash-outline',
     color: '#eab308',
   },
@@ -186,7 +197,11 @@ export default function CreateAlertScreen() {
                 <Text style={[styles.typeLabel, isSelected && { color: item.color }]}>
                   {item.label}
                 </Text>
-                <Text style={styles.typeDescription}>{item.description}</Text>
+                <Text style={styles.typeDescription}>
+                  {item.description}
+                  {'\n'}
+                  <Text style={{ color: item.color, fontWeight: '700' }}>{item.example}</Text>
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -559,10 +574,8 @@ const styles = StyleSheet.create({
   typeDescription: {
     fontSize: 11,
     color: '#94a3b8',
-    position: 'absolute',
-    bottom: 10,
-    left: 70,
-    right: 14,
+    lineHeight: 15,
+    marginTop: 6,
   },
   formSection: {
     marginBottom: 24,

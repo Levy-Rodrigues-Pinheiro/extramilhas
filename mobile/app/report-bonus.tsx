@@ -81,12 +81,32 @@ export default function ReportBonusScreen() {
             />
           </View>
           <Text style={styles.successTitle}>
-            {submitted.isDuplicate ? 'Já temos esse!' : 'Recebido! 🙏'}
+            {submitted.isDuplicate ? 'Já temos esse!' : 'Obrigado! 🙏'}
           </Text>
           <Text style={styles.successText}>{submitted.message}</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.successBtn}>
-            <Text style={styles.successBtnText}>Voltar</Text>
-          </TouchableOpacity>
+
+          {/* Reforço de impacto social: quando admin aprovar, N usuários
+              são notificados — cria sensação de contribuição real */}
+          {!submitted.isDuplicate && (
+            <View style={styles.impactBox}>
+              <Ionicons name="people" size={16} color="#A78BFA" />
+              <Text style={styles.impactText}>
+                Assim que admin validar, <Text style={{ fontWeight: '800' }}>todo mundo no app recebe push</Text>.
+                Seu report vira oportunidade pra quem tem saldo nesse programa.
+              </Text>
+            </View>
+          )}
+
+          {!submitted.isDuplicate && (
+            <View style={styles.impactBox}>
+              <Ionicons name="trophy" size={16} color="#F59E0B" />
+              <Text style={styles.impactText}>
+                Reports aprovados <Text style={{ fontWeight: '800' }}>sobem seu tier no ranking</Text>{' '}
+                + dão <Text style={{ fontWeight: '800' }}>dias Premium grátis</Text> via missões.
+              </Text>
+            </View>
+          )}
+
           <TouchableOpacity
             onPress={() => {
               setSubmitted(null);
@@ -94,9 +114,15 @@ export default function ReportBonusScreen() {
               setNotes('');
               setExpires('');
             }}
+            style={styles.successBtn}
+          >
+            <Text style={styles.successBtnText}>Reportar outro bônus</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.back()}
             style={[styles.successBtn, { backgroundColor: 'transparent' }]}
           >
-            <Text style={[styles.successBtnText, { color: '#8B5CF6' }]}>Reportar outro</Text>
+            <Text style={[styles.successBtnText, { color: '#8B5CF6' }]}>Voltar pro app</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -314,4 +340,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#8B5CF6', borderRadius: 10,
   },
   successBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  impactBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    padding: 14, marginTop: 8, marginHorizontal: 8,
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    borderWidth: 1, borderColor: '#334155',
+    maxWidth: 360,
+  },
+  impactText: { color: '#CBD5E1', fontSize: 12, lineHeight: 17, flex: 1 },
 });
