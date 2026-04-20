@@ -32,6 +32,8 @@ model User {
   milesBalances UserMilesBalance[]
   auditLogs     AuditLog[]         @relation("AdminAuditLogs")
   familyMembers FamilyMember[]
+  bonusReports  BonusReport[]      @relation("BonusReportReporter")
+  bonusReviews  BonusReport[]      @relation("BonusReportReviewer")
 
   @@map("users")
 }
@@ -289,6 +291,38 @@ model AwardChart {
   @@index([programId, origin, cabinClass, isActive])
   @@index([origin, destination, cabinClass, isActive])
   @@map("award_charts")
+}
+
+model BonusReport {
+  id              String    @id @default(uuid())
+  // Quem reportou (opcional — permite anônimo via email)
+  reporterId      String?
+  reporterEmail   String?
+  // Dados do bônus reportado (slugs de programa)
+  fromProgramSlug String
+  toProgramSlug   String
+  bonusPercent    Float
+  expiresAt       DateTime?
+  // Comprovação opcional (link de print, screenshot URL)
+  screenshotUrl   String?
+  // Texto livre do reporter
+  notes           String?
+  // Workflow
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED | DUPLICATE
+  adminNotes      String?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  // Quando aprovado, gera (ou atualiza) uma TransferPartnership
+  partnershipId   String?
+  createdAt       DateTime  @default(now())
+
+  reporter User? @relation("BonusReportReporter", fields: [reporterId], references: [id])
+  reviewer User? @relation("BonusReportReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([reporterId])
+  @@index([fromProgramSlug, toProgramSlug])
+  @@map("bonus_reports")
 }
 
 model WaitlistSignup {

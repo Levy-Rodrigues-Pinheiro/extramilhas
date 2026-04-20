@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Map,
   Database,
+  Megaphone,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -36,6 +37,7 @@ const navItems = [
   { label: 'Usuários', href: '/users', icon: Users },
   { label: 'Programas', href: '/programs', icon: Award },
   { label: 'Tabela de Resgate', href: '/award-charts', icon: Map },
+  { label: 'Reports de Bônus', href: '/bonus-reports', icon: Megaphone },
   { label: 'Cache & Telemetria', href: '/cache-stats', icon: Database },
   { label: 'Artigos', href: '/articles', icon: FileText },
   { label: 'Notificações', href: '/notifications', icon: Bell },

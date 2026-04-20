@@ -87,10 +87,40 @@ export default function ArbitrageScreen() {
             ))}
           </>
         )}
+
+        {/* CTA Reportar bônus — sempre visível, não só quando vazio */}
+        <TouchableOpacity
+          onPress={() => router.push('/report-bonus' as any)}
+          activeOpacity={0.85}
+          style={cta.box}
+        >
+          <View style={cta.iconBox}>
+            <Ionicons name="megaphone" size={20} color="#8B5CF6" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={cta.title}>Viu um bônus que não está aqui?</Text>
+            <Text style={cta.text}>Reporta — vira oportunidade pra todo mundo →</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#64748B" />
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const cta = StyleSheet.create({
+  box: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#1E293B', borderColor: '#3B2F66', borderWidth: 1,
+    padding: 16, borderRadius: 14, marginTop: 16,
+  },
+  iconBox: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: '#3B2F66', alignItems: 'center', justifyContent: 'center',
+  },
+  title: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
+  text: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
+});
 
 function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity }) {
   const color =
