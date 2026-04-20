@@ -57,11 +57,162 @@ export interface TransferOpportunity {
   summary: string;
 }
 
+export interface TransferCalculation {
+  fromProgram: { slug: string; name: string; avgCpm: number };
+  inputPoints: number;
+  inputValueBrl: number;
+  results: Array<{
+    toProgram: { slug: string; name: string; avgCpm: number };
+    bonusActive: number; // %
+    expiresAt: string | null;
+    resultingMiles: number;
+    resultingValueBrl: number;
+    valueGainBrl: number;
+    gainPercent: number;
+    recommendation: 'TRANSFERIR' | 'ESPERAR' | 'NAO_TRANSFERIR';
+    reasoning: string;
+    examples?: Array<{ destination: string; milesNeeded: number; tripsPossible: number }>;
+  }>;
+}
+
 @Injectable()
 export class ArbitrageService {
   private readonly logger = new Logger(ArbitrageService.name);
 
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * "Vale a pena transferir AGORA?"
+   *
+   * Usuário diz: "tenho X pontos no programa Y" → app calcula o que rinde
+   * em CADA partnership ativa, com classificação clara (transferir, esperar
+   * ou não vale).
+   *
+   * Critério de "ESPERAR": se o gainPercent atual está abaixo da média
+   * histórica das últimas 5 ofertas (TODO quando tiver BonusHistory). Por
+   * ora, ESPERAR só se gainPercent < 15% E currentBonus < 50%.
+   */
+  async calculateTransfer(input: {
+    fromProgramSlug: string;
+    points: number;
+    toProgramSlug?: string; // se especificado, filtra
+  }): Promise<TransferCalculation> {
+    const fromProgram = await this.prisma.loyaltyProgram.findUnique({
+      where: { slug: input.fromProgramSlug },
+      select: { id: true, slug: true, name: true, avgCpmCurrent: true },
+    });
+    if (!fromProgram) {
+      throw new Error(`Programa "${input.fromProgramSlug}" não encontrado`);
+    }
+
+    const sourceCpm = Number(fromProgram.avgCpmCurrent);
+    const inputValueBrl = parseFloat(((input.points / 1000) * sourceCpm).toFixed(2));
+
+    // Busca todas as partnerships ativas FROM esse programa
+    const where: any = { fromProgramId: fromProgram.id, isActive: true };
+    if (input.toProgramSlug) {
+      const toProgram = await this.prisma.loyaltyProgram.findUnique({
+        where: { slug: input.toProgramSlug },
+        select: { id: true },
+      });
+      if (toProgram) where.toProgramId = toProgram.id;
+    }
+
+    const partnerships = await this.prisma.transferPartnership.findMany({
+      where,
+      include: {
+        toProgram: { select: { id: true, slug: true, name: true, avgCpmCurrent: true } },
+      },
+    });
+
+    const results: TransferCalculation['results'] = [];
+    for (const p of partnerships) {
+      const destCpm = Number(p.toProgram.avgCpmCurrent);
+      const bonus = Number(p.currentBonus);
+      const baseRate = Number(p.baseRate);
+      const multiplier = baseRate * (1 + bonus / 100);
+
+      const resultingMiles = Math.floor(input.points * multiplier);
+      const resultingValueBrl = parseFloat(((resultingMiles / 1000) * destCpm).toFixed(2));
+      const valueGainBrl = parseFloat((resultingValueBrl - inputValueBrl).toFixed(2));
+      const gainPercent =
+        inputValueBrl > 0
+          ? parseFloat((((resultingValueBrl - inputValueBrl) / inputValueBrl) * 100).toFixed(1))
+          : 0;
+
+      let recommendation: TransferCalculation['results'][0]['recommendation'];
+      let reasoning: string;
+
+      if (gainPercent >= 30) {
+        recommendation = 'TRANSFERIR';
+        reasoning = `Ganho de ${gainPercent.toFixed(0)}% em valor (R$ ${valueGainBrl.toFixed(2)} a mais). Aproveite enquanto o bônus está ativo.`;
+      } else if (gainPercent >= 5) {
+        recommendation = 'TRANSFERIR';
+        reasoning = `Ganho positivo de ${gainPercent.toFixed(0)}%. Vale a pena se você já tem destino certo pra usar.`;
+      } else if (gainPercent < -10) {
+        recommendation = 'NAO_TRANSFERIR';
+        reasoning = `Você PERDE ${Math.abs(gainPercent).toFixed(0)}% transferindo agora. ${p.toProgram.name} tem CPM mais alto que ${fromProgram.name} sem o bônus.`;
+      } else {
+        recommendation = 'ESPERAR';
+        reasoning = `Ganho marginal (${gainPercent.toFixed(1)}%). Bônus de ${bonus.toFixed(0)}% costuma melhorar — espera por uma promoção mais agressiva.`;
+      }
+
+      // Exemplos de uso: pega rotas populares no AwardChart do programa destino
+      const exampleCharts = await this.prisma.awardChart.findMany({
+        where: {
+          programId: p.toProgramId,
+          isActive: true,
+          milesRequired: { lte: resultingMiles },
+        },
+        orderBy: { milesRequired: 'asc' },
+        take: 3,
+        select: { destinationName: true, destination: true, milesRequired: true },
+      });
+
+      const examples = exampleCharts.map((c) => ({
+        destination: `${c.destination} (${c.destinationName})`,
+        milesNeeded: c.milesRequired,
+        tripsPossible: Math.floor(resultingMiles / c.milesRequired),
+      }));
+
+      results.push({
+        toProgram: {
+          slug: p.toProgram.slug,
+          name: p.toProgram.name,
+          avgCpm: destCpm,
+        },
+        bonusActive: bonus,
+        expiresAt: p.expiresAt?.toISOString() ?? null,
+        resultingMiles,
+        resultingValueBrl,
+        valueGainBrl,
+        gainPercent,
+        recommendation,
+        reasoning,
+        examples: examples.length > 0 ? examples : undefined,
+      });
+    }
+
+    // Ordena: TRANSFERIR primeiro (por gainPercent desc), depois ESPERAR, depois NAO
+    const order = { TRANSFERIR: 0, ESPERAR: 1, NAO_TRANSFERIR: 2 };
+    results.sort((a, b) => {
+      const oa = order[a.recommendation];
+      const ob = order[b.recommendation];
+      if (oa !== ob) return oa - ob;
+      return b.gainPercent - a.gainPercent;
+    });
+
+    return {
+      fromProgram: {
+        slug: fromProgram.slug,
+        name: fromProgram.name,
+        avgCpm: sourceCpm,
+      },
+      inputPoints: input.points,
+      inputValueBrl,
+      results,
+    };
+  }
 
   /**
    * Lista oportunidades de transferência com bônus ativo.

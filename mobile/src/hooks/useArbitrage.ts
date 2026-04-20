@@ -1,5 +1,38 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
+
+export interface TransferCalcInput {
+  fromProgramSlug: string;
+  points: number;
+  toProgramSlug?: string;
+}
+
+export interface TransferCalcResult {
+  fromProgram: { slug: string; name: string; avgCpm: number };
+  inputPoints: number;
+  inputValueBrl: number;
+  results: Array<{
+    toProgram: { slug: string; name: string; avgCpm: number };
+    bonusActive: number;
+    expiresAt: string | null;
+    resultingMiles: number;
+    resultingValueBrl: number;
+    valueGainBrl: number;
+    gainPercent: number;
+    recommendation: 'TRANSFERIR' | 'ESPERAR' | 'NAO_TRANSFERIR';
+    reasoning: string;
+    examples?: Array<{ destination: string; milesNeeded: number; tripsPossible: number }>;
+  }>;
+}
+
+export function useTransferCalculator() {
+  return useMutation<TransferCalcResult, Error, TransferCalcInput>({
+    mutationFn: async (input) => {
+      const { data } = await api.post('/arbitrage/calculate', input);
+      return data as TransferCalcResult;
+    },
+  });
+}
 
 export interface TransferOpportunity {
   id: string;

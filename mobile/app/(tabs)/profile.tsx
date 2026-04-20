@@ -114,6 +114,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/arbitrage' as any),
     },
     {
+      icon: 'calculator-outline',
+      label: 'Vale a pena transferir?',
+      showChevron: true,
+      onPress: () => router.push('/transfer-calculator' as any),
+    },
+    {
       icon: 'settings-outline',
       label: 'Preferências',
       showChevron: true,
