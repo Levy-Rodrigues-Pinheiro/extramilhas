@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn, getInitials } from '@/lib/utils'
 import { LoadingPage } from '@/components/loading-spinner'
+import { CommandPalette } from '@/components/command-palette'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -76,6 +77,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-[#0B1120] overflow-hidden">
+      {/* Command palette — Cmd/Ctrl+K em qualquer tela */}
+      <CommandPalette />
+
       {/* Sidebar */}
       <aside className="flex h-full w-60 flex-col border-r border-[#1E293B] bg-[#0B1120]">
         {/* Logo */}

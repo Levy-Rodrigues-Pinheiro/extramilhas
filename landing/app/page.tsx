@@ -254,6 +254,8 @@ export default function LandingPage() {
 
       <footer className="px-6 py-12 border-t border-slate-800 text-center text-slate-500 text-sm">
         <div className="mb-4 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs">
+          <a href="/blog" className="hover:text-slate-300">Blog</a>
+          <a href="/programs" className="hover:text-slate-300">Programas</a>
           <a href="/privacy" className="hover:text-slate-300">Privacidade</a>
           <a href="/terms" className="hover:text-slate-300">Termos</a>
           <a href="/contato" className="hover:text-slate-300">Contato</a>
