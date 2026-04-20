@@ -160,7 +160,7 @@ const deviceLang = Localization.getLocales()[0]?.languageCode || 'pt';
 const initialLang = deviceLang.startsWith('pt') ? 'pt' : 'en';
 
 i18n.use(initReactI18next).init({
-  compatibilityJSON: 'v3',
+  // compatibilityJSON removido: i18next atual já suporta ICU-style plurals v4
   resources,
   lng: initialLang,
   fallbackLng: 'pt',

@@ -18,6 +18,24 @@ interface IntelSource {
   minIntervalMin: number
   lastRunAt: string | null
   costUsd: number
+  stats?: {
+    total: number
+    approved: number
+    rejected: number
+    pending: number
+    accuracyPercent: number | null
+  }
+}
+
+interface AgentSummary {
+  sourcesTotal: number
+  sourcesActive: number
+  totalReportsFromAgent: number
+  approvedFromAgent: number
+  rejectedFromAgent: number
+  overallAccuracyPercent: number | null
+  totalCostUsd: number
+  costPerApprovedUsd: number | null
 }
 
 interface IntelRun {
@@ -36,6 +54,7 @@ interface IntelRun {
 export default function IntelAgentPage() {
   const [sources, setSources] = useState<IntelSource[]>([])
   const [runs, setRuns] = useState<IntelRun[]>([])
+  const [summary, setSummary] = useState<AgentSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState<string | null>(null)
   const [runningAll, setRunningAll] = useState(false)
@@ -45,12 +64,14 @@ export default function IntelAgentPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [s, r] = await Promise.all([
+      const [s, r, sum] = await Promise.all([
         api.get('/admin/intel-agent/sources'),
         api.get('/admin/intel-agent/runs?limit=30'),
+        api.get('/admin/intel-agent/summary'),
       ])
       setSources(s.data.sources ?? [])
       setRuns(r.data.runs ?? [])
+      setSummary(sum.data ?? null)
     } catch {
       toast({ title: 'Erro', description: 'Falha ao carregar', variant: 'destructive' })
     } finally {
@@ -150,8 +171,8 @@ export default function IntelAgentPage() {
         }
       />
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* Stats gerais (4 cards) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Fontes ativas</p>
           <p className="text-2xl font-bold">{activeCount}/{sources.length}</p>
@@ -162,9 +183,33 @@ export default function IntelAgentPage() {
           <p className="text-[10px] text-muted-foreground">≈ R$ {(totalCost * 5.2).toFixed(2)}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-xs text-muted-foreground">Bônus criados (30 runs)</p>
-          <p className="text-2xl font-bold">
-            {runs.reduce((s, r) => s + (r.newReportsCount ?? 0), 0)}
+          <p className="text-xs text-muted-foreground">Reports do agente</p>
+          <p className="text-2xl font-bold">{summary?.totalReportsFromAgent ?? 0}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {summary?.approvedFromAgent ?? 0} aprovados · {summary?.rejectedFromAgent ?? 0} rejeitados
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Accuracy</p>
+          <p
+            className={`text-2xl font-bold ${
+              summary?.overallAccuracyPercent == null
+                ? 'text-muted-foreground'
+                : summary.overallAccuracyPercent >= 70
+                ? 'text-emerald-400'
+                : summary.overallAccuracyPercent >= 40
+                ? 'text-amber-400'
+                : 'text-red-400'
+            }`}
+          >
+            {summary?.overallAccuracyPercent != null
+              ? `${summary.overallAccuracyPercent}%`
+              : '—'}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {summary?.costPerApprovedUsd != null
+              ? `$${summary.costPerApprovedUsd} por aprovado`
+              : 'ainda sem reviews'}
           </p>
         </div>
       </div>
@@ -233,12 +278,33 @@ export default function IntelAgentPage() {
                     <ExternalLink className="h-3 w-3" />
                     {s.url}
                   </a>
-                  <div className="mt-2 flex gap-3 text-[11px] text-muted-foreground">
+                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                     <span>
                       Última: {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString('pt-BR') : 'nunca'}
                     </span>
                     <span>Interval: {s.minIntervalMin}min</span>
                     <span>Gasto: ${s.costUsd.toFixed(4)}</span>
+                    {s.stats && s.stats.total > 0 && (
+                      <span className="rounded bg-slate-800 px-1.5 py-0.5">
+                        {s.stats.approved}/{s.stats.approved + s.stats.rejected} aprovados
+                        {s.stats.accuracyPercent != null && (
+                          <span className={`ml-1 font-semibold ${
+                            s.stats.accuracyPercent >= 70
+                              ? 'text-emerald-400'
+                              : s.stats.accuracyPercent >= 40
+                              ? 'text-amber-400'
+                              : 'text-red-400'
+                          }`}>
+                            ({s.stats.accuracyPercent}%)
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {s.stats && s.stats.pending > 0 && (
+                      <span className="rounded bg-amber-500/15 text-amber-400 px-1.5 py-0.5">
+                        {s.stats.pending} pendente{s.stats.pending > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-1">

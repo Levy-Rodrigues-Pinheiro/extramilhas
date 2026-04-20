@@ -112,6 +112,7 @@ export default function RootLayout() {
             <Stack.Screen name="referral" options={{ headerShown: false }} />
             <Stack.Screen name="admin-review/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="missions" options={{ headerShown: false }} />
+            <Stack.Screen name="notifications-feed" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

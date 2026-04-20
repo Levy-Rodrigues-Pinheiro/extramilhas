@@ -255,6 +255,31 @@ export class PushService {
     // Dedupe WhatsApp (user pode ter múltiplos devices)
     const uniquePhones = Array.from(new Set(whatsappTargets));
 
+    // Persiste Notification in-app pra cada user com device target
+    // (permite Notification Center mostrar histórico). Dedupe por userId.
+    const targetUserIds = new Set<string>();
+    for (const d of devices) {
+      if (d.userId) targetUserIds.add(d.userId);
+    }
+    if (targetUserIds.size > 0) {
+      const created = await Promise.allSettled(
+        Array.from(targetUserIds).map((uid) =>
+          this.prisma.notification.create({
+            data: {
+              userId: uid,
+              title: payload.title,
+              body: payload.body,
+              type: 'bonus_alert',
+              data: JSON.stringify(payload.data || {}),
+            },
+          }),
+        ),
+      );
+      this.logger.log(
+        `Persisted ${created.filter((c) => c.status === 'fulfilled').length} in-app notifications`,
+      );
+    }
+
     const [pushResult, waResult] = await Promise.all([
       pushTargets.length > 0
         ? this.sendToTokens(pushTargets, payload)

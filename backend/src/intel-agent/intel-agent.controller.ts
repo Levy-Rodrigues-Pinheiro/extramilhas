@@ -97,6 +97,13 @@ export class IntelAgentController {
     return successResponse(r);
   }
 
+  @Get('summary')
+  @ApiOperation({ summary: 'Stats agregadas do agente (accuracy, custo, reports)' })
+  async summary() {
+    const s = await this.agent.getAgentSummary();
+    return successResponse(s);
+  }
+
   @Get('runs')
   @ApiOperation({ summary: 'Histórico recente de runs' })
   async recentRuns(@Query('limit') limit?: string) {

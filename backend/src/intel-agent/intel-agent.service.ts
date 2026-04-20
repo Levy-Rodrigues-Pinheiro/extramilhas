@@ -180,7 +180,8 @@ export class IntelAgentService {
             expiresAt: b.expiresAt ? new Date(b.expiresAt) : null,
             notes: `🤖 Extraído automaticamente de: ${source.name}\n\n"${b.notes}"`,
             status: 'PENDING',
-          },
+            intelSourceId: source.id, // permite calcular accuracy depois
+          } as any,
         });
         newReportIds.push(created.id);
       }
@@ -232,9 +233,75 @@ export class IntelAgentService {
   }
 
   async listSources() {
-    return (this.prisma as any).intelSource.findMany({
+    const sources = await (this.prisma as any).intelSource.findMany({
       orderBy: [{ isActive: 'desc' }, { lastRunAt: 'desc' }],
     });
+
+    // Enriquece com accuracy: approved/total de reports vindos dessa source
+    const withStats = await Promise.all(
+      sources.map(async (s: any) => {
+        const [total, approved, rejected, pending] = await Promise.all([
+          this.prisma.bonusReport.count({ where: { intelSourceId: s.id } as any }),
+          this.prisma.bonusReport.count({
+            where: { intelSourceId: s.id, status: 'APPROVED' } as any,
+          }),
+          this.prisma.bonusReport.count({
+            where: { intelSourceId: s.id, status: 'REJECTED' } as any,
+          }),
+          this.prisma.bonusReport.count({
+            where: { intelSourceId: s.id, status: 'PENDING' } as any,
+          }),
+        ]);
+        const reviewed = approved + rejected;
+        const accuracy = reviewed > 0 ? (approved / reviewed) * 100 : null;
+        return {
+          ...s,
+          stats: {
+            total,
+            approved,
+            rejected,
+            pending,
+            accuracyPercent: accuracy !== null ? parseFloat(accuracy.toFixed(1)) : null,
+          },
+        };
+      }),
+    );
+
+    return withStats;
+  }
+
+  async getAgentSummary() {
+    const [sources, totalReports, approvedFromAgent, rejectedFromAgent] =
+      await Promise.all([
+        (this.prisma as any).intelSource.findMany(),
+        this.prisma.bonusReport.count({ where: { intelSourceId: { not: null } } as any }),
+        this.prisma.bonusReport.count({
+          where: { intelSourceId: { not: null }, status: 'APPROVED' } as any,
+        }),
+        this.prisma.bonusReport.count({
+          where: { intelSourceId: { not: null }, status: 'REJECTED' } as any,
+        }),
+      ]);
+
+    const reviewed = approvedFromAgent + rejectedFromAgent;
+    const overallAccuracy = reviewed > 0 ? (approvedFromAgent / reviewed) * 100 : null;
+    const totalCost = sources.reduce((s: number, x: any) => s + (x.costUsd ?? 0), 0);
+    const activeCount = sources.filter((s: any) => s.isActive).length;
+
+    return {
+      sourcesTotal: sources.length,
+      sourcesActive: activeCount,
+      totalReportsFromAgent: totalReports,
+      approvedFromAgent,
+      rejectedFromAgent,
+      overallAccuracyPercent:
+        overallAccuracy !== null ? parseFloat(overallAccuracy.toFixed(1)) : null,
+      totalCostUsd: parseFloat(totalCost.toFixed(4)),
+      costPerApprovedUsd:
+        approvedFromAgent > 0
+          ? parseFloat((totalCost / approvedFromAgent).toFixed(4))
+          : null,
+    };
   }
 
   async listRecentRuns(limit = 50) {

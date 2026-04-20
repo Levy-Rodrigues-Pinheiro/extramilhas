@@ -325,6 +325,8 @@ model BonusReport {
   // Quem reportou (opcional — permite anônimo via email)
   reporterId      String?
   reporterEmail   String?
+  // Se veio do Intel Agent, referencia a source pra calcular accuracy
+  intelSourceId   String?
   // Dados do bônus reportado (slugs de programa)
   fromProgramSlug String
   toProgramSlug   String
@@ -349,6 +351,7 @@ model BonusReport {
   @@index([status, createdAt])
   @@index([reporterId])
   @@index([fromProgramSlug, toProgramSlug])
+  @@index([intelSourceId, status]) // accuracy queries por source
   @@map("bonus_reports")
 }
 

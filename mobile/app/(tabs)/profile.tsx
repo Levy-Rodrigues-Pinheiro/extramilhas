@@ -118,8 +118,14 @@ export default function ProfileScreen() {
       onPress: () => router.push('/transfers'),
     },
     {
+      icon: 'mail-outline',
+      label: 'Caixa de notificações',
+      showChevron: true,
+      onPress: () => router.push('/notifications-feed' as any),
+    },
+    {
       icon: 'notifications-outline',
-      label: 'Notificações',
+      label: 'Preferências de notificação',
       showChevron: true,
       onPress: () => router.push('/notification-settings' as any),
     },
