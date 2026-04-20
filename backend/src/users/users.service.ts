@@ -88,6 +88,71 @@ export class UsersService {
     return balances;
   }
 
+  /**
+   * Retorna a "carteira" do usuário com valor monetário total estimado,
+   * lista enriquecida (saldo × CPM = R$), e flags de expiração.
+   * É o endpoint principal pra tela de Carteira no mobile.
+   */
+  async getWalletSummary(userId: string) {
+    const balances = await this.prisma.userMilesBalance.findMany({
+      where: { userId },
+      include: { program: true },
+      orderBy: { balance: 'desc' },
+    });
+
+    const now = new Date();
+    const items = balances.map((b) => {
+      const cpm = Number(b.program.avgCpmCurrent);
+      const valueBrl = parseFloat(((b.balance / 1000) * cpm).toFixed(2));
+      const daysToExpiry = b.expiresAt
+        ? Math.max(0, Math.ceil((b.expiresAt.getTime() - now.getTime()) / 86_400_000))
+        : null;
+      const isExpiringSoon = daysToExpiry != null && daysToExpiry <= 30;
+      return {
+        id: b.id,
+        programId: b.programId,
+        program: {
+          id: b.program.id,
+          slug: b.program.slug,
+          name: b.program.name,
+          logoUrl: b.program.logoUrl,
+          avgCpm: cpm,
+        },
+        balance: b.balance,
+        valueBrl,
+        expiresAt: b.expiresAt?.toISOString() ?? null,
+        daysToExpiry,
+        isExpiringSoon,
+        updatedAt: b.updatedAt.toISOString(),
+      };
+    });
+
+    const totalBalance = items.reduce((s, i) => s + i.balance, 0);
+    const totalValueBrl = parseFloat(items.reduce((s, i) => s + i.valueBrl, 0).toFixed(2));
+    const expiringCount = items.filter((i) => i.isExpiringSoon).length;
+    const programsCount = items.length;
+
+    return {
+      summary: {
+        programsCount,
+        totalBalance,
+        totalValueBrl,
+        expiringCount,
+      },
+      items,
+    };
+  }
+
+  async deleteMilesBalance(userId: string, programId: string) {
+    const result = await this.prisma.userMilesBalance.deleteMany({
+      where: { userId, programId },
+    });
+    if (result.count === 0) {
+      throw new NotFoundException('Balance not found');
+    }
+    return { deleted: true };
+  }
+
   async upsertMilesBalance(userId: string, dto: UpsertMilesBalanceDto) {
     const program = await this.prisma.loyaltyProgram.findUnique({
       where: { id: dto.programId },

@@ -68,11 +68,27 @@ export class UsersController {
     return successResponse(result);
   }
 
+  @Get('wallet/summary')
+  @ApiOperation({
+    summary: 'Wallet summary com valor calculado em R$, programas, alertas de expiração',
+  })
+  async getWalletSummary(@CurrentUser() user: any) {
+    const result = await this.usersService.getWalletSummary(user.id);
+    return successResponse(result);
+  }
+
   @Put('miles-balance')
   @ApiOperation({ summary: 'Upsert miles balance for a program' })
   async upsertMilesBalance(@CurrentUser() user: any, @Body() dto: UpsertMilesBalanceDto) {
     const result = await this.usersService.upsertMilesBalance(user.id, dto);
     return successResponse(result, 'Miles balance updated successfully');
+  }
+
+  @Delete('miles-balance/:programId')
+  @ApiOperation({ summary: 'Remove o saldo de um programa específico da carteira' })
+  async deleteMilesBalance(@CurrentUser() user: any, @Param('programId') programId: string) {
+    const result = await this.usersService.deleteMilesBalance(user.id, programId);
+    return successResponse(result, 'Saldo removido');
   }
 
   @Get('notifications')

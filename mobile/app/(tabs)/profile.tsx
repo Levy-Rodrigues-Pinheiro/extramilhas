@@ -108,6 +108,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/explore'),
     },
     {
+      icon: 'wallet-outline',
+      label: 'Minha Carteira de Milhas',
+      showChevron: true,
+      onPress: () => router.push('/wallet' as any),
+    },
+    {
       icon: 'trending-up-outline',
       label: 'Oportunidades de arbitragem',
       showChevron: true,
