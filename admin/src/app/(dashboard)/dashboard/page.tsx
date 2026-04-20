@@ -136,6 +136,14 @@ export default function DashboardPage() {
         >
           📥 Reports CSV
         </a>
+        <a
+          href={`${API_BASE}/admin/export/partnerships.csv`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border border-[#1E293B] bg-[#141C2F] px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-[#1E293B] transition"
+        >
+          📥 Partnerships CSV
+        </a>
       </div>
 
       {/* Metric Cards - linha principal */}

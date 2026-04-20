@@ -65,10 +65,15 @@ export const metadata: Metadata = {
   },
 };
 
+import { ConsentBanner } from './components/ConsentBanner';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        {children}
+        <ConsentBanner />
+      </body>
     </html>
   );
 }

@@ -14,6 +14,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMissions, useClaimMission, Mission } from '../src/hooks/useMissions';
+import { haptic } from '../src/lib/haptic';
 
 /**
  * Missões — desafios opcionais que dão dias Premium grátis quando
@@ -28,12 +29,15 @@ export default function MissionsScreen() {
 
   const handleClaim = async (m: Mission) => {
     try {
+      haptic.tap();
       const res = await claim.mutateAsync(m.id);
+      haptic.success();
       Alert.alert(
         '🎉 Recompensa resgatada!',
         `Você ganhou ${res.rewardDays} dias Premium. Aproveite as oportunidades desbloqueadas!`,
       );
     } catch (err: any) {
+      haptic.error();
       Alert.alert('Erro', err?.response?.data?.message || 'Falha ao resgatar');
     }
   };

@@ -19,6 +19,8 @@ import {
   Database,
   Megaphone,
   Bot,
+  Activity,
+  History,
 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -41,6 +43,8 @@ const navItems = [
   { label: 'Reports de Bônus', href: '/bonus-reports', icon: Megaphone },
   { label: 'Agentes Inteligentes', href: '/intel-agent', icon: Bot },
   { label: 'Cache & Telemetria', href: '/cache-stats', icon: Database },
+  { label: 'Diagnostics', href: '/diagnostics', icon: Activity },
+  { label: 'Audit Logs', href: '/audit-logs', icon: History },
   { label: 'Artigos', href: '/articles', icon: FileText },
   { label: 'Notificações', href: '/notifications', icon: Bell },
   { label: 'Configurações', href: '/settings', icon: Settings },

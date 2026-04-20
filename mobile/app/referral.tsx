@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { useReferral, useApplyReferralCode } from '../src/hooks/useReferral';
+import { haptic } from '../src/lib/haptic';
 
 /**
  * Tela de referral: mostra código do user + estatísticas + botão share
@@ -41,15 +42,18 @@ export default function ReferralScreen() {
   const handleCopy = async () => {
     if (!data?.code) return;
     await Clipboard.setStringAsync(data.code);
+    haptic.success();
     Alert.alert('Copiado!', 'Código copiado pra área de transferência.');
   };
 
   const handleApply = async () => {
     try {
       const result = await apply.mutateAsync(codeInput.trim().toUpperCase());
+      haptic.success();
       Alert.alert('🎉 Sucesso!', result.message);
       setCodeInput('');
     } catch (err: any) {
+      haptic.error();
       Alert.alert('Erro', err?.response?.data?.message || 'Falha ao aplicar código');
     }
   };

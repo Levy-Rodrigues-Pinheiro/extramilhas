@@ -306,7 +306,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Milhas Extras v2.0.0</Text>
+        <Text style={styles.versionText}>
+          Milhas Extras v1.0.1 · build {new Date().getFullYear()}
+        </Text>
       </ScrollView>
     </SafeAreaView>
   );

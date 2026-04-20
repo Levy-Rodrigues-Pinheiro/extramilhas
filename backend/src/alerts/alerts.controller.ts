@@ -64,6 +64,14 @@ export class AlertsController {
     return successResponse(result);
   }
 
+  @Post('deactivate-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Desativa todos alertas do user (útil em férias)' })
+  async deactivateAll(@CurrentUser() user: any) {
+    const result = await this.alertsService.deactivateAll(user.id);
+    return successResponse(result);
+  }
+
   @Get('history')
   @ApiOperation({ summary: 'Alert trigger history with pagination' })
   async getAlertHistory(

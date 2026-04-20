@@ -191,6 +191,17 @@ export class AdminService {
     };
   }
 
+  // ─── Audit Logs ──────────────────────────────────────────────────────────
+
+  async listAuditLogs(limit = 50, action?: string) {
+    return this.prisma.auditLog.findMany({
+      where: action ? { action } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: { admin: { select: { name: true, email: true } } },
+    });
+  }
+
   // ─── Debug / Snapshots ───────────────────────────────────────────────────
 
   async listRecentSnapshots(limit = 30) {
@@ -238,6 +249,32 @@ export class AdminService {
           u.subscriptionExpiresAt?.toISOString() ?? '',
           u.createdAt?.toISOString() ?? '',
           u.lastActiveAt?.toISOString?.() ?? '',
+        ].join(','),
+      ),
+    ];
+    return lines.join('\n');
+  }
+
+  async exportPartnershipsCsv(): Promise<string> {
+    const rows = await this.prisma.transferPartnership.findMany({
+      where: { isActive: true },
+      include: {
+        fromProgram: { select: { slug: true, name: true } },
+        toProgram: { select: { slug: true, name: true } },
+      },
+      orderBy: { currentBonus: 'desc' },
+    });
+    const lines = [
+      'fromSlug,fromName,toSlug,toName,baseRate,currentBonus,expiresAt',
+      ...rows.map((p: any) =>
+        [
+          p.fromProgram.slug,
+          csvEscape(p.fromProgram.name),
+          p.toProgram.slug,
+          csvEscape(p.toProgram.name),
+          p.baseRate,
+          p.currentBonus,
+          p.expiresAt?.toISOString() ?? '',
         ].join(','),
       ),
     ];

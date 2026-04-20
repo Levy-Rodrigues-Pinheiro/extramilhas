@@ -16,6 +16,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCreateBonusReport } from '../src/hooks/useBonusReports';
+import { haptic } from '../src/lib/haptic';
 
 const PROGRAMS = [
   { slug: 'livelo', name: 'Livelo' },
@@ -60,7 +61,10 @@ export default function ReportBonusScreen() {
         notes: notes || undefined,
       });
       setSubmitted({ message: result.message, isDuplicate: result.isDuplicate });
+      if (result.isDuplicate) haptic.warning();
+      else haptic.success();
     } catch (e: any) {
+      haptic.error();
       Alert.alert('Erro', e?.response?.data?.message || e?.message || 'Falha ao enviar');
     }
   };

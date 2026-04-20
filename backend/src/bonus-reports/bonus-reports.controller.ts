@@ -282,6 +282,28 @@ export class BonusReportsController {
   }
 
   @Public()
+  @Get('bonus-reports/stats')
+  @ApiOperation({ summary: 'Stats rápidas de reports aprovados (público)' })
+  async publicReportStats() {
+    const [total, last24h, last7d] = await Promise.all([
+      this.prisma.bonusReport.count({ where: { status: 'APPROVED' } }),
+      this.prisma.bonusReport.count({
+        where: {
+          status: 'APPROVED',
+          reviewedAt: { gte: new Date(Date.now() - 86400_000) },
+        },
+      }),
+      this.prisma.bonusReport.count({
+        where: {
+          status: 'APPROVED',
+          reviewedAt: { gte: new Date(Date.now() - 7 * 86400_000) },
+        },
+      }),
+    ]);
+    return successResponse({ total, last24h, last7d });
+  }
+
+  @Public()
   @Get('bonus-reports/recent')
   @ApiOperation({ summary: 'Lista de bônus aprovados recentes (público)' })
   async listRecentApproved(@Query('days') daysRaw?: string) {

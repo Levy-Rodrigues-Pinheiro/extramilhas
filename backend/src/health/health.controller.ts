@@ -40,6 +40,41 @@ export class HealthController {
   }
 
   @Public()
+  @Get('live')
+  @ApiOperation({ summary: 'k8s-style liveness probe (retorna 200 enquanto node rodar)' })
+  live() {
+    return { status: 'ok' };
+  }
+
+  @Public()
+  @Get('ready')
+  @ApiOperation({ summary: 'k8s-style readiness (checa DB disponível)' })
+  async ready() {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return { status: 'ready' };
+    } catch {
+      return { status: 'not-ready' };
+    }
+  }
+
+  @Public()
+  @Get('mem')
+  @ApiOperation({ summary: 'Memory + process info (debug/ops)' })
+  mem() {
+    const m = process.memoryUsage();
+    return {
+      rssMb: Math.round(m.rss / 1024 / 1024),
+      heapUsedMb: Math.round(m.heapUsed / 1024 / 1024),
+      heapTotalMb: Math.round(m.heapTotal / 1024 / 1024),
+      externalMb: Math.round(m.external / 1024 / 1024),
+      uptimeSec: Math.round(process.uptime()),
+      pid: process.pid,
+      nodeVersion: process.version,
+    };
+  }
+
+  @Public()
   @Get('deep')
   @ApiOperation({ summary: 'Readiness — verifica DB, scraper, cache. Usar em load balancers.' })
   async deep() {

@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 // Sentry init — rodado ANTES de criar app pra capturar qualquer erro cedo
 // Sem SENTRY_DSN → no-op, zero overhead.
@@ -36,6 +37,8 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   // Faz o NestJS usar o Pino logger — todos os `Logger` internos pegam junto
   app.useLogger(app.get(Logger));
+  // Graceful shutdown: SIGTERM (Fly redeploy) executa onModuleDestroy dos services
+  app.enableShutdownHooks();
   const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api/v1');
@@ -73,7 +76,8 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // Ordem importa: Prisma filter primeiro pra pegar P2xxx antes do generic
+  app.useGlobalFilters(new PrismaExceptionFilter(), new HttpExceptionFilter());
 
   // Only expose Swagger docs in non-production environments
   if (process.env.NODE_ENV !== 'production') {

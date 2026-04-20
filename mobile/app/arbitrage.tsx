@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTransferBonuses, TransferOpportunity } from '../src/hooks/useArbitrage';
 import { PaywallUpsellBanner, LockedOpportunityCard } from '../src/components/PaywallGate';
+import { FirstRunTip } from '../src/components/FirstRunTip';
 
 /**
  * Arbitragem de milhas — tela dedicada.
@@ -73,6 +74,13 @@ export default function ArbitrageScreen() {
             </Text>
           </View>
         )}
+
+        <FirstRunTip
+          tipKey="arbitrage-how-v1"
+          title="Primeira vez vendo oportunidades?"
+          body="Cada card é uma janela de bônus de transferência. Se o ganho % for alto E você tiver saldo no programa origem, VALE transferir. Na dúvida, abre a Calculadora."
+          icon="help-circle-outline"
+        />
 
         {data && data.count > 0 && (
           <>

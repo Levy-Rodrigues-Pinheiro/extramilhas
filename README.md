@@ -51,6 +51,30 @@ Arquitetura completa em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 └──────────────────────────────────────────────────────────────┘
 ```
 
+## ⚡ Quick Start
+
+```bash
+# Backend
+cd backend && npm install && cp .env.example .env
+# edit .env with DATABASE_URL + JWT_SECRET
+npx prisma migrate deploy && npm run start:dev
+
+# Mobile
+cd mobile && npm install && npx expo start
+
+# Admin
+cd admin && npm install && npm run dev
+
+# Smoke test (contra prod)
+bash tests/e2e/backend-smoke.sh
+```
+
+Full docs:
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — arquitetura + flows
+- [API.md](docs/API.md) — endpoints principais
+- [STRIPE_SETUP.md](docs/STRIPE_SETUP.md) — ativar checkout real
+- [CHANGELOG.md](CHANGELOG.md) — histórico de releases
+
 ## Estrutura
 
 ```

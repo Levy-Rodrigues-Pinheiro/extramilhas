@@ -30,6 +30,18 @@ export class AlertsService {
     });
   }
 
+  /**
+   * Desativa todos alertas do user de uma vez. Útil pro user sair
+   * de férias sem deletar configuração — volta e ativa de novo.
+   */
+  async deactivateAll(userId: string) {
+    const r = await this.prisma.alert.updateMany({
+      where: { userId, isActive: true },
+      data: { isActive: false },
+    });
+    return { deactivatedCount: r.count };
+  }
+
   async createAlert(userId: string, dto: CreateAlertDto, userPlan: SubscriptionPlan) {
     const limit = PLAN_ALERT_LIMITS[userPlan] ?? 1;
     // PRO = Infinity: skip a checagem por limit (count tem custo).

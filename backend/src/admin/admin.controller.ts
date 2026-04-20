@@ -147,6 +147,14 @@ export class AdminController {
     });
   }
 
+  @Get('audit-logs')
+  @ApiOperation({ summary: 'Audit logs (últimos N, filtrar por action opcional)' })
+  async auditLogs(@Query('limit') limitRaw?: string, @Query('action') action?: string) {
+    const limit = Math.min(200, parseInt(limitRaw || '50', 10) || 50);
+    const logs = await this.adminService.listAuditLogs(limit, action);
+    return successResponse({ count: logs.length, logs });
+  }
+
   @Get('debug/snapshots')
   @ApiOperation({ summary: 'Últimos N snapshots de counts (canary de data loss)' })
   async debugSnapshots(@Query('limit') limitRaw?: string) {
@@ -163,6 +171,18 @@ export class AdminController {
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="users-${new Date().toISOString().slice(0, 10)}.csv"`,
+    );
+    res.send(csv);
+  }
+
+  @Get('export/partnerships.csv')
+  @ApiOperation({ summary: 'Export CSV transfer partnerships ativas' })
+  async exportPartnershipsCsv(@Res() res: any) {
+    const csv = await this.adminService.exportPartnershipsCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="partnerships-${new Date().toISOString().slice(0, 10)}.csv"`,
     );
     res.send(csv);
   }

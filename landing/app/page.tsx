@@ -253,6 +253,19 @@ export default function LandingPage() {
       <FAQ />
 
       <footer className="px-6 py-12 border-t border-slate-800 text-center text-slate-500 text-sm">
+        <div className="mb-4 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs">
+          <a href="/privacy" className="hover:text-slate-300">Privacidade</a>
+          <a href="/terms" className="hover:text-slate-300">Termos</a>
+          <a href="/contato" className="hover:text-slate-300">Contato</a>
+          <a
+            href="https://github.com/Levy-Rodrigues-Pinheiro/extramilhas"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-slate-300"
+          >
+            GitHub
+          </a>
+        </div>
         <p>© 2026 Milhas Extras · feito com ❤️ pra quem viaja com milhas</p>
         <p className="mt-2 text-xs">
           Não somos parceiros oficiais de Livelo, Smiles, TudoAzul, Latam Pass ou Esfera. Marcas

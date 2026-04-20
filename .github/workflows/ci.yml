@@ -35,6 +35,9 @@ jobs:
       - name: Type-check
         working-directory: backend
         run: npx tsc --noEmit
+      - name: Run unit tests
+        working-directory: backend
+        run: npm test -- --passWithNoTests
       - name: Build
         working-directory: backend
         run: npm run build
