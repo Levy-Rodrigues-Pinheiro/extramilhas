@@ -230,6 +230,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/portfolio-analysis' as any),
     },
     {
+      icon: 'book-outline',
+      label: 'Guias da comunidade',
+      showChevron: true,
+      onPress: () => router.push('/guides' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

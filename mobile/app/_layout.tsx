@@ -136,6 +136,9 @@ export default function RootLayout() {
             <Stack.Screen name="forum/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="retrospective" options={{ headerShown: false }} />
             <Stack.Screen name="portfolio-analysis" options={{ headerShown: false }} />
+            <Stack.Screen name="guides/index" options={{ headerShown: false }} />
+            <Stack.Screen name="guides/[slug]" options={{ headerShown: false }} />
+            <Stack.Screen name="guides/new" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>
