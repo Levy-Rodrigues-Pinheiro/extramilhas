@@ -54,6 +54,7 @@ import { AchievementsModule } from './achievements/achievements.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { ContactModule } from './contact/contact.module';
 import { WalletPassModule } from './wallet-pass/wallet-pass.module';
+import { QuizzesModule } from './quizzes/quizzes.module';
 
 @Module({
   imports: [
@@ -170,6 +171,7 @@ import { WalletPassModule } from './wallet-pass/wallet-pass.module';
     NewsletterModule,
     ContactModule,
     WalletPassModule,
+    QuizzesModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

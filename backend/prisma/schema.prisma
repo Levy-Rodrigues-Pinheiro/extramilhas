@@ -674,6 +674,79 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// Quiz + Certification system. Admin cria quiz com N questões; user faz
+/// attempt e se passar (score >= passingScore) ganha Certificate compartilhável.
+model Quiz {
+  id           String   @id @default(uuid())
+  slug         String   @unique
+  title        String
+  description  String
+  // BEGINNER | INTERMEDIATE | ADVANCED
+  level        String   @default("BEGINNER")
+  estimatedMin Int      @default(10)
+  passingScore Int      @default(70)
+  isPublished  Boolean  @default(false)
+  premiumOnly  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  questions    QuizQuestion[]
+  attempts     QuizAttempt[]
+
+  @@index([isPublished, level])
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id          String   @id @default(uuid())
+  quizId      String
+  orderIndex  Int
+  question    String
+  // JSON array [{id:"a", text:"..."}]
+  options     String
+  correctId   String
+  explanation String?
+
+  quiz        Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, orderIndex])
+  @@map("quiz_questions")
+}
+
+model QuizAttempt {
+  id            String   @id @default(uuid())
+  userId        String
+  quizId        String
+  answers       String // JSON [{questionId, selectedId, correct}]
+  score         Int    // 0-100
+  passed        Boolean @default(false)
+  certificateId String? @unique
+  timeSpentMs   Int     @default(0)
+  createdAt     DateTime @default(now())
+
+  quiz          Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  certificate   Certificate? @relation(fields: [certificateId], references: [id])
+
+  @@index([userId, quizId])
+  @@map("quiz_attempts")
+}
+
+model Certificate {
+  id         String   @id @default(uuid())
+  userId     String
+  quizSlug   String
+  quizTitle  String
+  certNumber String   @unique
+  score      Int
+  holderName String
+  issuedAt   DateTime @default(now())
+
+  attempt    QuizAttempt?
+
+  @@index([userId])
+  @@map("certificates")
+}
+
 /// Newsletter opt-in. Separado de User.email pra permitir signup anônimo
 /// via landing. Double opt-in via confirmToken (ativa quando Mailgun/SES
 /// disponível — até lá auto-confirma zero fricção).
