@@ -13,9 +13,37 @@
       "backgroundColor": "#0f172a"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.milhasextras.app",
-      "associatedDomains": ["applinks:milhasextras.com.br"]
+      "associatedDomains": ["applinks:milhasextras.com.br"],
+      "infoPlist": {
+        "NSUserActivityTypes": [
+          "com.milhasextras.app.check-wallet",
+          "com.milhasextras.app.view-arbitrage",
+          "com.milhasextras.app.view-alerts"
+        ],
+        "NSSiriUsageDescription": "Permitir Siri consultar suas milhas e oportunidades de arbitragem.",
+        "CFBundleShortcutItems": [
+          {
+            "UIApplicationShortcutItemType": "com.milhasextras.app.wallet",
+            "UIApplicationShortcutItemTitle": "Minha carteira",
+            "UIApplicationShortcutItemSubtitle": "Ver valor total",
+            "UIApplicationShortcutItemIconType": "UIApplicationShortcutIconTypeHome"
+          },
+          {
+            "UIApplicationShortcutItemType": "com.milhasextras.app.arbitrage",
+            "UIApplicationShortcutItemTitle": "Oportunidades",
+            "UIApplicationShortcutItemSubtitle": "Bônus ativos agora",
+            "UIApplicationShortcutItemIconType": "UIApplicationShortcutIconTypeMarkLocation"
+          },
+          {
+            "UIApplicationShortcutItemType": "com.milhasextras.app.calculator",
+            "UIApplicationShortcutItemTitle": "Calculadora",
+            "UIApplicationShortcutItemSubtitle": "Vale a pena transferir?",
+            "UIApplicationShortcutItemIconType": "UIApplicationShortcutIconTypeCompose"
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -35,6 +63,35 @@
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
+      "shortcuts": [
+        {
+          "iconResource": "@drawable/ic_shortcut_wallet",
+          "shortLabel": "Minha carteira",
+          "longLabel": "Ver valor total da carteira",
+          "intent": {
+            "action": "android.intent.action.VIEW",
+            "data": "milhasextras://wallet"
+          }
+        },
+        {
+          "iconResource": "@drawable/ic_shortcut_arbitrage",
+          "shortLabel": "Oportunidades",
+          "longLabel": "Bônus de transferência ativos",
+          "intent": {
+            "action": "android.intent.action.VIEW",
+            "data": "milhasextras://arbitrage"
+          }
+        },
+        {
+          "iconResource": "@drawable/ic_shortcut_calculator",
+          "shortLabel": "Calculadora",
+          "longLabel": "Vale a pena transferir?",
+          "intent": {
+            "action": "android.intent.action.VIEW",
+            "data": "milhasextras://transfer-calculator"
+          }
         }
       ]
     },

@@ -53,6 +53,7 @@ import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { ContactModule } from './contact/contact.module';
+import { WalletPassModule } from './wallet-pass/wallet-pass.module';
 
 @Module({
   imports: [
@@ -168,6 +169,7 @@ import { ContactModule } from './contact/contact.module';
     AchievementsModule,
     NewsletterModule,
     ContactModule,
+    WalletPassModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators
