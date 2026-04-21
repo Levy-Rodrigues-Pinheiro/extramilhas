@@ -29,7 +29,13 @@ export function useNotes() {
 export function useCreateNote() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { title: string; body: string; tag?: string; remindAt?: string }) => {
+    mutationFn: async (params: {
+      title: string;
+      body: string;
+      tag?: string;
+      remindAt?: string;
+      recurrence?: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+    }) => {
       const { data } = await api.post('/notes', params);
       return data as Note;
     },
@@ -46,6 +52,7 @@ export function useUpdateNote() {
       body?: string;
       tag?: string;
       remindAt?: string | null;
+      recurrence?: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
       isPinned?: boolean;
       isArchived?: boolean;
     }) => {

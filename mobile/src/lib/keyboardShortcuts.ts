@@ -30,10 +30,24 @@ export function useKeyboardShortcuts(shortcuts: Record<string, Handler>) {
     let lastKeyTime = 0;
 
     const handler = (e: any) => {
+      // Bug fix HONEST_TEST_REPORT #5: ignora se foco em input/textarea.
+      // Sequências ("g h") não devem disparar enquanto user digita
+      // palavras. Combos com cmd/ctrl passam (cmd+k funciona mesmo
+      // dentro de input — é intencional).
+      const target = e.target as HTMLElement | null;
+      const tagName = target?.tagName?.toUpperCase?.() ?? '';
+      const isInputLike =
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT' ||
+        target?.isContentEditable === true;
+
       const key = (e.key || '').toLowerCase();
       const ctrlOrCmd = e.metaKey || e.ctrlKey;
       const alt = e.altKey;
       const shift = e.shiftKey;
+
+      if (isInputLike && !ctrlOrCmd && !alt) return;
 
       // Build combo string
       const parts: string[] = [];

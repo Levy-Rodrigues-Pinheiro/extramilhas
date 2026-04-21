@@ -40,6 +40,7 @@ export default function NotesScreen() {
   const [body, setBody] = useState('');
   const [remindAt, setRemindAt] = useState(''); // yyyy-mm-dd[THH:MM]
   const [tag, setTag] = useState('GERAL');
+  const [recurrence, setRecurrence] = useState<'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'>('NONE');
 
   const openModal = (note?: Note) => {
     if (note) {
@@ -48,12 +49,15 @@ export default function NotesScreen() {
       setBody(note.body);
       setRemindAt(note.remindAt?.slice(0, 16) ?? '');
       setTag(note.tag);
+      const rec = ((note as any).recurrence ?? 'NONE') as 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+      setRecurrence(rec);
     } else {
       setEditing(null);
       setTitle('');
       setBody('');
       setRemindAt('');
       setTag('GERAL');
+      setRecurrence('NONE');
     }
     setModalOpen(true);
   };
@@ -71,14 +75,16 @@ export default function NotesScreen() {
           body,
           tag,
           remindAt: remindAt ? remindAt : null,
-        });
+          recurrence,
+        } as any);
       } else {
         await create.mutateAsync({
           title,
           body,
           tag,
           remindAt: remindAt || undefined,
-        });
+          recurrence,
+        } as any);
       }
       setModalOpen(false);
     } catch {
@@ -251,6 +257,45 @@ export default function NotesScreen() {
               maxLength={16}
               accessibilityLabel="Data do lembrete"
             />
+
+            {/* Recurrence picker — só faz sentido se tem reminder */}
+            {remindAt.length > 0 && (
+              <>
+                <Text style={styles.fieldLabel}>Repetir</Text>
+                <View style={styles.recurrenceRow}>
+                  {(
+                    [
+                      { key: 'NONE', label: 'Uma vez' },
+                      { key: 'DAILY', label: 'Todo dia' },
+                      { key: 'WEEKLY', label: 'Semanal' },
+                      { key: 'MONTHLY', label: 'Mensal' },
+                    ] as Array<{ key: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'; label: string }>
+                  ).map((r) => (
+                    <TouchableOpacity
+                      key={r.key}
+                      onPress={() => setRecurrence(r.key)}
+                      style={[
+                        styles.recurrenceChip,
+                        recurrence === r.key && styles.recurrenceChipActive,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: recurrence === r.key }}
+                      accessibilityLabel={r.label}
+                    >
+                      <Text
+                        style={[
+                          styles.recurrenceText,
+                          recurrence === r.key && styles.recurrenceTextActive,
+                        ]}
+                      >
+                        {r.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            )}
+
             <Text style={styles.fieldLabel}>Tag</Text>
             <TextInput
               style={styles.input}
@@ -385,6 +430,25 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   inputMulti: { minHeight: 120, textAlignVertical: 'top' },
+  recurrenceRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  recurrenceChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border.default,
+    backgroundColor: Colors.bg.surface,
+  },
+  recurrenceChipActive: {
+    borderColor: Colors.primary.start,
+    backgroundColor: Colors.primary.muted,
+  },
+  recurrenceText: { fontSize: 11, fontWeight: '600', color: Colors.text.secondary },
+  recurrenceTextActive: { color: Colors.primary.light },
   submit: { marginTop: 20 },
   submitGradient: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   submitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
