@@ -667,6 +667,30 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// SecurityEvent — log de eventos suspeitos pro anti-fraude. Cada event é
+/// imutável, um comportamento = um row. Admin dashboard agrega pra
+/// detectar padrões (ex: muitos REGISTER_FAIL mesmo IP = credential stuffing).
+model SecurityEvent {
+  id        String   @id @default(uuid())
+  // LOGIN_FAIL | LOGIN_OK | REGISTER_OK | REGISTER_FAIL | PASSWORD_RESET |
+  // ALERT_CREATE | RATE_LIMIT_HIT | SUSPICIOUS_PATTERN
+  eventType String
+  userId    String?  // null se anônimo/pré-login
+  ipAddress String?
+  userAgent String?
+  // JSON livre com detalhes (ex: errorReason, duration, route)
+  metadata  String?
+  // Risk score 0-100 calculado pelo service (rule-based)
+  riskScore Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([ipAddress, createdAt])
+  @@index([userId, createdAt])
+  @@index([riskScore, createdAt])
+  @@map("security_events")
+}
+
 model SupportMessage {
   id          String   @id @default(uuid())
   ticketId    String

@@ -44,6 +44,112 @@ export class AdminService {
   ) {}
 
   /**
+   * Retenção por coorte semanal — D1/D7/D30.
+   * Coorte = users registrados na semana X. Métrica = % deles com atividade
+   * (lastActiveAt) no dia 1, 7, 30 após o registro.
+   * Últimas 8 semanas pra dashboard.
+   */
+  async getCohortRetention() {
+    const now = Date.now();
+    const weekMs = 7 * 86400_000;
+    const cohorts: Array<{
+      weekStart: string;
+      totalUsers: number;
+      d1Retention: number;
+      d7Retention: number;
+      d30Retention: number;
+    }> = [];
+
+    for (let i = 8; i >= 1; i--) {
+      const weekStart = new Date(now - i * weekMs);
+      const weekEnd = new Date(weekStart.getTime() + weekMs);
+
+      const users = (await (this.prisma.user as any).findMany({
+        where: { createdAt: { gte: weekStart, lt: weekEnd } },
+        select: { id: true, createdAt: true, lastActiveAt: true },
+      })) as Array<{ id: string; createdAt: Date; lastActiveAt: Date | null }>;
+
+      const total = users.length;
+      if (total === 0) {
+        cohorts.push({
+          weekStart: weekStart.toISOString().slice(0, 10),
+          totalUsers: 0,
+          d1Retention: 0,
+          d7Retention: 0,
+          d30Retention: 0,
+        });
+        continue;
+      }
+
+      const countAfter = (days: number) => {
+        return users.filter((u) => {
+          if (!u.lastActiveAt) return false;
+          const delta = u.lastActiveAt.getTime() - u.createdAt.getTime();
+          // Ativo no mínimo X dias depois do signup (ainda engaja)
+          return delta >= days * 86400_000;
+        }).length;
+      };
+
+      cohorts.push({
+        weekStart: weekStart.toISOString().slice(0, 10),
+        totalUsers: total,
+        d1Retention: Math.round((countAfter(1) / total) * 1000) / 10,
+        d7Retention: Math.round((countAfter(7) / total) * 1000) / 10,
+        d30Retention: Math.round((countAfter(30) / total) * 1000) / 10,
+      });
+    }
+
+    return { cohorts };
+  }
+
+  /**
+   * LTV estimate por plano. Simplificado:
+   *   - PREMIUM mensal: R$ 19.90/mês * média de meses ativos
+   *   - PRO mensal: R$ 39.90/mês * média de meses ativos
+   *   - FREE: 0 (ou indireto via trial→conversão, não medido aqui)
+   *
+   * Base de meses ativos = (now - createdAt) / 30d pra users com subscriptionPlan != FREE.
+   * Isso é um proxy fraco — LTV real requer tracking de transactions Stripe.
+   */
+  async getLtvEstimate() {
+    const now = Date.now();
+    const PRICING: Record<string, number> = { FREE: 0, PREMIUM: 19.9, PRO: 39.9 };
+
+    const users = await this.prisma.user.findMany({
+      select: { id: true, subscriptionPlan: true, createdAt: true },
+    });
+
+    const byPlan: Record<
+      string,
+      { count: number; totalRevenue: number; avgMonthsActive: number }
+    > = {};
+
+    for (const plan of ['FREE', 'PREMIUM', 'PRO']) {
+      const group = users.filter((u) => u.subscriptionPlan === plan);
+      const months = group.map((u) => (now - u.createdAt.getTime()) / (30 * 86400_000));
+      const avgMonths =
+        months.length > 0 ? months.reduce((s, m) => s + m, 0) / months.length : 0;
+      const totalRev = group.length * avgMonths * PRICING[plan];
+      byPlan[plan] = {
+        count: group.length,
+        totalRevenue: Math.round(totalRev * 100) / 100,
+        avgMonthsActive: Math.round(avgMonths * 10) / 10,
+      };
+    }
+
+    const totalUsers = users.length;
+    const totalRevenue = Object.values(byPlan).reduce((s, p) => s + p.totalRevenue, 0);
+    return {
+      byPlan,
+      totalUsers,
+      totalEstimatedRevenue: Math.round(totalRevenue * 100) / 100,
+      avgLtv:
+        totalUsers > 0 ? Math.round((totalRevenue / totalUsers) * 100) / 100 : 0,
+      note: 'Estimativa baseada em subscriptionPlan atual × meses desde signup × tabela fixa. Stripe real não conectado (infra pronta).',
+    };
+  }
+
+  /**
    * Admin impersonação — gera JWT curto (30 min) no contexto do user-alvo
    * com flag `impersonatedBy=adminId` no payload pra auditoria. Grava
    * AuditLog. Uso: debug de bug específico do user, suporte white-glove.

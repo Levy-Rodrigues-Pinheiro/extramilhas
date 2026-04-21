@@ -422,6 +422,22 @@ export class AdminController {
     return successResponse(result);
   }
 
+  // ─── Cohort analytics ─────────────────────────────────────────────────
+
+  @Get('cohorts/retention')
+  @ApiOperation({ summary: 'Retenção D1/D7/D30 por semana de signup (últimas 8 semanas)' })
+  async cohortRetention() {
+    const result = await this.adminService.getCohortRetention();
+    return successResponse(result);
+  }
+
+  @Get('cohorts/ltv')
+  @ApiOperation({ summary: 'Estimativa de LTV por plano (approx baseada em subscriptionPlan history)' })
+  async cohortLtv() {
+    const result = await this.adminService.getLtvEstimate();
+    return successResponse(result);
+  }
+
   // ─── Flight cache observability ────────────────────────────────────────
 
   @Get('cache/stats')
