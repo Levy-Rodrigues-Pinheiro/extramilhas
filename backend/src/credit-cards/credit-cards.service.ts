@@ -129,4 +129,105 @@ export class CreditCardsService {
         'Cálculo estimativo baseado em CPM médio. ROI real depende de pra onde você transfere e quando resgata.',
     };
   }
+
+  /**
+   * Compara 2 cartões lado a lado pro mesmo perfil. Útil pra decisão
+   * "trocar cartão atual por novo com bonus welcome?".
+   * Bug fix HONEST_TEST item pulado #9: Cobrand ROI comparison.
+   */
+  async compareCards(params: {
+    currentCardId: string;
+    newCardId: string;
+    monthlySpendBrl: number;
+    categories?: Record<string, number>;
+  }) {
+    const cards = await (this.prisma as any).creditCard.findMany({
+      where: {
+        id: { in: [params.currentCardId, params.newCardId] },
+        isActive: true,
+      },
+    });
+    if (cards.length !== 2) {
+      throw new Error('Um ou ambos cartões não encontrados');
+    }
+    const current = cards.find((c: any) => c.id === params.currentCardId);
+    const neu = cards.find((c: any) => c.id === params.newCardId);
+
+    const programs = await this.prisma.loyaltyProgram.findMany({
+      where: { isActive: true },
+    });
+    const cpmByProgram = new Map(programs.map((p) => [p.slug, p.avgCpmCurrent ?? 25]));
+
+    const scoreCard = (c: any) => {
+      let multipliers: Record<string, number> = {};
+      try {
+        multipliers = JSON.parse(c.categoryBonuses);
+      } catch {
+        /* ignore */
+      }
+      let avgMultiplier = 1;
+      if (params.categories && Object.keys(params.categories).length > 0) {
+        let weightedSum = 0;
+        let totalWeight = 0;
+        for (const [cat, pct] of Object.entries(params.categories)) {
+          const mult = multipliers[cat] ?? 1;
+          weightedSum += mult * pct;
+          totalWeight += pct;
+        }
+        const uncategorizedPct = Math.max(0, 1 - totalWeight);
+        avgMultiplier = weightedSum + uncategorizedPct;
+      }
+      const pointsPerMonth = params.monthlySpendBrl * c.pointsPerBrl * avgMultiplier;
+      const yearlyPoints = pointsPerMonth * 12;
+      let welcomePoints = 0;
+      if (c.welcomePoints > 0 && params.monthlySpendBrl * 300 >= c.welcomeSpendBrl) {
+        welcomePoints = c.welcomePoints;
+      }
+      const totalPoints = yearlyPoints + welcomePoints;
+      const cpm = cpmByProgram.get(c.mainProgramSlug) ?? 25;
+      const valueYear = (totalPoints / 1000) * cpm;
+      const annualFee = c.annualFeeBrl / 100;
+      return {
+        card: {
+          id: c.id,
+          name: c.name,
+          issuer: c.issuer,
+          tier: c.tier,
+          logoUrl: c.logoUrl,
+          mainProgramSlug: c.mainProgramSlug,
+        },
+        yearlyPoints: Math.round(yearlyPoints),
+        welcomePoints,
+        totalPointsYear: Math.round(totalPoints),
+        cpmUsed: cpm,
+        valueBrlYear: Math.round(valueYear * 100) / 100,
+        annualFeeBrl: annualFee,
+        netRoiBrl: Math.round((valueYear - annualFee) * 100) / 100,
+      };
+    };
+
+    const currentAnalysis = scoreCard(current);
+    const newAnalysis = scoreCard(neu);
+    const deltaRoi = newAnalysis.netRoiBrl - currentAnalysis.netRoiBrl;
+    const deltaPct =
+      currentAnalysis.netRoiBrl > 0
+        ? Math.round((deltaRoi / currentAnalysis.netRoiBrl) * 100)
+        : null;
+
+    return {
+      current: currentAnalysis,
+      new: newAnalysis,
+      comparison: {
+        deltaRoiBrl: Math.round(deltaRoi * 100) / 100,
+        deltaPercent: deltaPct,
+        verdict:
+          deltaRoi > 0
+            ? `🎯 Trocar compensa: +R$${deltaRoi.toFixed(0)}/ano`
+            : deltaRoi < 0
+            ? `❌ Não compensa: -R$${Math.abs(deltaRoi).toFixed(0)}/ano`
+            : 'Empate — mantenha atual pra evitar fricção',
+        recommendation: deltaRoi > 100 ? 'SWITCH' : deltaRoi < -100 ? 'STAY' : 'NEUTRAL',
+      },
+    };
+  }
 }

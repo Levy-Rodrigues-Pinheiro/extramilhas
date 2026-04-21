@@ -50,4 +50,21 @@ export class CreditCardsController {
     });
     return successResponse(result);
   }
+
+  @Post('compare')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Compara 2 cartões lado a lado (cartão atual vs novo)' })
+  async compare(
+    @Body()
+    dto: {
+      currentCardId: string;
+      newCardId: string;
+      monthlySpendBrl: number;
+      categories?: Record<string, number>;
+    },
+  ) {
+    const result = await this.svc.compareCards(dto);
+    return successResponse(result);
+  }
 }

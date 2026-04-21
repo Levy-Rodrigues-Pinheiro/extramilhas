@@ -254,6 +254,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/card-recommender' as any),
     },
     {
+      icon: 'swap-horizontal-outline',
+      label: 'Trocar cartão? Compare lado a lado',
+      showChevron: true,
+      onPress: () => router.push('/card-compare' as any),
+    },
+    {
       icon: 'settings-outline',
       label: 'Configurações (tema, acessibilidade)',
       showChevron: true,
