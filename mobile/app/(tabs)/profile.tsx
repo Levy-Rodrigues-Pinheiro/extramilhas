@@ -194,6 +194,24 @@ export default function ProfileScreen() {
       onPress: () => router.push('/goals' as any),
     },
     {
+      icon: 'receipt-outline',
+      label: 'Relatório pro IR',
+      showChevron: true,
+      onPress: () => router.push('/tax-report' as any),
+    },
+    {
+      icon: 'document-text-outline',
+      label: 'Recuperar milhas não creditadas',
+      showChevron: true,
+      onPress: () => router.push('/claims-wizard' as any),
+    },
+    {
+      icon: 'airplane-outline',
+      label: 'Indenização de voo (ANAC/EU261)',
+      showChevron: true,
+      onPress: () => router.push('/compensation-eu261' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

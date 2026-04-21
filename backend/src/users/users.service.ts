@@ -489,6 +489,68 @@ export class UsersService {
    * Retorna o CSV como string junto com um filename sugerido. O mobile decide
    * se compartilha (Share.share) ou salva.
    */
+  /**
+   * Relatório de IR — milhas/pontos como ativos no IRPF. Gera CSV estruturado
+   * seguindo orientação Receita Federal (Bens e Direitos, grupo 99):
+   *   - Saldo em 31/12/N-1 (posição anterior)
+   *   - Saldo em 31/12/N (posição atual)
+   *   - CPM médio do ano como proxy de valor
+   *
+   * Nota: RFB não tem regra clara pra pontos; recomendação majoritária é
+   * declarar os saldos *se cumulativamente* >R$ 40k. App fornece planilha
+   * pronta pro contador.
+   */
+  async exportTaxReportCsv(userId: string, year: number) {
+    const balances = await this.prisma.userMilesBalance.findMany({
+      where: { userId },
+      include: { program: true },
+    });
+    const lines: string[] = [];
+    const esc = (v: any) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    lines.push(`# DECLARAÇÃO DE MILHAS/PONTOS — ANO-BASE ${year}`);
+    lines.push(
+      '# Grupo 99 — Outros bens e direitos. Código sugerido: 99 (outros bens).',
+    );
+    lines.push(
+      '# Consulte seu contador. Valores são ESTIMATIVAS baseadas em CPM médio.',
+    );
+    lines.push('');
+    lines.push('programa,saldoPontos,cpmMedio,valorEstimadoBRL');
+    let totalBrl = 0;
+    for (const b of balances) {
+      const cpm = b.program.avgCpmCurrent || 25;
+      const valor = (b.balance / 1000) * cpm;
+      totalBrl += valor;
+      lines.push(
+        [
+          b.program.name,
+          b.balance,
+          cpm.toFixed(2),
+          valor.toFixed(2),
+        ]
+          .map(esc)
+          .join(','),
+      );
+    }
+    lines.push('');
+    lines.push(`TOTAL,,${totalBrl.toFixed(2)},${totalBrl.toFixed(2)}`);
+    lines.push('');
+    lines.push(
+      '# Observação: se total > R$ 40.000, considere declarar. Se < R$ 40.000, isento.',
+    );
+
+    return {
+      csv: lines.join('\n'),
+      filename: `ir-milhas-${year}-${new Date().toISOString().slice(0, 10)}.csv`,
+      year,
+      totalEstimatedBrl: Math.round(totalBrl * 100) / 100,
+      programsCount: balances.length,
+    };
+  }
+
   async exportUserDataCsv(userId: string) {
     const [user, balances, alerts, notifications, family] = await Promise.all([
       this.prisma.user.findUnique({

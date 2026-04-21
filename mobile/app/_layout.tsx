@@ -129,6 +129,9 @@ export default function RootLayout() {
             <Stack.Screen name="active-sessions" options={{ headerShown: false }} />
             <Stack.Screen name="security" options={{ headerShown: false }} />
             <Stack.Screen name="goals" options={{ headerShown: false }} />
+            <Stack.Screen name="tax-report" options={{ headerShown: false }} />
+            <Stack.Screen name="claims-wizard" options={{ headerShown: false }} />
+            <Stack.Screen name="compensation-eu261" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

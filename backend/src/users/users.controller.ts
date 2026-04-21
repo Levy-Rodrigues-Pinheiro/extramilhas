@@ -229,6 +229,14 @@ export class UsersController {
     return successResponse(result);
   }
 
+  @Get('tax-report')
+  @ApiOperation({ summary: 'Relatório de milhas para IRPF (ano base via query ?year=2025)' })
+  async exportTaxReport(@CurrentUser() user: any, @Query('year') year?: string) {
+    const y = year ? parseInt(year, 10) : new Date().getFullYear() - 1;
+    const result = await this.usersService.exportTaxReportCsv(user.id, y);
+    return successResponse(result);
+  }
+
   @Get('miles-expiring')
   @ApiOperation({ summary: 'Get expiring miles balances (next 30 days)' })
   async getExpiringBalances(@CurrentUser() user: any) {
