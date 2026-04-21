@@ -254,6 +254,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/card-recommender' as any),
     },
     {
+      icon: 'settings-outline',
+      label: 'Configurações (tema, acessibilidade)',
+      showChevron: true,
+      onPress: () => router.push('/settings' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,
