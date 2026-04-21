@@ -461,6 +461,74 @@ export class SchedulerService {
 
 
   /**
+   * Wallet snapshots diários — captura 4h UTC (~1h BRT, baixo tráfego).
+   * Pega user com device ativo nos últimos 7d → snapshot.
+   * Chama diretamente o Prisma (evita circular dep com WalletHistoryModule
+   * que depende do PrismaModule já importado aqui).
+   */
+  @Cron('0 4 * * *')
+  async captureWalletSnapshots() {
+    if (!this.isEnabled()) return;
+    try {
+      const since = new Date(Date.now() - 7 * 86400_000);
+      const activeUsers = await this.prisma.user.findMany({
+        where: {
+          deviceTokens: { some: { lastUsedAt: { gte: since } } },
+        },
+        select: { id: true },
+        take: 5000,
+      });
+
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+
+      let ok = 0;
+      let fail = 0;
+      for (const u of activeUsers) {
+        try {
+          const balances = await this.prisma.userMilesBalance.findMany({
+            where: { userId: u.id },
+            include: { program: true },
+          });
+          const totalMiles = balances.reduce((s, b) => s + b.balance, 0);
+          const totalValueBrl = balances.reduce(
+            (s, b) => s + (b.balance / 1000) * (b.program.avgCpmCurrent || 25),
+            0,
+          );
+          const breakdown = balances.map((b) => ({
+            slug: b.program.slug,
+            balance: b.balance,
+            valueBrl: (b.balance / 1000) * (b.program.avgCpmCurrent || 25),
+          }));
+          await (this.prisma as any).walletSnapshot.upsert({
+            where: { userId_date: { userId: u.id, date: today } },
+            create: {
+              userId: u.id,
+              date: today,
+              totalMiles,
+              totalValueBrl,
+              programsCount: balances.length,
+              breakdown: JSON.stringify(breakdown),
+            },
+            update: {
+              totalMiles,
+              totalValueBrl,
+              programsCount: balances.length,
+              breakdown: JSON.stringify(breakdown),
+            },
+          });
+          ok++;
+        } catch {
+          fail++;
+        }
+      }
+      this.logger.log(`Wallet snapshots: ${ok} ok / ${fail} fail de ${activeUsers.length} users ativos`);
+    } catch (err) {
+      this.logger.error(`Wallet snapshot cron failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * Reminders de notas pessoais — roda a cada 5min. Busca user_notes com
    * remindAt <= now() AND remindSent=false AND isArchived=false, dispara
    * push + marca remindSent=true.

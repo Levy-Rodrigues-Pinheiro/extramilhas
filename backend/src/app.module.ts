@@ -47,6 +47,7 @@ import { MentorshipModule } from './mentorship/mentorship.module';
 import { EventsModule } from './events/events.module';
 import { TravelIntelModule } from './travel-intel/travel-intel.module';
 import { SloModule } from './slo/slo.module';
+import { WalletHistoryModule } from './wallet-history/wallet-history.module';
 
 @Module({
   imports: [
@@ -156,6 +157,7 @@ import { SloModule } from './slo/slo.module';
     EventsModule,
     TravelIntelModule,
     SloModule,
+    WalletHistoryModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

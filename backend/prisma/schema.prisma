@@ -674,6 +674,41 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// WalletSnapshot: captura diária do estado da carteira pra mostrar
+/// evolução ao longo do tempo. Cron roda 1x/dia pra cada user ativo.
+/// Não-destrutivo: histórico acumula.
+model WalletSnapshot {
+  id              String   @id @default(uuid())
+  userId          String
+  date            DateTime // yyyy-mm-dd (00:00 UTC)
+  totalMiles      Int      @default(0)
+  totalValueBrl   Float    @default(0)
+  programsCount   Int      @default(0)
+  // JSON snapshot por programa: [{slug, balance, valueBrl}]
+  breakdown       String   @default("[]")
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("wallet_snapshots")
+}
+
+/// SavedFilter: user salva uma combinação de filtros pra aplicar com 1 click.
+model SavedFilter {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String
+  // Onde se aplica: ARBITRAGE | OFFERS | SIMULATOR
+  context    String   @default("ARBITRAGE")
+  filterJson String
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId, context])
+  @@map("saved_filters")
+}
+
 /// Mentorship: pares mentor→mentee. User marca "quero mentorear" ou
 /// "preciso de mentor" (role). Match manual via admin ou por interesse
 /// automático (tags em comum).
