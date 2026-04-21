@@ -405,6 +405,29 @@ export class AdminController {
     return successResponse(result);
   }
 
+  @Post('notifications/broadcast-advanced')
+  @ApiOperation({
+    summary: 'Broadcast com segmentação avançada: plan + streak + hasBalance + lastActive',
+  })
+  async broadcastAdvanced(
+    @Body()
+    body: {
+      title: string;
+      body: string;
+      deepLink?: string;
+      segments: {
+        plans?: string[]; // ['PREMIUM','PRO']
+        minStreak?: number;
+        hasBalance?: boolean; // só users com saldo > 0
+        maxDaysSinceLastActive?: number;
+      };
+      dryRun?: boolean; // se true, retorna count sem mandar
+    },
+  ) {
+    const result = await this.adminService.broadcastAdvanced(body);
+    return successResponse(result);
+  }
+
   // ─── User impersonation (admin "assume" outro user pra debug) ─────────
 
   @Post('users/:id/impersonate')

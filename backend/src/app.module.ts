@@ -51,6 +51,8 @@ import { WalletHistoryModule } from './wallet-history/wallet-history.module';
 import { TripPlansModule } from './trip-plans/trip-plans.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { AchievementsModule } from './achievements/achievements.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
+import { ContactModule } from './contact/contact.module';
 
 @Module({
   imports: [
@@ -164,6 +166,8 @@ import { AchievementsModule } from './achievements/achievements.module';
     TripPlansModule,
     BookmarksModule,
     AchievementsModule,
+    NewsletterModule,
+    ContactModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

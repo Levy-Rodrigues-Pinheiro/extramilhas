@@ -674,6 +674,49 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// Newsletter opt-in. Separado de User.email pra permitir signup anônimo
+/// via landing. Double opt-in via confirmToken (ativa quando Mailgun/SES
+/// disponível — até lá auto-confirma zero fricção).
+model NewsletterSubscription {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  source        String   @default("OTHER")
+  // WEEKLY_DIGEST | MONTHLY | IMPORTANT_ONLY
+  frequency     String   @default("WEEKLY_DIGEST")
+  confirmToken  String?  @unique
+  confirmedAt   DateTime?
+  unsubToken    String   @unique
+  unsubbedAt    DateTime?
+  tags          String   @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([confirmedAt, unsubbedAt])
+  @@index([source])
+  @@map("newsletter_subscriptions")
+}
+
+/// ContactMessage — form público de "fale com a gente". Admin responde manual.
+model ContactMessage {
+  id            String   @id @default(uuid())
+  name          String
+  email         String
+  // GENERAL | PARTNERSHIP | PRESS | COMPLAINT | BUG
+  category      String   @default("GENERAL")
+  subject       String
+  body          String
+  // NEW | READ | REPLIED | ARCHIVED
+  status        String   @default("NEW")
+  handledBy     String?
+  handledAt     DateTime?
+  internalNotes String?
+  createdAt     DateTime @default(now())
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@map("contact_messages")
+}
+
 /// Bookmark: favoritos do user. kind+targetId unique.
 model Bookmark {
   id        String   @id @default(uuid())

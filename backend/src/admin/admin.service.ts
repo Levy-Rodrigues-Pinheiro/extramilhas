@@ -44,6 +44,108 @@ export class AdminService {
   ) {}
 
   /**
+   * Broadcast avançado com segmentação. Supporta combinar filtros:
+   *   - plans: ['PREMIUM', 'PRO']
+   *   - minStreak: 7 (só users com streak >= 7d)
+   *   - hasBalance: true (só users com algum saldo cadastrado)
+   *   - maxDaysSinceLastActive: 14
+   *
+   * Dry run retorna apenas count do segment sem mandar push.
+   */
+  async broadcastAdvanced(params: {
+    title: string;
+    body: string;
+    deepLink?: string;
+    segments: {
+      plans?: string[];
+      minStreak?: number;
+      hasBalance?: boolean;
+      maxDaysSinceLastActive?: number;
+    };
+    dryRun?: boolean;
+  }) {
+    const where: any = {};
+
+    if (params.segments.plans && params.segments.plans.length > 0) {
+      where.subscriptionPlan = { in: params.segments.plans };
+    }
+
+    if (params.segments.maxDaysSinceLastActive !== undefined) {
+      const cutoff = new Date(
+        Date.now() - params.segments.maxDaysSinceLastActive * 86400_000,
+      );
+      where.deviceTokens = { some: { lastUsedAt: { gte: cutoff } } };
+    } else {
+      where.deviceTokens = { some: {} };
+    }
+
+    // Streak filter + hasBalance são filtros post-query (schema não suporta
+    // direto via where. Filtramos em memória após findMany)
+    const candidates = (await (this.prisma.user as any).findMany({
+      where,
+      select: {
+        id: true,
+        deviceTokens: { select: { token: true, lastUsedAt: true } },
+      },
+      take: 10000,
+    })) as Array<{ id: string; deviceTokens: Array<{ token: string; lastUsedAt: Date }> }>;
+
+    let filtered = candidates;
+
+    if (params.segments.minStreak !== undefined) {
+      const streaks = (await (this.prisma as any).userStreak.findMany({
+        where: {
+          userId: { in: candidates.map((c) => c.id) },
+          currentStreak: { gte: params.segments.minStreak },
+        },
+        select: { userId: true },
+      })) as Array<{ userId: string }>;
+      const streakSet = new Set(streaks.map((s) => s.userId));
+      filtered = filtered.filter((c) => streakSet.has(c.id));
+    }
+
+    if (params.segments.hasBalance === true) {
+      const withBalance = (await this.prisma.userMilesBalance.findMany({
+        where: {
+          userId: { in: filtered.map((c) => c.id) },
+          balance: { gt: 0 },
+        },
+        distinct: ['userId'],
+        select: { userId: true },
+      })) as Array<{ userId: string }>;
+      const balanceSet = new Set(withBalance.map((b) => b.userId));
+      filtered = filtered.filter((c) => balanceSet.has(c.id));
+    }
+
+    const targetUsers = filtered.length;
+
+    if (params.dryRun) {
+      return { dryRun: true, targetUsers };
+    }
+
+    let sentCount = 0;
+    for (const u of filtered) {
+      const tokens = u.deviceTokens.map((d) => d.token);
+      if (tokens.length === 0) continue;
+      try {
+        await this.push.sendToTokens(tokens, {
+          title: params.title,
+          body: params.body,
+          data: {
+            type: 'admin_broadcast',
+            deepLink: params.deepLink ?? '/',
+          },
+        });
+        sentCount++;
+      } catch {
+        /* continua */
+      }
+    }
+
+    return { dryRun: false, targetUsers, sent: sentCount };
+  }
+
+  /**
    * Retenção por coorte semanal — D1/D7/D30.
    * Coorte = users registrados na semana X. Métrica = % deles com atividade
    * (lastActiveAt) no dia 1, 7, 30 após o registro.
