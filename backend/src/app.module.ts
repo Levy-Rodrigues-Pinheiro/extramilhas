@@ -36,6 +36,7 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { CommunityModule } from './community/community.module';
 import { GuidesModule } from './guides/guides.module';
+import { SupportModule } from './support/support.module';
 
 @Module({
   imports: [
@@ -134,6 +135,7 @@ import { GuidesModule } from './guides/guides.module';
     EngagementModule,
     CommunityModule,
     GuidesModule,
+    SupportModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

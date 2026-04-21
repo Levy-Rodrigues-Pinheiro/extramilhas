@@ -236,6 +236,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/guides' as any),
     },
     {
+      icon: 'help-buoy-outline',
+      label: 'Suporte / central de ajuda',
+      showChevron: true,
+      onPress: () => router.push('/support' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

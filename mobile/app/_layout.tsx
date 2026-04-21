@@ -139,6 +139,8 @@ export default function RootLayout() {
             <Stack.Screen name="guides/index" options={{ headerShown: false }} />
             <Stack.Screen name="guides/[slug]" options={{ headerShown: false }} />
             <Stack.Screen name="guides/new" options={{ headerShown: false }} />
+            <Stack.Screen name="support/index" options={{ headerShown: false }} />
+            <Stack.Screen name="support/[id]" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>
