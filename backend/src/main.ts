@@ -6,6 +6,10 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { initOtel } from './common/otel';
+
+// OTel tracing — só ativa se OTEL_ENABLED=true + OTEL_EXPORTER_OTLP_ENDPOINT
+initOtel();
 
 // Sentry init — rodado ANTES de criar app pra capturar qualquer erro cedo
 // Sem SENTRY_DSN → no-op, zero overhead.

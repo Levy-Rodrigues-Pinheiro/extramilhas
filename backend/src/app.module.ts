@@ -46,6 +46,7 @@ import { PublicApiModule } from './public-api/public-api.module';
 import { MentorshipModule } from './mentorship/mentorship.module';
 import { EventsModule } from './events/events.module';
 import { TravelIntelModule } from './travel-intel/travel-intel.module';
+import { SloModule } from './slo/slo.module';
 
 @Module({
   imports: [
@@ -154,6 +155,7 @@ import { TravelIntelModule } from './travel-intel/travel-intel.module';
     MentorshipModule,
     EventsModule,
     TravelIntelModule,
+    SloModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators
