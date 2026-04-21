@@ -218,6 +218,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/forum' as any),
     },
     {
+      icon: 'sparkles-outline',
+      label: 'Minha semana (Wrapped)',
+      showChevron: true,
+      onPress: () => router.push('/retrospective' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

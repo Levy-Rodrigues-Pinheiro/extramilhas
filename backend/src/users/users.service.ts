@@ -500,6 +500,78 @@ export class UsersService {
    * declarar os saldos *se cumulativamente* >R$ 40k. App fornece planilha
    * pronta pro contador.
    */
+  /**
+   * Retrospectiva semanal estilo Spotify Wrapped. Gera stats dos últimos 7d:
+   *   - Notificações recebidas (bônus descobertos)
+   *   - Missões progredidas
+   *   - Streak atual
+   *   - Oportunidade top (maior ganho%)
+   *   - Economia estimada da semana (aproximada)
+   *
+   * Cliente usa pra gerar share card bonito. Mutação-free (só read).
+   */
+  async getWeeklyRetrospective(userId: string) {
+    const now = Date.now();
+    const weekAgo = new Date(now - 7 * 86400_000);
+
+    const [user, notifications, missions, streak, balances] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true, createdAt: true },
+      }),
+      this.prisma.notification.findMany({
+        where: { userId, createdAt: { gte: weekAgo } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      (this.prisma as any).userMission.findMany({
+        where: { userId, updatedAt: { gte: weekAgo } },
+      }),
+      (this.prisma as any).userStreak.findUnique({ where: { userId } }),
+      this.prisma.userMilesBalance.findMany({
+        where: { userId },
+        include: { program: true },
+      }),
+    ]);
+
+    const totalMiles = balances.reduce((s, b) => s + b.balance, 0);
+    const walletValueBrl = balances.reduce(
+      (s, b) => s + (b.balance / 1000) * (b.program.avgCpmCurrent || 25),
+      0,
+    );
+
+    // Bônus top da semana — maior currentBonus ativo
+    const topBonus = await this.prisma.transferPartnership.findFirst({
+      where: { isActive: true, currentBonus: { gt: 0 } },
+      orderBy: { currentBonus: 'desc' },
+      include: { fromProgram: true, toProgram: true },
+    });
+
+    const missionsProgressed = missions.filter((m: any) => m.progress > 0).length;
+    const notifBonus = notifications.filter((n) => n.type === 'bonus_active' || n.type === 'alert_match').length;
+
+    return {
+      userName: user?.name?.split(' ')[0] ?? 'Você',
+      weekStart: weekAgo.toISOString(),
+      weekEnd: new Date(now).toISOString(),
+      stats: {
+        notificationsReceived: notifications.length,
+        bonusAlertsReceived: notifBonus,
+        missionsProgressed,
+        currentStreak: streak?.currentStreak ?? 0,
+        longestStreak: streak?.longestStreak ?? 0,
+        walletTotalMiles: totalMiles,
+        walletValueBrl: Math.round(walletValueBrl * 100) / 100,
+      },
+      topBonus: topBonus
+        ? {
+            from: topBonus.fromProgram.name,
+            to: topBonus.toProgram.name,
+            bonusPercent: Math.round(Number(topBonus.currentBonus)),
+          }
+        : null,
+    };
+  }
+
   async exportTaxReportCsv(userId: string, year: number) {
     const balances = await this.prisma.userMilesBalance.findMany({
       where: { userId },

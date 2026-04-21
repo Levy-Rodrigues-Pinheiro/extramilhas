@@ -229,6 +229,13 @@ export class UsersController {
     return successResponse(result);
   }
 
+  @Get('retrospective/weekly')
+  @ApiOperation({ summary: 'Retrospectiva dos últimos 7d (stats de engagement pra share card)' })
+  async getWeeklyRetrospective(@CurrentUser() user: any) {
+    const result = await this.usersService.getWeeklyRetrospective(user.id);
+    return successResponse(result);
+  }
+
   @Get('tax-report')
   @ApiOperation({ summary: 'Relatório de milhas para IRPF (ano base via query ?year=2025)' })
   async exportTaxReport(@CurrentUser() user: any, @Query('year') year?: string) {
