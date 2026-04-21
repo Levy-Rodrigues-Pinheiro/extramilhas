@@ -683,6 +683,26 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// Podcast episodes. Admin cadastra; user consome no /podcast screen.
+model PodcastEpisode {
+  id            String   @id @default(uuid())
+  slug          String   @unique
+  title         String
+  description   String
+  audioUrl      String
+  durationSec   Int
+  episodeNumber Int?
+  coverImage    String?
+  publishedAt   DateTime?
+  isPublished   Boolean  @default(false)
+  playCount     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([isPublished, publishedAt])
+  @@map("podcast_episodes")
+}
+
 /// Tenant — foundation pra multi-tenancy B2B.
 model Tenant {
   id          String   @id @default(uuid())
