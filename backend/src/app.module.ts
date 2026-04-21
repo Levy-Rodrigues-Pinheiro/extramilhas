@@ -56,6 +56,9 @@ import { ContactModule } from './contact/contact.module';
 import { WalletPassModule } from './wallet-pass/wallet-pass.module';
 import { QuizzesModule } from './quizzes/quizzes.module';
 import { ActivityFeedModule } from './activity-feed/activity-feed.module';
+import { TenantsModule } from './tenants/tenants.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
+import { EmailTemplatesModule } from './email-templates/email-templates.module';
 
 @Module({
   imports: [
@@ -174,6 +177,9 @@ import { ActivityFeedModule } from './activity-feed/activity-feed.module';
     WalletPassModule,
     QuizzesModule,
     ActivityFeedModule,
+    TenantsModule,
+    WebhooksModule,
+    EmailTemplatesModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

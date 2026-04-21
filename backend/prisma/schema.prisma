@@ -34,6 +34,9 @@ model User {
   // Badges sociais admin-set. JSON array pra extensível.
   // Valores: "VERIFIED", "CREATOR", "STAFF", "EARLY_ADOPTER", "TOP_REPORTER"
   badges                String   @default("[]")
+  // Multi-tenancy: user pertence a um tenant. "default" tenant existe
+  // por padrão pra users individuais. Admin B2B cria tenants extra.
+  tenantSlug            String?  @default("default")
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -678,6 +681,63 @@ model SupportTicket {
   @@index([status, priority])
   @@index([assignedTo, status])
   @@map("support_tickets")
+}
+
+/// Tenant — foundation pra multi-tenancy B2B.
+model Tenant {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  logoUrl     String?
+  primaryColor String?
+  // STARTER | GROWTH | ENTERPRISE
+  plan        String   @default("STARTER")
+  userQuota   Int      @default(10)
+  customDomain String? @unique
+  isActive    Boolean  @default(true)
+  contactEmail String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, plan])
+  @@map("tenants")
+}
+
+/// OutboundWebhook: parceiros se inscrevem em eventos via URL + HMAC signing.
+model OutboundWebhook {
+  id              String   @id @default(uuid())
+  ownerId         String
+  name            String
+  url             String
+  events          String   @default("[]") // JSON array
+  secret          String   // HMAC secret hex 32 chars
+  isActive        Boolean  @default(true)
+  totalSent       Int      @default(0)
+  totalSuccess    Int      @default(0)
+  totalFailed     Int      @default(0)
+  lastDeliveredAt DateTime?
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerId, isActive])
+  @@index([isActive])
+  @@map("outbound_webhooks")
+}
+
+/// EmailTemplate: admin mantém editáveis. Serviço de email (Mailgun/Resend)
+/// puxa pelo slug quando disparar.
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  subject   String
+  body      String
+  bodyText  String?
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_templates")
 }
 
 /// ActivityFeed: timeline pública de "quem fez o quê". User opt-in via
