@@ -38,6 +38,7 @@ import { CommunityModule } from './community/community.module';
 import { GuidesModule } from './guides/guides.module';
 import { SupportModule } from './support/support.module';
 import { SecurityModule } from './security/security.module';
+import { SocialModule } from './social/social.module';
 
 @Module({
   imports: [
@@ -138,6 +139,7 @@ import { SecurityModule } from './security/security.module';
     GuidesModule,
     SupportModule,
     SecurityModule,
+    SocialModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

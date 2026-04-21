@@ -667,6 +667,88 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// GroupBuy — users se organizam pra comprar pontos juntos numa promoção
+/// (muitas vezes bônus aumenta em volume). Organizador cria; outros entram.
+/// Quando fecha (ou atinge minPoints), organizador vê lista pra coordenar
+/// off-platform (WhatsApp).
+model GroupBuy {
+  id            String   @id @default(uuid())
+  organizerId   String
+  programId     String // programa destino (Smiles, Latam, etc)
+  title         String
+  description   String
+  targetPoints  Int // objetivo de pontos combinados
+  minPoints     Int @default(10000) // threshold pra disparar "fechamos grupo"
+  deadline      DateTime
+  status        String   @default("OPEN") // OPEN | CLOSED | CANCELED
+  contactMethod String @default("WHATSAPP") // WHATSAPP | EMAIL | IN_APP
+  contactValue  String // número ou email do organizador
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  participants  GroupBuyParticipant[]
+
+  @@index([status, deadline])
+  @@index([programId, status])
+  @@map("group_buys")
+}
+
+model GroupBuyParticipant {
+  id         String   @id @default(uuid())
+  groupBuyId String
+  userId     String
+  points     Int
+  joinedAt   DateTime @default(now())
+
+  groupBuy   GroupBuy @relation(fields: [groupBuyId], references: [id], onDelete: Cascade)
+
+  @@unique([groupBuyId, userId])
+  @@index([userId])
+  @@map("group_buy_participants")
+}
+
+/// TripSwap — marketplace de troca de experiências de viagem com milhas.
+/// User A diz "tenho voo+hotel pra Paris em Mar/26, quero trocar por
+/// Tokyo em Jun/26". Matches manuais. App só facilita descoberta.
+model TripSwap {
+  id              String   @id @default(uuid())
+  ownerId         String
+  title           String
+  description     String
+  fromCity        String // IATA ou texto livre
+  fromDate        DateTime
+  toDate          DateTime
+  // Que cidade/período ele QUER em troca. JSON pra flexibilidade.
+  desiredInTrade  String // livre ("Qualquer Europa em Jun/26") ou JSON estruturado
+  estimatedValue  Int // valor estimado em milhas da oferta
+  status          String   @default("OPEN") // OPEN | NEGOTIATING | CLOSED
+  contactMethod   String @default("WHATSAPP")
+  contactValue    String
+  viewCount       Int @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  interests       TripSwapInterest[]
+
+  @@index([status, fromDate])
+  @@index([ownerId])
+  @@map("trip_swaps")
+}
+
+model TripSwapInterest {
+  id          String   @id @default(uuid())
+  tripSwapId  String
+  userId      String
+  message     String
+  createdAt   DateTime @default(now())
+
+  tripSwap    TripSwap @relation(fields: [tripSwapId], references: [id], onDelete: Cascade)
+
+  @@unique([tripSwapId, userId])
+  @@index([userId])
+  @@map("trip_swap_interests")
+}
+
 /// SecurityEvent — log de eventos suspeitos pro anti-fraude. Cada event é
 /// imutável, um comportamento = um row. Admin dashboard agrega pra
 /// detectar padrões (ex: muitos REGISTER_FAIL mesmo IP = credential stuffing).
