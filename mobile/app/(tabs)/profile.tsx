@@ -188,6 +188,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/security' as any),
     },
     {
+      icon: 'flag-outline',
+      label: 'Minhas metas',
+      showChevron: true,
+      onPress: () => router.push('/goals' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

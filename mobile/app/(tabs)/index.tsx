@@ -20,6 +20,7 @@ import { useMissions } from '../../src/hooks/useMissions';
 import { FirstRunTip } from '../../src/components/FirstRunTip';
 import { OnboardingTour } from '../../src/components/OnboardingTour';
 import { useNotificationFeed } from '../../src/hooks/useNotificationFeed';
+import { usePingStreak, useStreak } from '../../src/hooks/useEngagement';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -41,6 +42,14 @@ export default function HomeScreen() {
   const notifFeed = useNotificationFeed();
   const notifUnread = notifFeed.data?.unreadCount ?? 0;
   const { t } = useTranslation();
+  const streak = useStreak();
+  const pingStreak = usePingStreak();
+
+  // Ping streak 1x no mount — fire and forget, erros silenciosos
+  React.useEffect(() => {
+    pingStreak.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Missão mais próxima de completar (>=50% progresso, não claimed)
   const nearCompletion = React.useMemo(() => {
@@ -92,6 +101,19 @@ export default function HomeScreen() {
           <View>
             <Text style={styles.greeting}>{t('home.greeting')}</Text>
             <Text style={styles.subtitle}>{t('home.subtitle')}</Text>
+            {streak.data && (streak.data.currentStreak ?? 0) > 1 && (
+              <TouchableOpacity
+                onPress={() => router.push('/goals' as any)}
+                style={streakStyles.badge}
+                accessibilityRole="button"
+                accessibilityLabel={`Streak de ${streak.data.currentStreak} dias consecutivos`}
+              >
+                <Text style={streakStyles.emoji}>🔥</Text>
+                <Text style={streakStyles.text}>
+                  {streak.data.currentStreak}d streak
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {/* Bell icon com badge de notif não-lidas */}
@@ -370,6 +392,24 @@ function QuickAction({
     </TouchableOpacity>
   );
 }
+
+const streakStyles = StyleSheet.create({
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F59E0B18',
+    borderWidth: 1,
+    borderColor: '#F59E0B40',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  emoji: { fontSize: 12 },
+  text: { fontSize: 11, fontWeight: '700', color: '#F59E0B' },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#0F172A' },

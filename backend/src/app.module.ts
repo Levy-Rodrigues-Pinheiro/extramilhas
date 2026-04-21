@@ -33,6 +33,7 @@ import { MissionsModule } from './missions/missions.module';
 import { IntelAgentModule } from './intel-agent/intel-agent.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
+import { EngagementModule } from './engagement/engagement.module';
 
 @Module({
   imports: [
@@ -128,6 +129,7 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
     IntelAgentModule,
     ReviewsModule,
     FeatureFlagsModule,
+    EngagementModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

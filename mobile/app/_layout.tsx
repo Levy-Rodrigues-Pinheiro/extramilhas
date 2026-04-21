@@ -128,6 +128,7 @@ export default function RootLayout() {
             <Stack.Screen name="dashboard" options={{ headerShown: false }} />
             <Stack.Screen name="active-sessions" options={{ headerShown: false }} />
             <Stack.Screen name="security" options={{ headerShown: false }} />
+            <Stack.Screen name="goals" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>
