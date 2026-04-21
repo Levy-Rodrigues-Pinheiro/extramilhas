@@ -83,8 +83,43 @@ export class WebhooksService {
   }
 
   /**
-   * Dispatcher genérico. Chama quando evento acontece em outro service.
-   * Atualmente sync; pra escala migra pra BullMQ futuramente.
+   * Single-shot delivery attempt. Helper usado pelo dispatch com retry.
+   */
+  private async attemptDelivery(
+    url: string,
+    secret: string,
+    body: string,
+    event: string,
+  ): Promise<{ ok: boolean; status?: number; error?: string }> {
+    try {
+      const signature = createHmac('sha256', secret).update(body).digest('hex');
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Milhasextras-Signature': signature,
+          'X-Milhasextras-Event': event,
+        },
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok) return { ok: true, status: res.status };
+      return { ok: false, status: res.status, error: `HTTP ${res.status}` };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message.slice(0, 500) };
+    }
+  }
+
+  /**
+   * Dispatcher com retry exponencial — best-effort tolerante a glitch curto.
+   *
+   * Bug fix HONEST_TEST_REPORT #8: antes era 1-shot só. Se parceiro tinha
+   * 500ms de downtime, perdia o event. Agora 3 tentativas com delay
+   * imediato / 1s / 3s (total 4s máx) — tolera instabilidade transient
+   * sem virar fila persistente. Pra escala, migrar pra BullMQ futuro.
    */
   async dispatch(event: string, payload: Record<string, unknown>) {
     const webhooks = await (this.prisma as any).outboundWebhook.findMany({
@@ -103,53 +138,35 @@ export class WebhooksService {
     const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
     let success = 0;
     let failed = 0;
+    const delays = [0, 1000, 3000]; // ms
 
     for (const wh of matching) {
-      try {
-        const signature = createHmac('sha256', wh.secret).update(body).digest('hex');
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(wh.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Milhasextras-Signature': signature,
-            'X-Milhasextras-Event': event,
+      let lastResult: { ok: boolean; error?: string } = { ok: false };
+      for (let i = 0; i < delays.length; i++) {
+        if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+        lastResult = await this.attemptDelivery(wh.url, wh.secret, body, event);
+        if (lastResult.ok) break;
+      }
+
+      if (lastResult.ok) {
+        success++;
+        await (this.prisma as any).outboundWebhook.update({
+          where: { id: wh.id },
+          data: {
+            totalSent: { increment: 1 },
+            totalSuccess: { increment: 1 },
+            lastDeliveredAt: new Date(),
+            lastError: null,
           },
-          body,
-          signal: controller.signal,
         });
-        clearTimeout(timer);
-        if (res.ok) {
-          success++;
-          await (this.prisma as any).outboundWebhook.update({
-            where: { id: wh.id },
-            data: {
-              totalSent: { increment: 1 },
-              totalSuccess: { increment: 1 },
-              lastDeliveredAt: new Date(),
-              lastError: null,
-            },
-          });
-        } else {
-          failed++;
-          await (this.prisma as any).outboundWebhook.update({
-            where: { id: wh.id },
-            data: {
-              totalSent: { increment: 1 },
-              totalFailed: { increment: 1 },
-              lastError: `HTTP ${res.status}`,
-            },
-          });
-        }
-      } catch (err) {
+      } else {
         failed++;
         await (this.prisma as any).outboundWebhook.update({
           where: { id: wh.id },
           data: {
             totalSent: { increment: 1 },
             totalFailed: { increment: 1 },
-            lastError: (err as Error).message.slice(0, 500),
+            lastError: `Failed after 3 retries: ${lastResult.error ?? 'unknown'}`.slice(0, 500),
           },
         });
       }

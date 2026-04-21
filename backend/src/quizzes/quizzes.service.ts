@@ -7,10 +7,29 @@ export class QuizzesService {
   constructor(private prisma: PrismaService) {}
 
   private genCertNumber(): string {
-    // Formato MX-XXXX-YYYY (humano friendly)
+    // Formato MX-XXXX-YYYY-ZZZZ (6 bytes = ~281T combos, colisão negligible).
+    // Bug fix HONEST_TEST_REPORT #13: antes era 4 bytes (~4B), teoricamente
+    // colidível em 1M certs. Agora + retry loop em genUniqueCertNumber().
     const p1 = randomBytes(2).toString('hex').toUpperCase();
     const p2 = randomBytes(2).toString('hex').toUpperCase();
-    return `MX-${p1}-${p2}`;
+    const p3 = randomBytes(2).toString('hex').toUpperCase();
+    return `MX-${p1}-${p2}-${p3}`;
+  }
+
+  /**
+   * Gera certNumber garantidamente único com retry de até 5 tentativas.
+   * Em prática só 1 iteração — 5+ colisões consecutivas indicariam RNG bug.
+   */
+  private async genUniqueCertNumber(): Promise<string> {
+    for (let i = 0; i < 5; i++) {
+      const candidate = this.genCertNumber();
+      const existing = await (this.prisma as any).certificate.findUnique({
+        where: { certNumber: candidate },
+        select: { id: true },
+      });
+      if (!existing) return candidate;
+    }
+    throw new Error('Falha gerando certNumber único após 5 tentativas');
   }
 
   async listPublished() {
@@ -102,7 +121,7 @@ export class QuizzesService {
             userId,
             quizSlug: quiz.slug,
             quizTitle: quiz.title,
-            certNumber: this.genCertNumber(),
+            certNumber: await this.genUniqueCertNumber(),
             score,
             holderName: user.name,
           },

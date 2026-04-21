@@ -186,8 +186,17 @@ export class AdminService {
       const countAfter = (days: number) => {
         return users.filter((u) => {
           if (!u.lastActiveAt) return false;
-          const delta = u.lastActiveAt.getTime() - u.createdAt.getTime();
-          // Ativo no mínimo X dias depois do signup (ainda engaja)
+          // Safe — lastActiveAt pode vir como string de JSON ou Date de Prisma.
+          const lastActiveMs =
+            typeof u.lastActiveAt === 'string'
+              ? new Date(u.lastActiveAt).getTime()
+              : u.lastActiveAt.getTime?.() ?? 0;
+          const createdMs =
+            typeof u.createdAt === 'string'
+              ? new Date(u.createdAt as any).getTime()
+              : u.createdAt.getTime?.() ?? 0;
+          if (!lastActiveMs || !createdMs) return false;
+          const delta = lastActiveMs - createdMs;
           return delta >= days * 86400_000;
         }).length;
       };

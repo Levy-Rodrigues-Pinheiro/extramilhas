@@ -665,6 +665,27 @@ export class SchedulerService {
   }
 
   /**
+   * Reset mensal de quota de API keys. Roda dia 1 de cada mês às 0h UTC.
+   * Zera requestsThisMonth pra todas keys ativas — ciclo de billing novo.
+   *
+   * Bug fix do HONEST_TEST_REPORT.md (#3): sem isso quota nunca reseta,
+   * users free estouram permanentemente.
+   */
+  @Cron('0 0 1 * *')
+  async resetApiKeyMonthlyQuota() {
+    if (!this.isEnabled()) return;
+    try {
+      const result = await (this.prisma as any).apiKey.updateMany({
+        where: { isActive: true },
+        data: { requestsThisMonth: 0 },
+      });
+      this.logger.log(`API keys quota reset: ${result.count} keys resetadas`);
+    } catch (err) {
+      this.logger.error(`API key quota reset failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * Avaliação de alertas personalizados — roda a cada 30 min.
    *
    * Para cada alert ativo do user:

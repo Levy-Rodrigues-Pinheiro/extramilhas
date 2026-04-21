@@ -61,6 +61,13 @@ export class EmailTemplatesController {
     return successResponse(result);
   }
 
+  @Get(':slug/preview')
+  @ApiOperation({ summary: 'Preview renderizado com vars fake + missingPlaceholders' })
+  async preview(@Param('slug') slug: string) {
+    const result = await this.svc.previewBySlug(slug);
+    return successResponse(result);
+  }
+
   @Put()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Upsert template' })
