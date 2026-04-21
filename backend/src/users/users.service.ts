@@ -510,6 +510,196 @@ export class UsersService {
    *
    * Cliente usa pra gerar share card bonito. Mutação-free (só read).
    */
+  /**
+   * Portfolio analyzer — análise de diversificação + alertas.
+   *
+   * Outputs:
+   *   - concentration: HHI (Herfindahl-Hirschman Index) do portfolio em %.
+   *     <1500 = diversificado, 1500-2500 = moderado, >2500 = concentrado.
+   *   - dominantProgram: programa com maior share
+   *   - suggestions: array de recomendações concretas baseadas em regras
+   */
+  async analyzePortfolio(userId: string) {
+    const balances = await this.prisma.userMilesBalance.findMany({
+      where: { userId },
+      include: { program: true },
+    });
+    const totalMiles = balances.reduce((s, b) => s + b.balance, 0);
+    if (totalMiles === 0) {
+      return {
+        totalMiles: 0,
+        totalValueBrl: 0,
+        concentration: null,
+        concentrationLabel: 'Sem saldo',
+        dominantProgram: null,
+        breakdown: [],
+        suggestions: [
+          {
+            severity: 'info',
+            title: 'Cadastre saldos',
+            text: 'Adicione seus programas pra análise de diversificação.',
+            action: '/wallet',
+          },
+        ],
+      };
+    }
+
+    const totalValueBrl = balances.reduce(
+      (s, b) => s + (b.balance / 1000) * (b.program.avgCpmCurrent || 25),
+      0,
+    );
+
+    // HHI em pontos de 0-10000 (share^2 somados)
+    const shares = balances.map((b) => {
+      const share = b.balance / totalMiles;
+      return {
+        programId: b.programId,
+        programName: b.program.name,
+        programSlug: b.program.slug,
+        balance: b.balance,
+        sharePercent: Math.round(share * 1000) / 10,
+        valueBrl: Math.round((b.balance / 1000) * (b.program.avgCpmCurrent || 25) * 100) / 100,
+        cpm: b.program.avgCpmCurrent || 25,
+      };
+    });
+    shares.sort((a, b) => b.balance - a.balance);
+    const hhi = shares.reduce((s, x) => s + Math.pow(x.sharePercent * 10, 2) / 100, 0);
+    const concentrationLabel =
+      hhi < 1500 ? 'Diversificado' : hhi < 2500 ? 'Moderado' : 'Concentrado';
+    const dominant = shares[0];
+
+    // Regras de recomendação
+    const suggestions: Array<{
+      severity: 'info' | 'warn' | 'critical';
+      title: string;
+      text: string;
+      action?: string;
+    }> = [];
+
+    if (dominant.sharePercent > 70) {
+      suggestions.push({
+        severity: 'warn',
+        title: `Você está ${dominant.sharePercent}% em ${dominant.programName}`,
+        text: 'Alta concentração num programa só aumenta risco (falência, mudança de regras). Considere diversificar.',
+        action: '/arbitrage',
+      });
+    }
+
+    // Saldos baixos (< 5k) — se acumular pra juntar
+    const lowBalances = shares.filter((s) => s.balance > 0 && s.balance < 5000);
+    if (lowBalances.length >= 2) {
+      suggestions.push({
+        severity: 'info',
+        title: `${lowBalances.length} programas com saldo baixo (<5k)`,
+        text: 'Pontos dispersos. Transferir pra 1-2 programas maximiza resgate. Veja oportunidades.',
+        action: '/arbitrage',
+      });
+    }
+
+    // Expiração — saldos vencendo em 90d
+    const in90 = new Date(Date.now() + 90 * 86400_000);
+    const expiringSoon = balances.filter(
+      (b) => b.expiresAt && b.expiresAt < in90 && b.balance > 0,
+    );
+    if (expiringSoon.length > 0) {
+      suggestions.push({
+        severity: 'critical',
+        title: `${expiringSoon.length} saldo${expiringSoon.length > 1 ? 's' : ''} expirando em <90d`,
+        text: 'Use a calculadora pra decidir pra onde transferir antes de perder.',
+        action: '/arbitrage',
+      });
+    }
+
+    // CPM alto (programa caro vs mercado). Se um programa tem cpm >1.5x média, sinaliza
+    const avgMarketCpm = 25;
+    const expensivePrograms = shares.filter((s) => s.cpm > avgMarketCpm * 1.5);
+    if (expensivePrograms.length > 0) {
+      const names = expensivePrograms.map((e) => e.programName).join(', ');
+      suggestions.push({
+        severity: 'info',
+        title: `CPM alto em ${names}`,
+        text: `CPM acima de R$ ${(avgMarketCpm * 1.5).toFixed(0)} — em geral vale mais resgatar do que acumular.`,
+      });
+    }
+
+    return {
+      totalMiles,
+      totalValueBrl: Math.round(totalValueBrl * 100) / 100,
+      concentration: Math.round(hhi),
+      concentrationLabel,
+      dominantProgram: dominant,
+      breakdown: shares,
+      suggestions,
+    };
+  }
+
+  /**
+   * Predictive buy/sell signals — regras simples em cima de PriceHistory.
+   *
+   * Para cada programa com histórico suficiente (>=7 dias):
+   *   - mediana dos últimos 30d
+   *   - preço atual vs mediana → sinal
+   *     - atual <= mediana * 0.85 → BUY forte
+   *     - atual <= mediana * 0.95 → BUY
+   *     - atual >= mediana * 1.15 → SELL (se user tem muito saldo, transferir)
+   *
+   * Treino real de ML fica pra próxima iteração; regras funcionam como
+   * proxy razoável e zero dep.
+   */
+  async getPredictiveSignals() {
+    const cutoff = new Date(Date.now() - 30 * 86400_000);
+    const programs = await this.prisma.loyaltyProgram.findMany({
+      where: { isActive: true },
+      include: {
+        priceHistory: {
+          where: { date: { gte: cutoff } },
+          orderBy: { date: 'desc' },
+        },
+      },
+    });
+
+    const signals = programs
+      .filter((p) => p.priceHistory.length >= 7)
+      .map((p) => {
+        const cpms = p.priceHistory.map((h) => h.avgCpm).sort((a, b) => a - b);
+        const median = cpms[Math.floor(cpms.length / 2)];
+        const current = p.avgCpmCurrent;
+        const ratio = current / median;
+
+        let signal: 'BUY_STRONG' | 'BUY' | 'HOLD' | 'SELL' = 'HOLD';
+        let text = '';
+        if (ratio <= 0.85) {
+          signal = 'BUY_STRONG';
+          text = `CPM ${((1 - ratio) * 100).toFixed(0)}% abaixo da mediana 30d. Momento forte pra acumular ou comprar pontos.`;
+        } else if (ratio <= 0.95) {
+          signal = 'BUY';
+          text = `CPM abaixo da mediana 30d. Bom momento pra acumular.`;
+        } else if (ratio >= 1.15) {
+          signal = 'SELL';
+          text = `CPM ${((ratio - 1) * 100).toFixed(0)}% acima da mediana. Se tem saldo parado, considere transferir.`;
+        } else {
+          text = 'CPM em linha com mediana. Neutro.';
+        }
+
+        return {
+          programId: p.id,
+          programName: p.name,
+          programSlug: p.slug,
+          currentCpm: current,
+          median30d: Math.round(median * 100) / 100,
+          signal,
+          text,
+          ratio: Math.round(ratio * 100) / 100,
+        };
+      })
+      .sort((a, b) => {
+        const order = { BUY_STRONG: 0, SELL: 1, BUY: 2, HOLD: 3 };
+        return order[a.signal] - order[b.signal];
+      });
+
+    return signals;
+  }
+
   async getWeeklyRetrospective(userId: string) {
     const now = Date.now();
     const weekAgo = new Date(now - 7 * 86400_000);

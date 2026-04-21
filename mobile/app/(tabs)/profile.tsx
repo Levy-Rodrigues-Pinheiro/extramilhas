@@ -224,6 +224,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/retrospective' as any),
     },
     {
+      icon: 'analytics-outline',
+      label: 'Análise da carteira + sinais',
+      showChevron: true,
+      onPress: () => router.push('/portfolio-analysis' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

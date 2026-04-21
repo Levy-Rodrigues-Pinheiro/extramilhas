@@ -229,6 +229,20 @@ export class UsersController {
     return successResponse(result);
   }
 
+  @Get('portfolio/analyze')
+  @ApiOperation({ summary: 'Analyzer de diversificação (HHI + sugestões personalizadas)' })
+  async analyzePortfolio(@CurrentUser() user: any) {
+    const result = await this.usersService.analyzePortfolio(user.id);
+    return successResponse(result);
+  }
+
+  @Get('portfolio/signals')
+  @ApiOperation({ summary: 'Sinais BUY/SELL/HOLD por programa (mediana 30d vs atual)' })
+  async getSignals() {
+    const result = await this.usersService.getPredictiveSignals();
+    return successResponse(result);
+  }
+
   @Get('retrospective/weekly')
   @ApiOperation({ summary: 'Retrospectiva dos últimos 7d (stats de engagement pra share card)' })
   async getWeeklyRetrospective(@CurrentUser() user: any) {

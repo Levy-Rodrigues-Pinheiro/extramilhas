@@ -3,6 +3,41 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 
+/**
+ * Banco de dicas rotativas. Mudam por dia-da-semana pra user não ver a mesma.
+ * Expandir com admin console vira feature futura.
+ */
+const DAILY_TIPS: Array<{ title: string; body: string }> = [
+  {
+    title: '💡 Dica: Livelo→Smiles é o combo mais usado',
+    body: 'Se você tem Itaú ou Bradesco, provavelmente acumula Livelo. Bônus Smiles de 100%+ é o target.',
+  },
+  {
+    title: '📅 Dica: planeje emissão com 90d de antecedência',
+    body: 'Taxa menor + disponibilidade maior. Emissão last-minute costuma custar 2-3x mais milhas.',
+  },
+  {
+    title: '✈️ Dica: classe executiva dá o melhor retorno',
+    body: 'CPM efetivo em business/first é 2-4x maior que econômica. Se tem milhas sobrando, foque nisso.',
+  },
+  {
+    title: '🔥 Dica: nunca transfira sem bônus de 80%+',
+    body: 'Transferência sem bônus = perder CPM. A não ser que seja pra resgatar voo já escolhido.',
+  },
+  {
+    title: '🎯 Dica: monitore 2-3 programas só',
+    body: 'Espalhar em 7 programas fragmenta saldo. Foco em 2-3 com parceria forte (ex: Livelo, Smiles, Latam).',
+  },
+  {
+    title: '📊 Dica: CPM varia 30-40% ao longo do ano',
+    body: 'Dezembro + Julho = emissão mais cara. Compre pontos em Fev-Mar e Set-Out (CPM historicamente baixo).',
+  },
+  {
+    title: '⏰ Dica: saldo < 5k expirando = transfira mesmo sem bônus',
+    body: 'Perder 3k pontos = R$60 jogados fora. Bônus de 50% transformando em 4.5k salva pelo menos.',
+  },
+];
+
 function safeJson(s: string): any {
   try {
     return JSON.parse(s);
@@ -424,6 +459,60 @@ export class SchedulerService {
     }
   }
 
+
+  /**
+   * Dica do dia — terça, quinta e sábado às 18h UTC (~15h BRT).
+   * Só envia pra users com notifyBonus=true e último device ativo nos últimos
+   * 30 dias. Escolhe tip do array DAILY_TIPS por modulo do dia-do-ano.
+   */
+  @Cron('0 18 * * 2,4,6')
+  async sendDailyTip() {
+    if (!this.isEnabled()) return;
+    if ((process.env.DAILY_TIP_ENABLED || 'true').toLowerCase() === 'false') return;
+
+    try {
+      const dayOfYear = Math.floor(
+        (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400_000,
+      );
+      const tip = DAILY_TIPS[dayOfYear % DAILY_TIPS.length];
+
+      // Só users com preferência de notificação ligada + device recente
+      const users = await this.prisma.user.findMany({
+        where: {
+          preferences: { notifyBonus: true },
+          deviceTokens: {
+            some: { lastUsedAt: { gte: new Date(Date.now() - 30 * 86400_000) } },
+          },
+        },
+        select: {
+          id: true,
+          deviceTokens: {
+            where: { lastUsedAt: { gte: new Date(Date.now() - 30 * 86400_000) } },
+            select: { token: true },
+          },
+        },
+      });
+
+      let sent = 0;
+      for (const u of users) {
+        const tokens = u.deviceTokens.map((d) => d.token);
+        if (tokens.length === 0) continue;
+        try {
+          await this.push.sendToTokens(tokens, {
+            title: tip.title,
+            body: tip.body,
+            data: { type: 'daily_tip', deepLink: '/arbitrage' },
+          });
+          sent++;
+        } catch {
+          /* continua pros outros */
+        }
+      }
+      this.logger.log(`Daily tip enviado pra ${sent}/${users.length} users`);
+    } catch (err) {
+      this.logger.error(`Daily tip failed: ${(err as Error).message}`);
+    }
+  }
 
   /**
    * Avaliação de alertas personalizados — roda a cada 30 min.
