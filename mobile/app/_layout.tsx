@@ -13,6 +13,7 @@ import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { initAnalytics } from '../src/lib/analytics';
 import { hydrateOfflineCache, subscribeOfflineCache } from '../src/lib/offlineCache';
 import { OfflineBanner } from '../src/components/OfflineBanner';
+import { ThemeProvider } from '../src/lib/ThemeProvider';
 import '../src/lib/i18n'; // side-effect: inicializa i18n
 
 // Arma push notifications (permissão + token + listeners).
@@ -72,6 +73,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
           <PushBootstrap />
           <OfflineBanner />
           <StatusBar style="light" backgroundColor={Colors.bg.primary} />
@@ -144,6 +146,7 @@ export default function RootLayout() {
             <Stack.Screen name="notes" options={{ headerShown: false }} />
             <Stack.Screen name="card-recommender" options={{ headerShown: false }} />
           </Stack>
+          </ThemeProvider>
           </QueryClientProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
