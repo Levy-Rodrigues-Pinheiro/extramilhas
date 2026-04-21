@@ -212,6 +212,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/compensation-eu261' as any),
     },
     {
+      icon: 'chatbubbles-outline',
+      label: 'Fórum da comunidade',
+      showChevron: true,
+      onPress: () => router.push('/forum' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,
