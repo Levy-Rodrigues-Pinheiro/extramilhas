@@ -551,6 +551,146 @@ model UserMission {
   @@map("user_missions")
 }
 
+/// Feature flags com rollout gradual. Admin edita sem deploy.
+/// Rollout: 0-100 (percentual de users). Hash estável do userId decide se
+/// user está no bucket. Se user é null, aplica pra todos anônimos.
+/// Overrides: allowlist de userIds que sempre vêem true (testers).
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique // "new-home-layout", "ab-paywall-copy-v2"
+  description String
+  // "off" = sempre false; "on" = sempre true; "rollout" = usa percentage
+  mode        String   @default("off")
+  percentage  Int      @default(0) // 0-100
+  // JSON array de userIds que sempre vêem ON (pra QA/staff)
+  allowlist   String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("feature_flags")
+}
+
+/// A/B tests — variantes de um experimento. Cada user cai numa variante
+/// determinística por hash(userId + experimentKey). Tracking de exposure
+/// + conversão fica no event log (analytics module).
+model Experiment {
+  id          String   @id @default(uuid())
+  key         String   @unique // "paywall-copy-2026-04"
+  description String
+  // JSON array: [{"name":"control","weight":50},{"name":"variant_a","weight":50}]
+  variants    String   @default("[]")
+  isActive    Boolean  @default(true)
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+
+  @@map("experiments")
+}
+
+/// Daily streak — cada dia que user abre o app conta. Quebra se pula
+/// 1 dia. Recompensa: 7d = 1d Premium grátis; 30d = 7d Premium.
+model UserStreak {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  currentStreak    Int      @default(0)
+  longestStreak    Int      @default(0)
+  lastActiveDate   DateTime // yyyy-mm-dd (usa 00:00 UTC pra simplicidade)
+  freezesAvailable Int      @default(1) // 1 "freeze" por mês protege streak de 1 dia perdido
+  updatedAt        DateTime @updatedAt
+
+  @@map("user_streaks")
+}
+
+/// Goals — "quero 150k milhas Smiles até Dez/2025". App mostra progresso
+/// + tempo médio histórico + sugere ações (transferências, bônus).
+model UserGoal {
+  id            String   @id @default(uuid())
+  userId        String
+  title         String
+  // Programa alvo (opcional — pode ser genérico "milhas totais")
+  programId     String?
+  targetMiles   Int
+  targetDate    DateTime
+  // Snapshot do saldo quando goal foi criado (pra calcular delta)
+  startingMiles Int      @default(0)
+  isArchived    Boolean  @default(false)
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, isArchived])
+  @@map("user_goals")
+}
+
+/// Forum threads — community básica. Posts são replies dentro da thread.
+/// Moderation: isFlagged + hiddenAt pra soft-delete quando admin baniu.
+model ForumThread {
+  id          String   @id @default(uuid())
+  authorId    String
+  title       String
+  body        String
+  // Tag livre pra começar. Pode virar enum depois: ROTA, PROGRAMA, DUVIDA, BONUS
+  tag         String   @default("GERAL")
+  replyCount  Int      @default(0)
+  upvoteCount Int      @default(0)
+  isFlagged   Boolean  @default(false)
+  hiddenAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts       ForumPost[]
+
+  @@index([tag, createdAt])
+  @@index([authorId])
+  @@map("forum_threads")
+}
+
+model ForumPost {
+  id        String   @id @default(uuid())
+  threadId  String
+  authorId  String
+  body      String
+  upvoteCount Int    @default(0)
+  isFlagged Boolean  @default(false)
+  hiddenAt  DateTime?
+  createdAt DateTime @default(now())
+
+  thread    ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@index([authorId])
+  @@map("forum_posts")
+}
+
+/// Polls — enquete semanal. Admin cria. User vota 1x.
+model Poll {
+  id        String    @id @default(uuid())
+  question  String
+  // JSON array of {id, label}. Ex: [{"id":"a","label":"Smiles"},{"id":"b","label":"Latam"}]
+  options   String
+  isActive  Boolean   @default(true)
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  votes     PollVote[]
+
+  @@index([isActive, endsAt])
+  @@map("polls")
+}
+
+model PollVote {
+  id        String   @id @default(uuid())
+  pollId    String
+  userId    String
+  optionId  String
+  createdAt DateTime @default(now())
+
+  poll      Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+  @@index([pollId, optionId])
+  @@map("poll_votes")
+}
+
 /// Avaliação de uma transfer partnership (bônus) — user diz se "funcionou"
 /// pra ele. Alimenta score de credibilidade das ofertas no feed.
 /// 1 review por user por partnership (unique).

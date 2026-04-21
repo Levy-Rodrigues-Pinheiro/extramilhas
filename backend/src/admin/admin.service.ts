@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { OfferClassification, SubscriptionPlan } from '../common/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -37,7 +39,80 @@ export class AdminService {
     private notificationsService: NotificationsService,
     private contentService: ContentService,
     private push: PushService,
+    private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
+
+  /**
+   * Admin impersonação — gera JWT curto (30 min) no contexto do user-alvo
+   * com flag `impersonatedBy=adminId` no payload pra auditoria. Grava
+   * AuditLog. Uso: debug de bug específico do user, suporte white-glove.
+   *
+   * SEGURANÇA: não devolve refreshToken (admin não fica logado como user).
+   */
+  async impersonateUser(targetUserId: string, adminId: string) {
+    const target = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+    if (!target) throw new NotFoundException('User não encontrado');
+    const accessToken = await this.jwtService.signAsync(
+      {
+        sub: target.id,
+        email: target.email,
+        isAdmin: false, // força não-admin no token impersonated, evita escalation
+        plan: target.subscriptionPlan,
+        impersonatedBy: adminId,
+      },
+      {
+        secret: this.configService.get<string>('jwt.secret'),
+        expiresIn: '30m',
+      },
+    );
+    await this.prisma.auditLog.create({
+      data: {
+        adminId,
+        action: 'IMPERSONATE',
+        entityType: 'user',
+        entityId: target.id,
+        after: JSON.stringify({ targetEmail: target.email, expiresIn: '30m' }),
+      },
+    });
+    return {
+      accessToken,
+      targetUserId: target.id,
+      targetEmail: target.email,
+      expiresInMs: 30 * 60 * 1000,
+    };
+  }
+
+  /**
+   * Exporta AuditLog completo como CSV. Usado em auditorias LGPD/SOC.
+   * Limita a últimos 12 meses pra não explodir payload.
+   */
+  async exportAuditLogCsv() {
+    const cutoff = new Date(Date.now() - 365 * 86400_000);
+    const logs = await this.prisma.auditLog.findMany({
+      where: { createdAt: { gte: cutoff } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const lines = ['id,adminId,action,entityType,entityId,createdAt,after'];
+    for (const l of logs) {
+      lines.push(
+        [
+          l.id,
+          l.adminId,
+          l.action,
+          l.entityType,
+          l.entityId ?? '',
+          l.createdAt.toISOString(),
+          csvEscape(l.after ?? ''),
+        ].join(','),
+      );
+    }
+    return {
+      csv: lines.join('\n'),
+      filename: `audit-log-${new Date().toISOString().slice(0, 10)}.csv`,
+      rowCount: logs.length,
+    };
+  }
 
   // ─── Dashboard ──────────────────────────────────────────────────────────────
 

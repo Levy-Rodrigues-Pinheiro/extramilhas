@@ -31,6 +31,7 @@ import { FlightCacheService } from '../simulator/flight-cache.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard, Role } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { successResponse } from '../common/helpers/response.helper';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { BroadcastNotificationDto } from './dto/broadcast-notification.dto';
@@ -401,6 +402,23 @@ export class AdminController {
       dto.targetPlan,
       dto.deepLink,
     );
+    return successResponse(result);
+  }
+
+  // ─── User impersonation (admin "assume" outro user pra debug) ─────────
+
+  @Post('users/:id/impersonate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gera JWT temporário (30min) no contexto do user. Usa pra debug/suporte.' })
+  async impersonate(@Param('id') targetUserId: string, @CurrentUser() admin: any) {
+    const result = await this.adminService.impersonateUser(targetUserId, admin.id);
+    return successResponse(result);
+  }
+
+  @Get('audit-log/export')
+  @ApiOperation({ summary: 'Exporta audit log completo em CSV (compliance/LGPD)' })
+  async exportAuditLog() {
+    const result = await this.adminService.exportAuditLogCsv();
     return successResponse(result);
   }
 
