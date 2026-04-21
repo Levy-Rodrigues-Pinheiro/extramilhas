@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ThemedSafeArea } from '../src/components/ThemedSafeArea';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -73,7 +74,7 @@ export default function WalletScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <ThemedSafeArea edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color="#fff" />
@@ -181,7 +182,7 @@ export default function WalletScreen() {
           loading={upsert.isPending}
         />
       )}
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 

@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ThemedSafeArea } from '../../src/components/ThemedSafeArea';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -90,7 +90,7 @@ export default function HomeScreen() {
     .slice(0, 3);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <ThemedSafeArea edges={['top']}>
       {/* Tour completo (4 slides) — 1x após welcome-quiz */}
       <OnboardingTour />
 
@@ -373,7 +373,7 @@ export default function HomeScreen() {
         {/* (CTA box removido — hero card já tem "Cadastre seus saldos →"
             com mesmo destino. Redundância confundia user.) */}
       </ScrollView>
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 
