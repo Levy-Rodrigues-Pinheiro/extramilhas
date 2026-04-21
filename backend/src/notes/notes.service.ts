@@ -14,11 +14,20 @@ export class NotesService {
 
   async create(
     userId: string,
-    params: { title: string; body: string; tag?: string; remindAt?: string },
+    params: {
+      title: string;
+      body: string;
+      tag?: string;
+      remindAt?: string;
+      recurrence?: string;
+    },
   ) {
     if (!params.title?.trim() || !params.body?.trim()) {
       throw new ForbiddenException('Título e corpo obrigatórios');
     }
+    const recurrence = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(params.recurrence ?? 'NONE')
+      ? params.recurrence ?? 'NONE'
+      : 'NONE';
     return (this.prisma as any).userNote.create({
       data: {
         userId,
@@ -26,6 +35,7 @@ export class NotesService {
         body: params.body.slice(0, 5000),
         tag: params.tag || 'GERAL',
         remindAt: params.remindAt ? new Date(params.remindAt) : null,
+        recurrence,
       },
     });
   }
@@ -38,6 +48,7 @@ export class NotesService {
       body?: string;
       tag?: string;
       remindAt?: string | null;
+      recurrence?: string;
       isPinned?: boolean;
       isArchived?: boolean;
     },
@@ -54,6 +65,11 @@ export class NotesService {
         ...(params.remindAt !== undefined && {
           remindAt: params.remindAt ? new Date(params.remindAt) : null,
           remindSent: false, // reseta flag ao mudar data
+        }),
+        ...(params.recurrence !== undefined && {
+          recurrence: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(params.recurrence)
+            ? params.recurrence
+            : 'NONE',
         }),
         ...(params.isPinned !== undefined && { isPinned: params.isPinned }),
         ...(params.isArchived !== undefined && { isArchived: params.isArchived }),

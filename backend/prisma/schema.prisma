@@ -674,6 +674,67 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// TripPlan: planejamento colaborativo. Owner cria, convida via inviteToken.
+model TripPlan {
+  id            String   @id @default(uuid())
+  ownerId       String
+  title         String
+  description   String?
+  mainDestination String?
+  startDate     DateTime?
+  endDate       DateTime?
+  targetMiles   Int      @default(0)
+  targetBrl     Float    @default(0)
+  // OPEN | LOCKED | DONE | CANCELED
+  status        String   @default("OPEN")
+  inviteToken   String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  members       TripPlanMember[]
+  items         TripPlanItem[]
+
+  @@index([ownerId, status])
+  @@map("trip_plans")
+}
+
+model TripPlanMember {
+  id         String   @id @default(uuid())
+  tripPlanId String
+  userId     String
+  // OWNER | EDITOR | VIEWER
+  role       String   @default("EDITOR")
+  joinedAt   DateTime @default(now())
+
+  trip       TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([tripPlanId, userId])
+  @@index([userId])
+  @@map("trip_plan_members")
+}
+
+model TripPlanItem {
+  id          String   @id @default(uuid())
+  tripPlanId  String
+  addedBy     String
+  // FLIGHT | HOTEL | ACTIVITY | NOTE
+  kind        String
+  title       String
+  description String?
+  metadata    String?  // JSON livre
+  milesCost   Int      @default(0)
+  brlCost     Float    @default(0)
+  isConfirmed Boolean  @default(false)
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trip        TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+
+  @@index([tripPlanId, orderIndex])
+  @@map("trip_plan_items")
+}
+
 /// WalletSnapshot: captura diária do estado da carteira pra mostrar
 /// evolução ao longo do tempo. Cron roda 1x/dia pra cada user ativo.
 /// Não-destrutivo: histórico acumula.
@@ -871,6 +932,9 @@ model UserNote {
   // Opcional: data pra gerar notificação push no dia/hora
   remindAt    DateTime?
   remindSent  Boolean  @default(false)
+  // Recurring: NONE | DAILY | WEEKLY | MONTHLY. Cron re-armará remindAt
+  // após disparar + setar remindSent=false.
+  recurrence  String   @default("NONE")
   // Tag livre (programa, destino, etc)
   tag         String   @default("GERAL")
   isPinned    Boolean  @default(false)

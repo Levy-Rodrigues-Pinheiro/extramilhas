@@ -532,6 +532,12 @@ export class SchedulerService {
    * Reminders de notas pessoais — roda a cada 5min. Busca user_notes com
    * remindAt <= now() AND remindSent=false AND isArchived=false, dispara
    * push + marca remindSent=true.
+   *
+   * Recurring: se note.recurrence != NONE, re-arma remindAt pro próximo
+   * ciclo em vez de apenas marcar sent.
+   *   DAILY   → +24h
+   *   WEEKLY  → +7d
+   *   MONTHLY → +30d (aproximação, suficiente pra reminders)
    */
   @Cron('*/5 * * * *')
   async sendNoteReminders() {
@@ -544,7 +550,7 @@ export class SchedulerService {
           remindSent: false,
           isArchived: false,
         },
-        take: 100, // batch cap pra não travar cron
+        take: 100,
       });
       if (notes.length === 0) return;
 
@@ -572,10 +578,31 @@ export class SchedulerService {
             /* continua */
           }
         }
-        await (this.prisma as any).userNote.update({
-          where: { id: note.id },
-          data: { remindSent: true },
-        });
+
+        // Recurring: re-arma em vez de marcar sent
+        const recurrence = (note as any).recurrence ?? 'NONE';
+        if (recurrence !== 'NONE' && note.remindAt) {
+          const base = new Date(note.remindAt).getTime();
+          let nextMs = base;
+          if (recurrence === 'DAILY') nextMs = base + 86400_000;
+          else if (recurrence === 'WEEKLY') nextMs = base + 7 * 86400_000;
+          else if (recurrence === 'MONTHLY') nextMs = base + 30 * 86400_000;
+          // Garantir que nextMs é >= agora (se note antiga, pula p/ próximo ciclo)
+          while (nextMs < Date.now()) {
+            if (recurrence === 'DAILY') nextMs += 86400_000;
+            else if (recurrence === 'WEEKLY') nextMs += 7 * 86400_000;
+            else nextMs += 30 * 86400_000;
+          }
+          await (this.prisma as any).userNote.update({
+            where: { id: note.id },
+            data: { remindAt: new Date(nextMs), remindSent: false },
+          });
+        } else {
+          await (this.prisma as any).userNote.update({
+            where: { id: note.id },
+            data: { remindSent: true },
+          });
+        }
       }
       this.logger.log(`Note reminders: ${notes.length} processados, ${sent} pushes enviados`);
     } catch (err) {
