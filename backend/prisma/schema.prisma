@@ -674,6 +674,99 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// Mentorship: pares mentor→mentee. User marca "quero mentorear" ou
+/// "preciso de mentor" (role). Match manual via admin ou por interesse
+/// automático (tags em comum).
+model MentorProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  // MENTOR | MENTEE | BOTH
+  role         String
+  // Livre: "Viagens Europa", "Smiles avançado", "Cartões Amex"
+  expertise    String
+  // Experiência declarada (anos de milhagem, ex: "5+ anos", "iniciante")
+  experience   String
+  // JSON array de tags
+  interests    String   @default("[]")
+  bio          String?
+  // Disponibilidade em horas/semana (auto-reporta)
+  hoursPerWeek Int      @default(1)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  requestsAsMentor  MentorshipRequest[] @relation("AsMentor")
+  requestsAsMentee  MentorshipRequest[] @relation("AsMentee")
+
+  @@index([role, isActive])
+  @@map("mentor_profiles")
+}
+
+/// Pedido de mentoria — mentee pede, mentor aceita/rejeita.
+model MentorshipRequest {
+  id         String   @id @default(uuid())
+  mentorId   String   // MentorProfile.id (não userId)
+  menteeId   String   // MentorProfile.id
+  message    String   // pitch inicial do mentee
+  // PENDING | ACCEPTED | DECLINED | CLOSED
+  status     String   @default("PENDING")
+  respondedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  mentor     MentorProfile @relation("AsMentor", fields: [mentorId], references: [id], onDelete: Cascade)
+  mentee     MentorProfile @relation("AsMentee", fields: [menteeId], references: [id], onDelete: Cascade)
+
+  @@unique([mentorId, menteeId])
+  @@index([mentorId, status])
+  @@index([menteeId, status])
+  @@map("mentorship_requests")
+}
+
+/// Events: meetups, webinars, AMAs. Admin cria, users RSVPam.
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  // Tipo livre: WEBINAR | MEETUP | AMA | WORKSHOP
+  kind        String   @default("WEBINAR")
+  startsAt    DateTime
+  endsAt      DateTime?
+  // URL (zoom/google-meet/youtube-live)
+  location    String
+  // Online | presencial
+  isOnline    Boolean  @default(true)
+  city        String?
+  // Capacidade máxima (0 = ilimitado)
+  maxAttendees Int     @default(0)
+  coverImage  String?
+  // Só Premium? Se true, vira perk de assinatura
+  premiumOnly Boolean  @default(false)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rsvps       EventRsvp[]
+
+  @@index([isPublished, startsAt])
+  @@map("events")
+}
+
+model EventRsvp {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  // GOING | MAYBE | CANCELED
+  status    String   @default("GOING")
+  createdAt DateTime @default(now())
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@map("event_rsvps")
+}
+
 /// Cartões de crédito catalogados. Admin popula. Usado pelo recommender
 /// que sugere qual cartão tem melhor ROI pra gasto médio do user.
 ///

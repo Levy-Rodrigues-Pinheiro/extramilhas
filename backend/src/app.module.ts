@@ -43,6 +43,8 @@ import { NotesModule } from './notes/notes.module';
 import { PublicProfileModule } from './public-profile/public-profile.module';
 import { CreditCardsModule } from './credit-cards/credit-cards.module';
 import { PublicApiModule } from './public-api/public-api.module';
+import { MentorshipModule } from './mentorship/mentorship.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -148,6 +150,8 @@ import { PublicApiModule } from './public-api/public-api.module';
     PublicProfileModule,
     CreditCardsModule,
     PublicApiModule,
+    MentorshipModule,
+    EventsModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators
