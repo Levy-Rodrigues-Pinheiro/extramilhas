@@ -24,6 +24,13 @@ model User {
   refreshToken          String?
   whatsappPhone         String?
   isAdmin               Boolean  @default(false)
+  // Perfil público (opt-in). Se publicUsername != null, user aparece em /u/:username
+  publicUsername        String?  @unique
+  publicBio             String?
+  publicAvatarUrl       String?
+  // Privacidade: user controla o que aparece no perfil público
+  publicShowLeaderboard Boolean  @default(false)
+  publicShowGuides      Boolean  @default(true)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -665,6 +672,28 @@ model SupportTicket {
   @@index([status, priority])
   @@index([assignedTo, status])
   @@map("support_tickets")
+}
+
+/// Personal notes/reminders. User anota "quando Smiles abrir bônus 150%,
+/// transferir 30k" e define reminder opcional. Zero scope de compartilhamento.
+model UserNote {
+  id          String   @id @default(uuid())
+  userId      String
+  title       String
+  body        String
+  // Opcional: data pra gerar notificação push no dia/hora
+  remindAt    DateTime?
+  remindSent  Boolean  @default(false)
+  // Tag livre (programa, destino, etc)
+  tag         String   @default("GERAL")
+  isPinned    Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, isArchived, isPinned])
+  @@index([remindAt, remindSent])
+  @@map("user_notes")
 }
 
 /// GroupBuy — users se organizam pra comprar pontos juntos numa promoção

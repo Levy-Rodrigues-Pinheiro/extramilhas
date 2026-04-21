@@ -461,6 +461,61 @@ export class SchedulerService {
 
 
   /**
+   * Reminders de notas pessoais — roda a cada 5min. Busca user_notes com
+   * remindAt <= now() AND remindSent=false AND isArchived=false, dispara
+   * push + marca remindSent=true.
+   */
+  @Cron('*/5 * * * *')
+  async sendNoteReminders() {
+    if (!this.isEnabled()) return;
+    try {
+      const now = new Date();
+      const notes = await (this.prisma as any).userNote.findMany({
+        where: {
+          remindAt: { lte: now },
+          remindSent: false,
+          isArchived: false,
+        },
+        take: 100, // batch cap pra não travar cron
+      });
+      if (notes.length === 0) return;
+
+      let sent = 0;
+      for (const note of notes) {
+        const devices = await this.prisma.deviceToken.findMany({
+          where: {
+            userId: note.userId,
+            lastUsedAt: { gte: new Date(Date.now() - 60 * 86400_000) },
+          },
+          select: { token: true },
+        });
+        if (devices.length > 0) {
+          try {
+            await this.push.sendToTokens(
+              devices.map((d) => d.token),
+              {
+                title: `📝 Lembrete: ${note.title}`,
+                body: note.body.slice(0, 200),
+                data: { type: 'note_reminder', noteId: note.id },
+              },
+            );
+            sent++;
+          } catch {
+            /* continua */
+          }
+        }
+        await (this.prisma as any).userNote.update({
+          where: { id: note.id },
+          data: { remindSent: true },
+        });
+      }
+      this.logger.log(`Note reminders: ${notes.length} processados, ${sent} pushes enviados`);
+    } catch (err) {
+      this.logger.error(`Note reminders failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * Dica do dia — terça, quinta e sábado às 18h UTC (~15h BRT).
    * Só envia pra users com notifyBonus=true e último device ativo nos últimos
    * 30 dias. Escolhe tip do array DAILY_TIPS por modulo do dia-do-ano.

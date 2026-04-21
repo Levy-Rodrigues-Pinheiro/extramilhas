@@ -242,6 +242,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/support' as any),
     },
     {
+      icon: 'document-text-outline',
+      label: 'Minhas notas',
+      showChevron: true,
+      onPress: () => router.push('/notes' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,
