@@ -13,6 +13,7 @@ import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { initAnalytics } from '../src/lib/analytics';
 import { hydrateOfflineCache, subscribeOfflineCache } from '../src/lib/offlineCache';
 import { OfflineBanner } from '../src/components/OfflineBanner';
+import { GlobalShortcuts } from '../src/components/GlobalShortcuts';
 import { ThemeProvider } from '../src/lib/ThemeProvider';
 import '../src/lib/i18n'; // side-effect: inicializa i18n
 
@@ -75,6 +76,7 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
           <ThemeProvider>
           <PushBootstrap />
+          <GlobalShortcuts />
           <OfflineBanner />
           <StatusBar style="light" backgroundColor={Colors.bg.primary} />
           <Stack
