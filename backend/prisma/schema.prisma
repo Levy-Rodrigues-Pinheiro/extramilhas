@@ -674,6 +674,54 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// Bookmark: favoritos do user. kind+targetId unique.
+model Bookmark {
+  id        String   @id @default(uuid())
+  userId    String
+  // PROGRAM | DESTINATION | BONUS | GUIDE | OFFER
+  kind      String
+  // Pra DESTINATION=IATA; PROGRAM=slug; BONUS=partnershipId; GUIDE=slug; OFFER=offerId
+  targetId  String
+  label     String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, kind, targetId])
+  @@index([userId, kind])
+  @@map("bookmarks")
+}
+
+/// Achievement: conquista one-time (vs Missions que são cíclicas).
+model Achievement {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String
+  icon        String   @default("🏅")
+  // common | uncommon | rare | legendary
+  rarity      String   @default("common")
+  isHidden    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  userUnlocks UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id               String   @id @default(uuid())
+  userId           String
+  achievementId    String
+  unlockedAt       DateTime @default(now())
+  progressSnapshot String?
+
+  achievement      Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+  @@map("user_achievements")
+}
+
 /// TripPlan: planejamento colaborativo. Owner cria, convida via inviteToken.
 model TripPlan {
   id            String   @id @default(uuid())

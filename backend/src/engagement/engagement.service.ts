@@ -1,5 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AchievementsService } from '../achievements/achievements.service';
 
 /**
  * Milestones de streak e quantos dias de Premium rendem. Admin pode mudar
@@ -31,7 +32,10 @@ const STREAK_REWARDS: Array<{ days: number; premiumDaysGranted: number }> = [
 @Injectable()
 export class EngagementService {
   private readonly logger = new Logger(EngagementService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private achievements?: AchievementsService,
+  ) {}
 
   /**
    * Verifica se user atingiu milestone novo no streak e grata Premium.
@@ -167,6 +171,8 @@ export class EngagementService {
         next,
         existing.milestonesClaimed ?? '[]',
       );
+      // Achievements streak (7/30/100)
+      this.achievements?.checkStreakRules(userId, next).catch(() => {});
       return { ...updated, isNewDay: true, streakBroken: false, reward };
     }
 

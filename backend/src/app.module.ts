@@ -49,6 +49,8 @@ import { TravelIntelModule } from './travel-intel/travel-intel.module';
 import { SloModule } from './slo/slo.module';
 import { WalletHistoryModule } from './wallet-history/wallet-history.module';
 import { TripPlansModule } from './trip-plans/trip-plans.module';
+import { BookmarksModule } from './bookmarks/bookmarks.module';
+import { AchievementsModule } from './achievements/achievements.module';
 
 @Module({
   imports: [
@@ -160,6 +162,8 @@ import { TripPlansModule } from './trip-plans/trip-plans.module';
     SloModule,
     WalletHistoryModule,
     TripPlansModule,
+    BookmarksModule,
+    AchievementsModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators

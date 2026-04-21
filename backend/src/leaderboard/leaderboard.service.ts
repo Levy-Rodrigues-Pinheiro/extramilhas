@@ -142,4 +142,29 @@ export class LeaderboardService {
         : null,
     };
   }
+
+  /**
+   * Top referrers — users com mais indicações. Usa relação self-referencing
+   * User.referrals (criada pelo ReferralModule).
+   */
+  async topReferrers(limit = 20) {
+    const results = (await (this.prisma.user as any).findMany({
+      where: { referrals: { some: {} } },
+      include: {
+        _count: { select: { referrals: true } },
+      },
+      take: limit * 3,
+    })) as Array<any>;
+    const sorted = results
+      .map((u: any) => ({
+        userId: u.id,
+        name: u.name,
+        publicUsername: u.publicUsername ?? null,
+        referralsCount: u._count?.referrals ?? 0,
+      }))
+      .sort((a, b) => b.referralsCount - a.referralsCount)
+      .slice(0, limit)
+      .map((u, i) => ({ ...u, rank: i + 1 }));
+    return sorted;
+  }
 }

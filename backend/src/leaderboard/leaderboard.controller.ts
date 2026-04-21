@@ -35,4 +35,13 @@ export class LeaderboardController {
     const stats = await this.leaderboard.myStats(userId);
     return successResponse(stats);
   }
+
+  @Public()
+  @Get('referrers')
+  @ApiOperation({ summary: 'Top referrers (users que mais trouxeram amigos)' })
+  async topReferrers(@Query('limit') limitRaw?: string) {
+    const limit = Math.max(1, Math.min(50, parseInt(limitRaw || '20', 10) || 20));
+    const stats = await this.leaderboard.topReferrers(limit);
+    return successResponse({ count: stats.length, referrers: stats });
+  }
 }
