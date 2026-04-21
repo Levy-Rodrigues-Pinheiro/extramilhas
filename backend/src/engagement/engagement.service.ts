@@ -1,5 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+
+/**
+ * Milestones de streak e quantos dias de Premium rendem. Admin pode mudar
+ * via migration futura; mantemos hardcoded pra não complicar.
+ */
+const STREAK_REWARDS: Array<{ days: number; premiumDaysGranted: number }> = [
+  { days: 7, premiumDaysGranted: 1 },
+  { days: 30, premiumDaysGranted: 7 },
+  { days: 100, premiumDaysGranted: 30 },
+  { days: 365, premiumDaysGranted: 90 },
+];
 
 /**
  * Engagement: streaks diários + goals de milhas.
@@ -19,7 +30,83 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 @Injectable()
 export class EngagementService {
+  private readonly logger = new Logger(EngagementService.name);
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Verifica se user atingiu milestone novo no streak e grata Premium.
+   * Idempotente: usa milestonesClaimed (JSON array de días-atingidos) pra
+   * não pagar 2x. Retorna null se nenhuma milestone nova.
+   */
+  private async checkAndClaimMilestones(
+    userId: string,
+    currentStreak: number,
+    existingClaimed: string,
+  ): Promise<{ daysReached: number; premiumDaysGranted: number; newExpiresAt: Date } | null> {
+    let claimed: number[] = [];
+    try {
+      claimed = JSON.parse(existingClaimed) as number[];
+      if (!Array.isArray(claimed)) claimed = [];
+    } catch {
+      claimed = [];
+    }
+
+    // Encontra milestone maior ainda não reivindicado
+    const eligible = STREAK_REWARDS
+      .filter((r) => currentStreak >= r.days && !claimed.includes(r.days))
+      .sort((a, b) => b.days - a.days)[0];
+
+    if (!eligible) return null;
+
+    // Grata Premium: extende subscriptionExpiresAt se já é Premium, ou ativa trial-like
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return null;
+
+    const now = new Date();
+    const basis =
+      user.subscriptionExpiresAt && user.subscriptionExpiresAt > now
+        ? user.subscriptionExpiresAt
+        : now;
+    const newExpiresAt = new Date(basis.getTime() + eligible.premiumDaysGranted * 86400_000);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        subscriptionPlan: user.subscriptionPlan === 'FREE' ? 'PREMIUM' : user.subscriptionPlan,
+        subscriptionExpiresAt: newExpiresAt,
+      },
+    });
+
+    const updatedClaimed = [...claimed, eligible.days];
+    await (this.prisma as any).userStreak.update({
+      where: { userId },
+      data: { milestonesClaimed: JSON.stringify(updatedClaimed) },
+    });
+
+    // Registra notificação pra o user ver
+    try {
+      await this.prisma.notification.create({
+        data: {
+          userId,
+          title: `🏆 Streak de ${eligible.days}d conquistado!`,
+          body: `Você ganhou ${eligible.premiumDaysGranted} dia${eligible.premiumDaysGranted > 1 ? 's' : ''} de Premium grátis. Continue firme!`,
+          type: 'streak_reward',
+          data: JSON.stringify({
+            daysReached: eligible.days,
+            premiumDaysGranted: eligible.premiumDaysGranted,
+          }),
+        },
+      });
+    } catch (err) {
+      this.logger.warn(`Notification creation failed: ${(err as Error).message}`);
+    }
+
+    return {
+      daysReached: eligible.days,
+      premiumDaysGranted: eligible.premiumDaysGranted,
+      newExpiresAt,
+    };
+  }
 
   // ─── Streaks ────────────────────────────────────────────────────────
 
@@ -74,7 +161,13 @@ export class EngagementService {
           lastActiveDate: today,
         },
       });
-      return { ...updated, isNewDay: true, streakBroken: false };
+      // Verifica milestone (apenas se avançou, não em mesmo-dia)
+      const reward = await this.checkAndClaimMilestones(
+        userId,
+        next,
+        existing.milestonesClaimed ?? '[]',
+      );
+      return { ...updated, isNewDay: true, streakBroken: false, reward };
     }
 
     // Gap de 2+ dias: se tem freeze disponível, gasta 1 e preserva
@@ -89,7 +182,12 @@ export class EngagementService {
           freezesAvailable: existing.freezesAvailable - 1,
         },
       });
-      return { ...updated, isNewDay: true, streakBroken: false, freezeUsed: true };
+      const reward = await this.checkAndClaimMilestones(
+        userId,
+        next,
+        existing.milestonesClaimed ?? '[]',
+      );
+      return { ...updated, isNewDay: true, streakBroken: false, freezeUsed: true, reward };
     }
 
     // Quebra

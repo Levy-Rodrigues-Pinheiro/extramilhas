@@ -595,9 +595,93 @@ model UserStreak {
   longestStreak    Int      @default(0)
   lastActiveDate   DateTime // yyyy-mm-dd (usa 00:00 UTC pra simplicidade)
   freezesAvailable Int      @default(1) // 1 "freeze" por mês protege streak de 1 dia perdido
+  // Milestones já reivindicados pra não pagar 2x. JSON array: [7, 30, 100]
+  milestonesClaimed String  @default("[]")
   updatedAt        DateTime @updatedAt
 
   @@map("user_streaks")
+}
+
+/// UGC: guias escritos pela comunidade. Alta ROI de SEO — páginas públicas
+/// indexadas no Next landing. Moderação: admin aprova antes de publicar.
+model UserGuide {
+  id          String   @id @default(uuid())
+  authorId    String
+  title       String
+  slug        String   @unique // URL-safe, gerado no service
+  summary     String   // <280 chars — aparece em listagens
+  body        String   // Markdown
+  tags        String   @default("[]") // JSON array ["smiles", "paris"]
+  coverImage  String?  // URL opcional
+  status      String   @default("DRAFT") // DRAFT | PENDING_REVIEW | PUBLISHED | REJECTED
+  rejectionReason String?
+  upvoteCount Int      @default(0)
+  viewCount   Int      @default(0)
+  publishedAt DateTime?
+  reviewedAt  DateTime?
+  reviewedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  upvotes     GuideUpvote[]
+
+  @@index([status, publishedAt])
+  @@index([authorId])
+  @@map("user_guides")
+}
+
+model GuideUpvote {
+  id        String   @id @default(uuid())
+  guideId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  guide     UserGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  @@unique([guideId, userId])
+  @@index([userId])
+  @@map("guide_upvotes")
+}
+
+/// Tickets de suporte — user abre, admin responde. Reduz pressão no
+/// WhatsApp/e-mail + cria audit trail natural.
+model SupportTicket {
+  id          String   @id @default(uuid())
+  userId      String
+  subject     String
+  category    String   @default("GENERAL") // GENERAL | BILLING | BUG | FEATURE | ACCOUNT
+  status      String   @default("OPEN")    // OPEN | AWAITING_USER | RESOLVED | CLOSED
+  priority    String   @default("NORMAL")  // LOW | NORMAL | HIGH | URGENT
+  // Admin que tá cuidando (null = backlog)
+  assignedTo  String?
+  resolvedAt  DateTime?
+  lastActivityAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  messages    SupportMessage[]
+
+  @@index([userId, status])
+  @@index([status, priority])
+  @@index([assignedTo, status])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id          String   @id @default(uuid())
+  ticketId    String
+  // Quem escreveu — user ou admin (o mesmo user schema). Admin é detectado
+  // via User.isAdmin no service quando monta resposta.
+  authorId    String
+  body        String
+  // Pra admin fazer notas internas que user não vê
+  isInternal  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_messages")
 }
 
 /// Goals — "quero 150k milhas Smiles até Dez/2025". App mostra progresso

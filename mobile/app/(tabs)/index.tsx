@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,7 +48,18 @@ export default function HomeScreen() {
 
   // Ping streak 1x no mount — fire and forget, erros silenciosos
   React.useEffect(() => {
-    pingStreak.mutate();
+    pingStreak.mutate(undefined, {
+      onSuccess: (data) => {
+        if (data?.reward) {
+          const r = data.reward;
+          Alert.alert(
+            `🏆 Streak de ${r.daysReached} dias!`,
+            `Parabéns! Você ganhou ${r.premiumDaysGranted} dia${r.premiumDaysGranted > 1 ? 's' : ''} de Premium grátis.`,
+            [{ text: 'Show!', style: 'default' }],
+          );
+        }
+      },
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -9,6 +9,29 @@ export interface StreakState {
   isNewDay?: boolean;
   streakBroken?: boolean;
   freezeUsed?: boolean;
+  reward?: {
+    daysReached: number;
+    premiumDaysGranted: number;
+    newExpiresAt: string;
+  } | null;
+}
+
+export interface Milestone {
+  days: number;
+  premiumDays: number;
+  achieved: boolean;
+  claimed: boolean;
+}
+
+export function useStreakMilestones() {
+  return useQuery({
+    queryKey: ['engagement', 'milestones'],
+    queryFn: async (): Promise<{ currentStreak: number; milestones: Milestone[] }> => {
+      const { data } = await api.get('/engagement/streak/milestones');
+      return data as { currentStreak: number; milestones: Milestone[] };
+    },
+    staleTime: 1000 * 60,
+  });
 }
 
 export interface UserGoal {

@@ -53,6 +53,33 @@ export class EngagementController {
     return successResponse(result);
   }
 
+  @Get('streak/milestones')
+  @ApiOperation({ summary: 'Lista milestones com dias + Premium grátis a ganhar' })
+  async getMilestones(@CurrentUser() user: any) {
+    const streak = await this.eng.getStreak(user.id);
+    // Hardcoded aqui pra dar visibility pro frontend; matches STREAK_REWARDS do service
+    const milestones = [
+      { days: 7, premiumDays: 1 },
+      { days: 30, premiumDays: 7 },
+      { days: 100, premiumDays: 30 },
+      { days: 365, premiumDays: 90 },
+    ];
+    let claimed: number[] = [];
+    try {
+      claimed = JSON.parse((streak as any).milestonesClaimed ?? '[]');
+    } catch {
+      /* ignore */
+    }
+    return successResponse({
+      currentStreak: streak.currentStreak,
+      milestones: milestones.map((m) => ({
+        ...m,
+        achieved: streak.currentStreak >= m.days,
+        claimed: claimed.includes(m.days),
+      })),
+    });
+  }
+
   @Post('streak/ping')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Registra visita do dia (incrementa streak se novo dia)' })
