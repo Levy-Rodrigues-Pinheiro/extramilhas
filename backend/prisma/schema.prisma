@@ -31,6 +31,9 @@ model User {
   // Privacidade: user controla o que aparece no perfil público
   publicShowLeaderboard Boolean  @default(false)
   publicShowGuides      Boolean  @default(true)
+  // Badges sociais admin-set. JSON array pra extensível.
+  // Valores: "VERIFIED", "CREATOR", "STAFF", "EARLY_ADOPTER", "TOP_REPORTER"
+  badges                String   @default("[]")
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -77,6 +80,9 @@ model UserPreference {
   // Canais extras (push é padrão sempre-on se notifyBonus=true)
   notifyWhatsApp         Boolean  @default(false)
   whatsappVerifiedAt     DateTime? // só envia WhatsApp depois de verificar o número
+  // Activity feed privacy: se true, activities são públicas no /u/:username
+  // e no feed global. Default FALSE (privacidade first).
+  shareActivity          Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -672,6 +678,29 @@ model SupportTicket {
   @@index([status, priority])
   @@index([assignedTo, status])
   @@map("support_tickets")
+}
+
+/// ActivityFeed: timeline pública de "quem fez o quê". User opt-in via
+/// UserPreference.shareActivity. Privacy-first: user escolhe o que
+/// aparece. Activities expiram em 90d pra não virar histórico profundo.
+model Activity {
+  id         String   @id @default(uuid())
+  userId     String
+  // TRANSFER_DONE | GOAL_ACHIEVED | CERTIFICATE_EARNED | GUIDE_PUBLISHED |
+  // FAMILY_ADDED | STREAK_MILESTONE | ACHIEVEMENT_UNLOCKED
+  kind       String
+  // Texto resumo gerado no backend (pt-BR) pra display rápido
+  summary    String
+  // JSON metadata: varia por kind
+  metadata   String?
+  // Visibilidade: PUBLIC (todos), FOLLOWERS (se implementar follow), PRIVATE
+  visibility String   @default("PUBLIC")
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([visibility, createdAt])
+  @@index([kind, createdAt])
+  @@map("activities")
 }
 
 /// Quiz + Certification system. Admin cria quiz com N questões; user faz
