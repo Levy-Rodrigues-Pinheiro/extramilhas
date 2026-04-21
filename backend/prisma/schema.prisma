@@ -674,6 +674,65 @@ model SupportTicket {
   @@map("support_tickets")
 }
 
+/// Cartões de crédito catalogados. Admin popula. Usado pelo recommender
+/// que sugere qual cartão tem melhor ROI pra gasto médio do user.
+///
+/// Modelo brasileiro: cada cartão acumula em 1 ou mais programas de pontos
+/// com taxa variável por categoria (restaurante 1.5x, etc).
+model CreditCard {
+  id              String   @id @default(uuid())
+  name            String   // "Itaú Personnalité Gold"
+  brand           String   // "Visa" | "Mastercard" | "Amex"
+  issuer          String   // "Itaú" | "Santander" | "Amex"
+  tier            String   @default("STANDARD") // STANDARD | GOLD | PLATINUM | BLACK
+  annualFeeBrl    Int      @default(0) // R$ em centavos (0 = sem anuidade)
+  // Programa principal que acumula (livelo, esfera, etc)
+  mainProgramSlug String
+  // Pontos por R$1 gasto (base)
+  pointsPerBrl    Float    @default(1.0)
+  // Multiplier por categoria (JSON: {"restaurante": 1.5, "viagem": 2.0})
+  categoryBonuses String   @default("{}")
+  // Bônus de boas-vindas (pontos ganhos ao atingir X de gasto nos primeiros 90d)
+  welcomePoints   Int      @default(0)
+  welcomeSpendBrl Int      @default(0) // centavos
+  // Renda mínima exigida (centavos)
+  minIncomeBrl    Int      @default(0)
+  logoUrl         String?
+  officialUrl     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive, tier])
+  @@index([mainProgramSlug])
+  @@map("credit_cards")
+}
+
+/// API keys pros devs/blogs/parceiros consumirem dados via /public/*.
+/// Rate limit por tier. Usage contado pra billing futuro.
+model ApiKey {
+  id             String   @id @default(uuid())
+  // Owner user (se user-created) ou admin (se parceiro)
+  ownerId        String
+  name           String   // "Blog Passageiro de Primeira"
+  // Hash do secret (nunca armazena plaintext após criação)
+  keyHash        String   @unique
+  // Prefix público visível (primeiros 8 chars do secret) pra UX de listagem
+  keyPrefix      String
+  // "free" = 100 req/dia; "starter" = R$49/mês 10k/dia; "business" = R$299/mês 100k/dia
+  tier           String   @default("free")
+  isActive       Boolean  @default(true)
+  lastUsedAt     DateTime?
+  // Contagem cumulativa — reseta todo mês 1
+  requestsThisMonth Int   @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([keyHash, isActive])
+  @@map("api_keys")
+}
+
 /// Personal notes/reminders. User anota "quando Smiles abrir bônus 150%,
 /// transferir 30k" e define reminder opcional. Zero scope de compartilhamento.
 model UserNote {

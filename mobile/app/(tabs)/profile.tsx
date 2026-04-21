@@ -248,6 +248,12 @@ export default function ProfileScreen() {
       onPress: () => router.push('/notes' as any),
     },
     {
+      icon: 'card-outline',
+      label: 'Qual cartão vale mais pra mim?',
+      showChevron: true,
+      onPress: () => router.push('/card-recommender' as any),
+    },
+    {
       icon: 'shield-outline',
       label: 'Política de Privacidade',
       showChevron: true,

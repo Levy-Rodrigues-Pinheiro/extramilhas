@@ -142,6 +142,7 @@ export default function RootLayout() {
             <Stack.Screen name="support/index" options={{ headerShown: false }} />
             <Stack.Screen name="support/[id]" options={{ headerShown: false }} />
             <Stack.Screen name="notes" options={{ headerShown: false }} />
+            <Stack.Screen name="card-recommender" options={{ headerShown: false }} />
           </Stack>
           </QueryClientProvider>
         </SafeAreaProvider>

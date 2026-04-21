@@ -41,6 +41,8 @@ import { SecurityModule } from './security/security.module';
 import { SocialModule } from './social/social.module';
 import { NotesModule } from './notes/notes.module';
 import { PublicProfileModule } from './public-profile/public-profile.module';
+import { CreditCardsModule } from './credit-cards/credit-cards.module';
+import { PublicApiModule } from './public-api/public-api.module';
 
 @Module({
   imports: [
@@ -144,6 +146,8 @@ import { PublicProfileModule } from './public-profile/public-profile.module';
     SocialModule,
     NotesModule,
     PublicProfileModule,
+    CreditCardsModule,
+    PublicApiModule,
   ],
   providers: [
     // Habilita ThrottlerGuard globalmente — assim os @Throttle decorators
