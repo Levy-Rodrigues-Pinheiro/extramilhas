@@ -21,13 +21,29 @@ import type { QueryClient } from '@tanstack/react-query';
  *   - ['family']
  */
 
-const STORAGE_KEY = 'offline-cache-v1';
+const STORAGE_KEY = 'offline-cache-v2';
+const STORAGE_MAX_BYTES = 2 * 1024 * 1024; // 2MB cap — AsyncStorage tem limite por plataforma
 
 const PERSISTED_KEYS = [
   JSON.stringify(['wallet']),
   JSON.stringify(['arbitrage', 'transfer-bonuses']),
   JSON.stringify(['programs']),
   JSON.stringify(['family']),
+  JSON.stringify(['engagement', 'streak']),
+  JSON.stringify(['engagement', 'goals']),
+  JSON.stringify(['engagement', 'milestones']),
+  JSON.stringify(['portfolio', 'analyze']),
+  JSON.stringify(['portfolio', 'signals']),
+  JSON.stringify(['notes']),
+  JSON.stringify(['bookmarks']),
+  JSON.stringify(['guides', 'all']),
+  JSON.stringify(['guides', 'mine']),
+  JSON.stringify(['community', 'threads', 'all']),
+  JSON.stringify(['community', 'polls']),
+  JSON.stringify(['dashboard', 'stats']),
+  JSON.stringify(['wallet-history']),
+  JSON.stringify(['sessions']),
+  JSON.stringify(['support', 'tickets']),
 ];
 
 interface Snapshot {
@@ -76,8 +92,22 @@ async function snapshot(qc: QueryClient) {
     }
   }
   if (Object.keys(data).length === 0) return;
-  const snap: Snapshot = { data, savedAt: Date.now() };
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snap));
+  let snap: Snapshot = { data, savedAt: Date.now() };
+  let payload = JSON.stringify(snap);
+
+  // Se passou do cap, começa a dropar keys menos críticas até caber.
+  // Ordem de drop: reverse de PERSISTED_KEYS — as primeiras são as mais críticas
+  // (wallet, arbitrage, programs, family).
+  if (payload.length > STORAGE_MAX_BYTES) {
+    const dropOrder = [...PERSISTED_KEYS].reverse();
+    for (const k of dropOrder) {
+      if (payload.length <= STORAGE_MAX_BYTES) break;
+      delete data[k];
+      snap = { data, savedAt: Date.now() };
+      payload = JSON.stringify(snap);
+    }
+  }
+  await AsyncStorage.setItem(STORAGE_KEY, payload);
 }
 
 export async function clearOfflineCache() {
