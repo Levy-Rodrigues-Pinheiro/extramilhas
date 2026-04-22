@@ -64,6 +64,18 @@ model User {
 
   userMissions  UserMission[]
 
+  // Specialist review fix: back-relations pra FK enforcement.
+  // Antes, esses models tinham userId/authorId String sem relation —
+  // Prisma não fazia cascade nem index, registros ficavam órfãos no
+  // delete account. Agora cascade garante limpeza completa.
+  forumThreads     ForumThread[]
+  forumPosts       ForumPost[]
+  pollVotes        PollVote[]
+  guides           UserGuide[]
+  guideUpvotes     GuideUpvote[]
+  supportTickets   SupportTicket[]
+  supportMessages  SupportMessage[]
+
   @@map("users")
 }
 
@@ -640,6 +652,7 @@ model UserGuide {
   updatedAt   DateTime @updatedAt
 
   upvotes     GuideUpvote[]
+  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([status, publishedAt])
   @@index([authorId])
@@ -653,6 +666,7 @@ model GuideUpvote {
   createdAt DateTime @default(now())
 
   guide     UserGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([guideId, userId])
   @@index([userId])
@@ -676,6 +690,7 @@ model SupportTicket {
   updatedAt   DateTime @updatedAt
 
   messages    SupportMessage[]
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
   @@index([status, priority])
@@ -1338,8 +1353,11 @@ model SupportMessage {
   createdAt   DateTime @default(now())
 
   ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  // SetNull pra preservar histórico se admin/user for deletado
+  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([ticketId, createdAt])
+  @@index([authorId])
   @@map("support_messages")
 }
 
@@ -1381,6 +1399,7 @@ model ForumThread {
   updatedAt   DateTime @updatedAt
 
   posts       ForumPost[]
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([tag, createdAt])
   @@index([authorId])
@@ -1398,6 +1417,7 @@ model ForumPost {
   createdAt DateTime @default(now())
 
   thread    ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author    User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt])
   @@index([authorId])
@@ -1428,9 +1448,11 @@ model PollVote {
   createdAt DateTime @default(now())
 
   poll      Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([pollId, userId])
   @@index([pollId, optionId])
+  @@index([userId])
   @@map("poll_votes")
 }
 
