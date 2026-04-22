@@ -187,23 +187,33 @@ export class GuidesService {
   }
 
   async toggleUpvote(userId: string, guideId: string) {
-    const existing = await (this.prisma as any).guideUpvote.findUnique({
-      where: { guideId_userId: { guideId, userId } },
-    });
-    if (existing) {
-      await (this.prisma as any).guideUpvote.delete({ where: { id: existing.id } });
-      await (this.prisma as any).userGuide.update({
-        where: { id: guideId },
-        data: { upvoteCount: { decrement: 1 } },
+    // Fix race: tudo em 1 transação. Dois cliques simultâneos antes causavam
+    // P2002 (unique violation no create) OU double-increment.
+    // Agora: transação + catch no P2002 pra idempotência.
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await (tx as any).guideUpvote.findUnique({
+        where: { guideId_userId: { guideId, userId } },
       });
-      return { upvoted: false };
-    }
-    await (this.prisma as any).guideUpvote.create({ data: { guideId, userId } });
-    await (this.prisma as any).userGuide.update({
-      where: { id: guideId },
-      data: { upvoteCount: { increment: 1 } },
+      if (existing) {
+        await (tx as any).guideUpvote.delete({ where: { id: existing.id } });
+        await (tx as any).userGuide.update({
+          where: { id: guideId },
+          data: { upvoteCount: { decrement: 1 } },
+        });
+        return { upvoted: false };
+      }
+      try {
+        await (tx as any).guideUpvote.create({ data: { guideId, userId } });
+      } catch (e: any) {
+        if (e?.code === 'P2002') return { upvoted: true };
+        throw e;
+      }
+      await (tx as any).userGuide.update({
+        where: { id: guideId },
+        data: { upvoteCount: { increment: 1 } },
+      });
+      return { upvoted: true };
     });
-    return { upvoted: true };
   }
 
   // ─── Admin moderation ───────────────────────────────────────────────

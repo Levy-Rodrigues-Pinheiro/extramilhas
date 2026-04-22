@@ -111,35 +111,45 @@ export class QuizzesService {
       : 0;
     const passed = score >= quiz.passingScore;
 
-    let certificateId: string | null = null;
+    // Transação atômica: Certificate + QuizAttempt juntos. Antes, se falhasse
+    // entre os 2 inserts, ficava Certificate órfão ou Attempt sem cert.
     let certificate: any = null;
+    let user: { name: string } | null = null;
     if (passed) {
-      const user = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (user) {
-        certificate = await (this.prisma as any).certificate.create({
+      user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { name: true },
+      });
+    }
+    const certNumber = passed && user ? await this.genUniqueCertNumber() : null;
+
+    const attempt = await this.prisma.$transaction(async (tx) => {
+      let certId: string | null = null;
+      if (passed && user && certNumber) {
+        const cert = await (tx as any).certificate.create({
           data: {
             userId,
             quizSlug: quiz.slug,
             quizTitle: quiz.title,
-            certNumber: await this.genUniqueCertNumber(),
+            certNumber,
             score,
             holderName: user.name,
           },
         });
-        certificateId = certificate.id;
+        certificate = cert;
+        certId = cert.id;
       }
-    }
-
-    const attempt = await (this.prisma as any).quizAttempt.create({
-      data: {
-        userId,
-        quizId: quiz.id,
-        answers: JSON.stringify(graded),
-        score,
-        passed,
-        certificateId,
-        timeSpentMs: params.timeSpentMs ?? 0,
-      },
+      return (tx as any).quizAttempt.create({
+        data: {
+          userId,
+          quizId: quiz.id,
+          answers: JSON.stringify(graded),
+          score,
+          passed,
+          certificateId: certId,
+          timeSpentMs: params.timeSpentMs ?? 0,
+        },
+      });
     });
 
     // Return graded com explicações pra feedback

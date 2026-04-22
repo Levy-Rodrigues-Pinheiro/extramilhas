@@ -54,59 +54,70 @@ export class ReferralService {
    *  - ambos ganham 30 dias Premium (se ainda são FREE)
    */
   async applyCode(newUserId: string, code: string): Promise<void> {
-    const newUser = (await this.prisma.user.findUnique({
-      where: { id: newUserId },
-    })) as any;
-    if (!newUser) throw new Error('User não encontrado');
-    if (newUser.referredById) throw new Error('Você já usou um código de referral');
-
-    // Não pode usar código próprio
-    if (newUser.referralCode === code) {
-      throw new Error('Não pode usar seu próprio código');
-    }
-
-    // Janela de 7d pós-registro (abuso)
-    const registeredRecently =
-      Date.now() - new Date(newUser.createdAt).getTime() < 7 * 86400_000;
-    if (!registeredRecently) {
-      throw new Error('Códigos só valem nos primeiros 7 dias após o registro');
-    }
-
-    const referrer = (await this.prisma.user.findFirst({
-      where: { referralCode: code } as any,
-    })) as any;
-    if (!referrer) throw new Error('Código inválido');
-    if (referrer.id === newUserId) throw new Error('Não pode usar seu próprio código');
-
-    // Aplica em transação: vincula + concede premium aos 2
+    // Race fix: toda a operação em 1 transação com re-check dentro.
+    // Antes, findUnique + findFirst + update eram separados — 2 requests
+    // simultâneos podiam conceder Premium 2x (double-bonus fraud).
+    // Agora: lock otimista via updateMany com WHERE referredById:null.
     const premiumExpiresAt = new Date(Date.now() + 30 * 86400_000);
 
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      const newUser = (await tx.user.findUnique({
         where: { id: newUserId },
+      })) as any;
+      if (!newUser) throw new Error('User não encontrado');
+      if (newUser.referredById) throw new Error('Você já usou um código de referral');
+      if (newUser.referralCode === code) {
+        throw new Error('Não pode usar seu próprio código');
+      }
+
+      const registeredRecently =
+        Date.now() - new Date(newUser.createdAt).getTime() < 7 * 86400_000;
+      if (!registeredRecently) {
+        throw new Error('Códigos só valem nos primeiros 7 dias após o registro');
+      }
+
+      const referrer = (await tx.user.findFirst({
+        where: { referralCode: code } as any,
+      })) as any;
+      if (!referrer) throw new Error('Código inválido');
+      if (referrer.id === newUserId) {
+        throw new Error('Não pode usar seu próprio código');
+      }
+
+      // updateMany com WHERE referredById:null — atomic check + set.
+      // Se outro request gravou referredById entre findUnique e update,
+      // rowsAffected=0 e a transação falha explicitamente.
+      const applied = await tx.user.updateMany({
+        where: { id: newUserId, referredById: null } as any,
         data: {
           referredById: referrer.id,
-          subscriptionPlan: newUser.subscriptionPlan === 'FREE' ? 'PREMIUM' : newUser.subscriptionPlan,
+          subscriptionPlan:
+            newUser.subscriptionPlan === 'FREE' ? 'PREMIUM' : newUser.subscriptionPlan,
           subscriptionExpiresAt:
             newUser.subscriptionPlan === 'FREE'
               ? premiumExpiresAt
               : newUser.subscriptionExpiresAt,
         } as any,
-      }),
-      this.prisma.user.update({
+      });
+      if (applied.count === 0) {
+        throw new Error(
+          'Referral já foi aplicado (race condition detectada). Não há double-bonus.',
+        );
+      }
+      await tx.user.update({
         where: { id: referrer.id },
         data: {
-          subscriptionPlan: referrer.subscriptionPlan === 'FREE' ? 'PREMIUM' : referrer.subscriptionPlan,
-          // Se referrer já é Premium, estende 30d; se Pro, não mexe
+          subscriptionPlan:
+            referrer.subscriptionPlan === 'FREE' ? 'PREMIUM' : referrer.subscriptionPlan,
           subscriptionExpiresAt:
             referrer.subscriptionPlan === 'PRO'
               ? referrer.subscriptionExpiresAt
               : this.extendBy30d(referrer.subscriptionExpiresAt),
         } as any,
-      }),
-    ]);
+      });
 
-    this.logger.log(`Referral applied: ${referrer.id} → ${newUserId} (+30d Premium ambos)`);
+      this.logger.log(`Referral applied: ${referrer.id} → ${newUserId} (+30d Premium ambos)`);
+    });
   }
 
   private extendBy30d(current: Date | null): Date {

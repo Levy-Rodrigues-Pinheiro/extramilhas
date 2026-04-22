@@ -76,8 +76,13 @@ export class PublicApiService {
   }
 
   /**
-   * Middleware helper — valida API key, aplica rate limit mensal, incrementa
+   * Middleware helper — valida API key, rate limit mensal atômico, incrementa
    * counter. Retorna ownerId pra logar.
+   *
+   * Race fix: antes era check + update separados. Requests simultâneos
+   * conseguiam ultrapassar quota (2999 check + 2999 check → 3001 final).
+   * Agora updateMany com WHERE clause: incrementa APENAS se count < quota.
+   * Se count >= quota, updatedCount=0 e rejeita.
    */
   async validateAndUse(apiKeyRaw: string): Promise<{ ownerId: string; tier: string }> {
     if (!apiKeyRaw || !apiKeyRaw.startsWith('mx_')) {
@@ -85,22 +90,31 @@ export class PublicApiService {
     }
     const keyHash = this.hashKey(apiKeyRaw);
     const key = await (this.prisma as any).apiKey.findUnique({ where: { keyHash } });
-    if (!key || !key.isActive) throw new UnauthorizedException('API key inválida ou revogada');
-
-    const quota = TIER_LIMITS[key.tier] ?? TIER_LIMITS.free;
-    if (key.requestsThisMonth >= quota.monthlyQuota) {
-      throw new ForbiddenException(
-        `Quota mensal atingida (${quota.monthlyQuota}). Upgrade pra tier superior.`,
-      );
+    if (!key || !key.isActive) {
+      throw new UnauthorizedException('API key inválida ou revogada');
     }
 
-    await (this.prisma as any).apiKey.update({
-      where: { id: key.id },
+    const quota = TIER_LIMITS[key.tier] ?? TIER_LIMITS.free;
+
+    // Atomic check-and-increment: UPDATE ... WHERE count < quota
+    const result = await (this.prisma as any).apiKey.updateMany({
+      where: {
+        id: key.id,
+        isActive: true,
+        requestsThisMonth: { lt: quota.monthlyQuota },
+      },
       data: {
         requestsThisMonth: { increment: 1 },
         lastUsedAt: new Date(),
       },
     });
+
+    if (result.count === 0) {
+      // Ou key foi desativada, ou quota estourou entre findUnique e updateMany
+      throw new ForbiddenException(
+        `Quota mensal atingida (${quota.monthlyQuota}). Upgrade pra tier superior.`,
+      );
+    }
 
     return { ownerId: key.ownerId, tier: key.tier };
   }

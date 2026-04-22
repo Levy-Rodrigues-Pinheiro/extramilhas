@@ -85,17 +85,21 @@ export class SocialService {
   }
 
   async joinGroupBuy(userId: string, groupBuyId: string, points: number) {
-    const group = await (this.prisma as any).groupBuy.findUnique({
-      where: { id: groupBuyId },
-    });
-    if (!group || group.status !== 'OPEN' || group.deadline < new Date()) {
-      throw new ForbiddenException('Grupo encerrado');
-    }
     if (points < 1000) throw new ForbiddenException('Mín 1000 pontos');
-    return (this.prisma as any).groupBuyParticipant.upsert({
-      where: { groupBuyId_userId: { groupBuyId, userId } },
-      create: { groupBuyId, userId, points },
-      update: { points },
+    // Race fix: TOCTOU. Antes admin podia fechar grupo entre check e upsert.
+    // Agora tudo em transação — se status mudou no meio, throw.
+    return this.prisma.$transaction(async (tx) => {
+      const group = await (tx as any).groupBuy.findUnique({
+        where: { id: groupBuyId },
+      });
+      if (!group || group.status !== 'OPEN' || group.deadline < new Date()) {
+        throw new ForbiddenException('Grupo encerrado');
+      }
+      return (tx as any).groupBuyParticipant.upsert({
+        where: { groupBuyId_userId: { groupBuyId, userId } },
+        create: { groupBuyId, userId, points },
+        update: { points },
+      });
     });
   }
 
