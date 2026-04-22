@@ -91,5 +91,24 @@ describe('PublicApiService', () => {
         ForbiddenException,
       );
     });
+
+    it('rate limit per-minute bloqueia após N requests (free=10/min)', async () => {
+      const key = {
+        id: 'k-burst-' + Date.now(), // id único pra não compartilhar bucket com outros tests
+        isActive: true,
+        tier: 'free',
+        ownerId: 'u1',
+        requestsThisMonth: 0,
+      };
+      prisma.apiKey.findUnique.mockResolvedValue(key);
+      prisma.apiKey.updateMany.mockResolvedValue({ count: 1 });
+
+      for (let i = 0; i < 10; i++) {
+        await expect(service.validateAndUse('mx_burst')).resolves.toBeTruthy();
+      }
+      await expect(service.validateAndUse('mx_burst')).rejects.toThrow(
+        /Rate limit excedido/,
+      );
+    });
   });
 });

@@ -2,11 +2,47 @@ import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/c
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
-const TIER_LIMITS: Record<string, { monthlyQuota: number; dailyRate: number }> = {
-  free: { monthlyQuota: 3000, dailyRate: 100 }, // ~100/dia ≈ 3000/mês
-  starter: { monthlyQuota: 300_000, dailyRate: 10_000 },
-  business: { monthlyQuota: 3_000_000, dailyRate: 100_000 },
+const TIER_LIMITS: Record<
+  string,
+  { monthlyQuota: number; dailyRate: number; perMinuteLimit: number }
+> = {
+  free: { monthlyQuota: 3000, dailyRate: 100, perMinuteLimit: 10 },
+  starter: { monthlyQuota: 300_000, dailyRate: 10_000, perMinuteLimit: 100 },
+  business: { monthlyQuota: 3_000_000, dailyRate: 100_000, perMinuteLimit: 1000 },
 };
+
+/**
+ * In-memory rate limit per API key per minute. Mitiga burst attacks.
+ * Limitação: não shared entre instâncias (Fly multi-region). Pra escala,
+ * trocar por Redis SETEX/INCR. Por agora, barreira single-instance basta.
+ * Bug fix HONEST_TEST_REPORT #SR-14.
+ */
+class InMemoryRateLimiter {
+  private buckets = new Map<string, { count: number; minute: number }>();
+
+  hit(key: string, limit: number): { allowed: boolean; remaining: number } {
+    const now = Math.floor(Date.now() / 60000);
+    const bucketKey = `${key}:${now}`;
+    let entry = this.buckets.get(bucketKey);
+    if (!entry) {
+      entry = { count: 0, minute: now };
+      this.buckets.set(bucketKey, entry);
+      // Lazy GC: limpa buckets >2min quando Map passa 1k entries
+      if (this.buckets.size > 1000) {
+        for (const [k, v] of this.buckets.entries()) {
+          if (now - v.minute > 2) this.buckets.delete(k);
+        }
+      }
+    }
+    entry.count++;
+    return {
+      allowed: entry.count <= limit,
+      remaining: Math.max(0, limit - entry.count),
+    };
+  }
+}
+
+const rateLimiter = new InMemoryRateLimiter();
 
 @Injectable()
 export class PublicApiService {
@@ -95,6 +131,15 @@ export class PublicApiService {
     }
 
     const quota = TIER_LIMITS[key.tier] ?? TIER_LIMITS.free;
+
+    // Rate limit per-minute (bug fix #SR-14): burst attack blocker.
+    // Free tier só pode 10 req/min = 600/h = dentro do 3k/mês se bem usado.
+    const rlResult = rateLimiter.hit(key.id, quota.perMinuteLimit);
+    if (!rlResult.allowed) {
+      throw new ForbiddenException(
+        `Rate limit excedido: ${quota.perMinuteLimit} req/min (tier ${key.tier}). Aguarde 1 min.`,
+      );
+    }
 
     // Atomic check-and-increment: UPDATE ... WHERE count < quota
     const result = await (this.prisma as any).apiKey.updateMany({
