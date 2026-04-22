@@ -1,0 +1,82 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**', '.github/workflows/backend-ci.yml']
+  pull_request:
+    paths: ['backend/**']
+
+jobs:
+  validate:
+    name: Validate (type-check + tests + prisma)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install deps
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      - name: Prisma generate
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Prisma validate
+        working-directory: backend
+        run: npx prisma validate
+
+      - name: Type check
+        working-directory: backend
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        working-directory: backend
+        run: npm test -- --ci --maxWorkers=2 --reporters=default
+
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+  smoke-test-prod:
+    name: Smoke test prod (post-deploy)
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for deploy (60s)
+        run: sleep 60
+
+      - name: Health check
+        run: |
+          curl -fsS "${API:-https://milhasextras-api.fly.dev/api/v1}/health" || exit 1
+        env:
+          API: ${{ secrets.API_URL }}
+
+      - name: Smoke test public endpoints
+        run: |
+          API="${API:-https://milhasextras-api.fly.dev/api/v1}"
+          set -e
+          for endpoint in /programs /travel-intel/alliances /quizzes /podcast /guides; do
+            echo "Testing $endpoint..."
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$API$endpoint")
+            if [ "$STATUS" -ne 200 ]; then
+              echo "❌ $endpoint returned $STATUS"
+              exit 1
+            fi
+            echo "✓ $endpoint OK"
+          done
+        env:
+          API: ${{ secrets.API_URL }}
