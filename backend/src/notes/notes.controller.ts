@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsOptional, IsString, Length } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsOptional, IsString, Length } from 'class-validator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { successResponse } from '../common/helpers/response.helper';
@@ -35,6 +35,10 @@ class CreateNoteDto {
   @IsOptional()
   @IsDateString()
   remindAt?: string;
+  @ApiPropertyOptional({ enum: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'] })
+  @IsOptional()
+  @IsIn(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'])
+  recurrence?: string;
 }
 
 class UpdateNoteDto {
@@ -53,6 +57,10 @@ class UpdateNoteDto {
   @ApiPropertyOptional()
   @IsOptional()
   remindAt?: string | null;
+  @ApiPropertyOptional({ enum: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'] })
+  @IsOptional()
+  @IsIn(['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'])
+  recurrence?: string;
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()
