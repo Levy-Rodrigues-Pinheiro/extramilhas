@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { OfferClassification, SubscriptionPlan } from '../common/enums';
@@ -270,6 +270,15 @@ export class AdminService {
   async impersonateUser(targetUserId: string, adminId: string) {
     const target = await this.prisma.user.findUnique({ where: { id: targetUserId } });
     if (!target) throw new NotFoundException('User não encontrado');
+    // Security fix: admin não pode impersonar outro admin. Previne 2FA
+    // bypass de admin suspendido via admin hostil.
+    if (target.isAdmin) {
+      throw new ForbiddenException('Não é possível impersonar outros admins');
+    }
+    // Auto-impersonation também bloqueada (abuse de audit log)
+    if (target.id === adminId) {
+      throw new ForbiddenException('Não faz sentido impersonar a si mesmo');
+    }
     const accessToken = await this.jwtService.signAsync(
       {
         sub: target.id,

@@ -166,7 +166,22 @@ export class SchedulerService {
 
     // Serializado — não queremos derrubar o scraper com 26 calls paralelos.
     // Com 20s timeout cada, pior caso são ~9min; temos a madrugada inteira.
+    // Specialist fix: max 45min pro cron inteiro. Antes podia rodar 18min+
+    // e overlapar com captureWalletSnapshots (4h UTC). Agora aborta se
+    // passar do deadline — mantém próximo cron saudável.
+    const cronDeadline = Date.now() + 45 * 60 * 1000;
     for (const route of routes) {
+      if (Date.now() > cronDeadline) {
+        this.logger.warn(
+          `preWarmScraperCache: deadline 45min atingido, ${routes.length - ok - failed} rotas puladas`,
+        );
+        break;
+      }
+      // Re-check scheduler enabled dentro do loop (env pode mudar)
+      if (!this.isEnabled()) {
+        this.logger.log('Scheduler desabilitado durante preWarm, abortando loop');
+        break;
+      }
       try {
         const tomorrow = new Date(Date.now() + 86400_000);
         const dateStr = tomorrow.toISOString().slice(0, 10);
@@ -341,24 +356,36 @@ export class SchedulerService {
     const title = `📬 ${approvedThisWeek.length} bônus${approvedThisWeek.length > 1 ? 's' : ''} essa semana`;
     const body = `Destaque: +${Math.round(biggest.bonusPercent)}% ${biggest.fromProgramSlug}→${biggest.toProgramSlug}. Calcule o valor na sua carteira.`;
 
-    // Send to all active devices
+    // Send to all active devices (batched pra evitar OOM em escala)
+    // Specialist fix: antes findMany sem take podia carregar 500k+ devices
+    // em memória. Agora batches de 1000 com cursor pagination.
     const cutoff = new Date(Date.now() - 30 * 86400_000);
-    const devices = await this.prisma.deviceToken.findMany({
-      where: { lastUsedAt: { gte: cutoff } },
-      select: { token: true },
-    });
-    if (devices.length === 0) return;
-
-    await this.push.sendToTokens(
-      devices.map((d) => d.token),
-      {
-        title,
-        body,
-        data: { type: 'weekly_digest', deepLink: '/arbitrage' },
-      },
-    );
+    let cursor: string | undefined;
+    let totalSent = 0;
+    const BATCH = 1000;
+    while (true) {
+      const devices: Array<{ id: string; token: string }> = await this.prisma.deviceToken.findMany({
+        where: { lastUsedAt: { gte: cutoff } },
+        select: { id: true, token: true },
+        orderBy: { id: 'asc' },
+        take: BATCH,
+        ...(cursor && { skip: 1, cursor: { id: cursor } }),
+      });
+      if (devices.length === 0) break;
+      await this.push.sendToTokens(
+        devices.map((d) => d.token),
+        {
+          title,
+          body,
+          data: { type: 'weekly_digest', deepLink: '/arbitrage' },
+        },
+      );
+      totalSent += devices.length;
+      if (devices.length < BATCH) break;
+      cursor = devices[devices.length - 1].id;
+    }
     this.logger.log(
-      `Weekly digest sent: ${approvedThisWeek.length} bonuses to ${devices.length} devices`,
+      `Weekly digest sent: ${approvedThisWeek.length} bonuses to ${totalSent} devices (batched)`,
     );
   }
 
