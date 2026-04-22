@@ -828,6 +828,65 @@ export class SchedulerService {
   }
 
   /**
+   * Cleanup unbounded tables — domingo 2h UTC. Specialist review audit:
+   * 5 tabelas estavam crescendo infinito sem limpeza:
+   *   - AlertHistory     → 180d retention (doc DATA_RETENTION.md)
+   *   - SecurityEvent    → 90d retention
+   *   - Notification     → 90d retention
+   *   - Activity         → 90d retention
+   *   - SearchLog        → 90d (+ anonymize userId após 90d)
+   *   - QuizAttempt      → 365d retention (histórico longo faz sentido)
+   *   - ContactMessage   → 365d retention (suporte)
+   *
+   * Roda 1x/semana pra reduzir pressão no DB. Batch deletes com cap.
+   */
+  @Cron('0 2 * * 0') // sunday 02:00 UTC
+  async cleanupUnboundedTables() {
+    if (!this.isEnabled()) return;
+    const now = Date.now();
+    const cutoff = (days: number) => new Date(now - days * 86400_000);
+
+    const cleanups = [
+      { model: 'alertHistory', cutoff: cutoff(180), field: 'sentAt' },
+      { model: 'securityEvent', cutoff: cutoff(90), field: 'createdAt' },
+      { model: 'notification', cutoff: cutoff(90), field: 'createdAt' },
+      { model: 'activity', cutoff: cutoff(90), field: 'createdAt' },
+      { model: 'searchLog', cutoff: cutoff(90), field: 'createdAt' },
+      { model: 'quizAttempt', cutoff: cutoff(365), field: 'createdAt' },
+      { model: 'contactMessage', cutoff: cutoff(365), field: 'createdAt' },
+      { model: 'auditLog', cutoff: cutoff(365), field: 'createdAt' }, // 12m retention
+    ];
+
+    for (const c of cleanups) {
+      try {
+        const res = await (this.prisma as any)[c.model].deleteMany({
+          where: { [c.field]: { lt: c.cutoff } },
+        });
+        if (res.count > 0) {
+          this.logger.log(`Cleanup ${c.model}: removed ${res.count} entries older than ${c.cutoff.toISOString().slice(0, 10)}`);
+        }
+      } catch (err) {
+        this.logger.warn(`Cleanup ${c.model} failed: ${(err as Error).message}`);
+      }
+    }
+
+    // SearchLog: além de cleanup, anonimizar userId pra LGPD (retenção
+    // menor de dado-pessoal, mesmo com search query mantido pra analytics)
+    try {
+      const anonCutoff = cutoff(30);
+      const res = await (this.prisma as any).searchLog.updateMany({
+        where: { userId: { not: null }, createdAt: { lt: anonCutoff } },
+        data: { userId: null },
+      });
+      if (res.count > 0) {
+        this.logger.log(`SearchLog anonymized: ${res.count} entries had userId removed (>30d old)`);
+      }
+    } catch (err) {
+      this.logger.warn(`SearchLog anonymize failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
    * Cleanup LiveFlightCache — remove entries staler que 30d.
    * Supabase free 500MB limit; melhor manter enxuto. Cache STALE (24h-7d)
    * ainda vira REFERENCIA útil, mas >30d só ocupa espaço.
