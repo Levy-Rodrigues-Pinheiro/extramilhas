@@ -51,6 +51,11 @@ export {
   type ComparisonRow,
   default as ComparisonBarsDefault,
 } from './ComparisonBars';
+export {
+  SettingsRow,
+  SettingsGroup,
+  default as SettingsRowDefault,
+} from './SettingsRow';
 
 // Design tokens re-export
 export {

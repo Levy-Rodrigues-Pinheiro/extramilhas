@@ -4,10 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
   Alert,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Share,
@@ -16,14 +13,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useMutation } from '@tanstack/react-query';
 import api from '../src/lib/api';
 import { useAuthStore } from '../src/store/auth.store';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  FloatingLabelInput,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
-/**
- * Edit profile: troca nome + troca senha (com validação atual).
- * Também tem botão "Compartilhar app" pro user espalhar organicamente.
- */
 export default function EditProfileScreen() {
   const { user, setUser } = useAuthStore();
 
@@ -31,6 +41,8 @@ export default function EditProfileScreen() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
 
   const updateName = useMutation({
     mutationFn: async (newName: string) => {
@@ -39,9 +51,13 @@ export default function EditProfileScreen() {
     },
     onSuccess: (data: any) => {
       if (user) setUser({ ...user, name: data?.name ?? name });
+      haptics.success();
       Alert.alert('Salvo!', 'Nome atualizado.');
     },
-    onError: () => Alert.alert('Erro', 'Não foi possível atualizar o nome.'),
+    onError: () => {
+      haptics.error();
+      Alert.alert('Erro', 'Não foi possível atualizar o nome.');
+    },
   });
 
   const changePassword = useMutation({
@@ -53,14 +69,20 @@ export default function EditProfileScreen() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      Alert.alert('Senha trocada', 'Você continua logado neste aparelho. Outros devices vão pedir login novo.');
+      haptics.success();
+      Alert.alert(
+        'Senha trocada',
+        'Você continua logado neste aparelho. Outros devices vão pedir login novo.',
+      );
     },
     onError: (err: any) => {
+      haptics.error();
       Alert.alert('Erro', err?.response?.data?.message || 'Falha ao trocar senha');
     },
   });
 
   const handleShareApp = async () => {
+    haptics.tap();
     const refCode = (user as any)?.referralCode;
     const message = refCode
       ? `🛩️ Uso o Milhas Extras pra não perder bônus de transferência. Use meu código ${refCode} e a gente ganha 30d Premium cada: https://milhasextras.com.br/r/${refCode}`
@@ -73,6 +95,7 @@ export default function EditProfileScreen() {
   const handleSaveName = () => {
     const trimmed = name.trim();
     if (trimmed.length < 2) {
+      haptics.error();
       Alert.alert('Atenção', 'Nome deve ter ao menos 2 caracteres');
       return;
     }
@@ -82,171 +105,279 @@ export default function EditProfileScreen() {
 
   const handleChangePassword = () => {
     if (!currentPassword || !newPassword) {
+      haptics.error();
       Alert.alert('Atenção', 'Preencha a senha atual e a nova');
       return;
     }
     if (newPassword.length < 6) {
+      haptics.error();
       Alert.alert('Atenção', 'Nova senha precisa ter ao menos 6 caracteres');
       return;
     }
     if (newPassword !== confirmPassword) {
+      haptics.error();
       Alert.alert('Atenção', 'As novas senhas não coincidem');
       return;
     }
     changePassword.mutate({ currentPassword, newPassword });
   };
 
+  const initials = (user?.name ?? 'U')
+    .split(' ')
+    .map((s) => s[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.titleBox}>
-            <Text style={styles.title}>Editar perfil</Text>
-            <Text style={styles.subtitle}>Nome, senha, convite</Text>
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content}>
-          {/* Nome */}
-          <Text style={styles.section}>Nome</Text>
-          <View style={styles.row}>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Seu nome"
-              placeholderTextColor="#475569"
-              autoCapitalize="words"
-            />
-            <TouchableOpacity
-              onPress={handleSaveName}
-              disabled={updateName.isPending || name.trim() === user?.name}
-              style={[styles.btn, styles.btnPrimary, (updateName.isPending || name.trim() === user?.name) && { opacity: 0.5 }]}
-            >
-              {updateName.isPending ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.btnPrimaryText}>Salvar</Text>
-              )}
-            </TouchableOpacity>
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.header}>
+            <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+              <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+            </PressableScale>
+            <View style={styles.titleBox}>
+              <Text style={styles.title}>Editar perfil</Text>
+              <Text style={styles.subtitle}>Nome, senha, convite</Text>
+            </View>
           </View>
 
-          {/* E-mail read-only */}
-          <Text style={styles.section}>E-mail</Text>
-          <View style={[styles.input, styles.inputRO]}>
-            <Text style={{ color: '#64748B' }}>{user?.email}</Text>
-          </View>
-          <Text style={styles.hint}>E-mail não pode ser alterado — crie nova conta se precisar.</Text>
-
-          {/* Trocar senha */}
-          <Text style={styles.section}>Trocar senha</Text>
-          <TextInput
-            style={styles.input}
-            value={currentPassword}
-            onChangeText={setCurrentPassword}
-            placeholder="Senha atual"
-            placeholderTextColor="#475569"
-            secureTextEntry
-          />
-          <TextInput
-            style={styles.input}
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder="Nova senha (mín 6 caracteres)"
-            placeholderTextColor="#475569"
-            secureTextEntry
-          />
-          <TextInput
-            style={styles.input}
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder="Confirme a nova senha"
-            placeholderTextColor="#475569"
-            secureTextEntry
-          />
-          <TouchableOpacity
-            onPress={handleChangePassword}
-            disabled={changePassword.isPending || !currentPassword || !newPassword}
-            style={[styles.btn, styles.btnPrimary, { marginTop: 8 }, (changePassword.isPending || !currentPassword || !newPassword) && { opacity: 0.5 }]}
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            {changePassword.isPending ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.btnPrimaryText}>Trocar senha</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Share app */}
-          <View style={styles.shareBox}>
-            <LinearGradient
-              colors={['#25D366', '#128C7E']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.shareGradient}
+            {/* Avatar */}
+            <Animated.View
+              entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+              style={styles.avatarWrap}
             >
-              <Ionicons name="gift" size={20} color="#fff" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.shareTitle}>Convide amigos, ganhe Premium</Text>
-                <Text style={styles.shareSub}>
-                  30d grátis pra cada amigo que se cadastrar com seu código
-                </Text>
-              </View>
-              <TouchableOpacity onPress={handleShareApp} style={styles.shareBtn}>
-                <Text style={styles.shareBtnText}>Compartilhar</Text>
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              <View style={styles.avatarHalo} />
+              <LinearGradient
+                colors={gradients.aurora}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatar}
+              >
+                <Text style={styles.avatarText}>{initials}</Text>
+              </LinearGradient>
+            </Animated.View>
+
+            {/* Nome */}
+            <Animated.View entering={FadeInDown.delay(80).duration(motion.timing.medium)}>
+              <Text style={styles.sectionLabel}>NOME</Text>
+              <GlassCard radiusSize="lg" padding={14}>
+                <FloatingLabelInput
+                  label="Seu nome"
+                  iconLeft="person-outline"
+                  value={name}
+                  onChangeText={setName}
+                />
+                <AuroraButton
+                  label="Salvar nome"
+                  onPress={handleSaveName}
+                  loading={updateName.isPending}
+                  disabled={!name.trim() || name.trim() === user?.name}
+                  variant="apple"
+                  size="md"
+                  icon="checkmark"
+                  fullWidth
+                />
+              </GlassCard>
+            </Animated.View>
+
+            {/* Senha */}
+            <Animated.View
+              entering={FadeInDown.delay(160).duration(motion.timing.medium)}
+              style={{ marginTop: space.md }}
+            >
+              <Text style={styles.sectionLabel}>TROCAR SENHA</Text>
+              <GlassCard radiusSize="lg" padding={14}>
+                <FloatingLabelInput
+                  label="Senha atual"
+                  iconLeft="lock-closed-outline"
+                  iconRight={showCurrent ? 'eye-off-outline' : 'eye-outline'}
+                  onRightIconPress={() => {
+                    haptics.select();
+                    setShowCurrent(!showCurrent);
+                  }}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry={!showCurrent}
+                  autoCapitalize="none"
+                />
+                <FloatingLabelInput
+                  label="Nova senha (min 6)"
+                  iconLeft="shield-checkmark-outline"
+                  iconRight={showNew ? 'eye-off-outline' : 'eye-outline'}
+                  onRightIconPress={() => {
+                    haptics.select();
+                    setShowNew(!showNew);
+                  }}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry={!showNew}
+                  autoCapitalize="none"
+                />
+                <FloatingLabelInput
+                  label="Confirmar nova senha"
+                  iconLeft="checkmark-done-outline"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showNew}
+                  autoCapitalize="none"
+                />
+                <AuroraButton
+                  label="Trocar senha"
+                  onPress={handleChangePassword}
+                  loading={changePassword.isPending}
+                  disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
+                  variant="primary"
+                  size="md"
+                  icon="key"
+                  fullWidth
+                />
+              </GlassCard>
+            </Animated.View>
+
+            {/* Share app */}
+            <Animated.View
+              entering={FadeInDown.delay(240).duration(motion.timing.medium)}
+              style={{ marginTop: space.md }}
+            >
+              <PressableScale onPress={handleShareApp} haptic="tap">
+                <GlassCard radiusSize="lg" padding={14} glow="gold">
+                  <View style={styles.shareRow}>
+                    <View style={styles.shareIcon}>
+                      <Ionicons name="gift" size={20} color={premium.goldLight} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.shareTitle}>Convide amigos e ganhe</Text>
+                      <Text style={styles.shareText}>
+                        30 dias Premium grátis pra cada amigo que usar seu código.
+                      </Text>
+                    </View>
+                    <Ionicons name="share-social" size={18} color={premium.goldLight} />
+                  </View>
+                </GlassCard>
+              </PressableScale>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0F172A' },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: { padding: 8, width: 40 },
-  titleBox: { flex: 1 },
-  title: { color: '#fff', fontSize: 19, fontWeight: '700' },
-  subtitle: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
-  content: { padding: 16, paddingBottom: 60 },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+  sectionLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    paddingHorizontal: space.md,
+  },
 
-  section: {
-    color: '#94A3B8', fontSize: 11, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 20, marginBottom: 8,
+  avatarWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: space.lg,
+    position: 'relative',
   },
-  row: { flexDirection: 'row', gap: 8 },
-  input: {
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 8, padding: 12,
-    color: '#F1F5F9', fontSize: 14,
-    marginBottom: 8, flex: 1,
+  avatarHalo: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: aurora.magentaSoft,
   },
-  inputRO: { paddingVertical: 14 },
-  hint: { color: '#64748B', fontSize: 11, marginTop: 2, marginBottom: 10 },
+  avatar: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: aurora.magenta,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  avatarText: {
+    color: '#FFF',
+    fontFamily: 'Inter_900Black',
+    fontSize: 32,
+    letterSpacing: -0.8,
+  },
 
-  btn: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  btnPrimary: { backgroundColor: '#8B5CF6' },
-  btnPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-
-  shareBox: { marginTop: 24, borderRadius: 14, overflow: 'hidden' },
-  shareGradient: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
-  shareTitle: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  shareSub: { color: 'rgba(255,255,255,0.85)', fontSize: 11, marginTop: 2 },
-  shareBtn: {
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.2)',
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  shareBtnText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  shareIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: premium.goldSoft,
+    borderWidth: 1,
+    borderColor: `${premium.goldLight}55`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
+  shareText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
 });

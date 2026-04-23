@@ -1,31 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Alert,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors } from '../src/lib/theme';
+import {
+  AuroraBackground,
+  SettingsGroup,
+  SettingsRow,
+  GlassCard,
+  PressableScale,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
-/**
- * Central de segurança.
- *   - Login por biometria (feat flag local; real requer expo-local-authentication
- *     instalado e compilado — bloqueado por quota EAS até 01/mai)
- *   - 2FA (coming soon — requer TOTP lib no backend)
- *   - Dispositivos conectados (implementado, roteia pra /active-sessions)
- *
- * As preferências ficam em AsyncStorage com prefixo `sec-pref-*`. Quando
- * biometria real for compilada, basta ler a mesma key e se true, disparar
- * LocalAuthentication.authenticateAsync no boot.
- */
 export default function SecurityScreen() {
   const { t } = useTranslation();
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
@@ -46,14 +42,16 @@ export default function SecurityScreen() {
 
   const toggleBiometrics = async (v: boolean) => {
     if (v) {
+      haptics.warning();
       Alert.alert(
         t('profile.biometrics'),
-        'Esta versão ainda não tem login por biometria compilado (aguardando build EAS do mobile). A preferência fica salva e ativa quando a próxima versão estiver disponível.',
+        'Esta versão ainda não tem login por biometria compilado. A preferência fica salva e ativa quando a próxima versão estiver disponível.',
         [
           { text: t('common.cancel'), style: 'cancel' },
           {
             text: 'Salvar preferência',
             onPress: async () => {
+              haptics.success();
               await AsyncStorage.setItem('sec-pref-biometrics', '1');
               setBiometricsEnabled(true);
             },
@@ -68,6 +66,7 @@ export default function SecurityScreen() {
 
   const toggle2FA = async (v: boolean) => {
     if (v) {
+      haptics.warning();
       Alert.alert(
         t('profile.two_factor'),
         'Verificação em 2 etapas via app autenticador virá em breve. Salvar preferência pra receber notificação quando estiver disponível?',
@@ -76,6 +75,7 @@ export default function SecurityScreen() {
           {
             text: 'Me avise',
             onPress: async () => {
+              haptics.success();
               await AsyncStorage.setItem('sec-pref-2fa', '1');
               setTwoFactorEnabled(true);
             },
@@ -89,128 +89,157 @@ export default function SecurityScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{t('profile.security')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Biometria */}
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.iconBox}>
-              <Ionicons name="finger-print" size={20} color={Colors.primary.light} />
-            </View>
-            <View style={styles.info}>
-              <Text style={styles.itemTitle}>{t('profile.biometrics')}</Text>
-              <Text style={styles.itemDesc}>
-                Login rápido com impressão digital ou Face ID (em breve).
-              </Text>
-            </View>
-            <Switch
-              value={biometricsEnabled}
-              onValueChange={toggleBiometrics}
-              trackColor={{ false: Colors.border.default, true: Colors.primary.start }}
-              accessibilityLabel={t('profile.biometrics')}
-            />
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Segurança</Text>
+            <Text style={styles.subtitle}>Biometria, 2FA, sessões</Text>
           </View>
         </View>
 
-        {/* 2FA */}
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={styles.iconBox}>
-              <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary.light} />
-            </View>
-            <View style={styles.info}>
-              <Text style={styles.itemTitle}>{t('profile.two_factor')}</Text>
-              <Text style={styles.itemDesc}>
-                Camada extra de segurança com código TOTP (em breve).
-              </Text>
-            </View>
-            <Switch
-              value={twoFactorEnabled}
-              onValueChange={toggle2FA}
-              trackColor={{ false: Colors.border.default, true: Colors.primary.start }}
-              accessibilityLabel={t('profile.two_factor')}
-            />
-          </View>
-        </View>
-
-        {/* Sessões ativas — navegável */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => router.push('/active-sessions' as any)}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.active_sessions')}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.row}>
-            <View style={styles.iconBox}>
-              <Ionicons name="phone-portrait-outline" size={20} color={Colors.primary.light} />
-            </View>
-            <View style={styles.info}>
-              <Text style={styles.itemTitle}>{t('profile.active_sessions')}</Text>
-              <Text style={styles.itemDesc}>
-                Veja e desconecte dispositivos que acessam sua conta.
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.text.muted} />
-          </View>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Hero info */}
+          <Animated.View
+            entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+          >
+            <GlassCard radiusSize="lg" padding={16} glow="success">
+              <View style={styles.heroRow}>
+                <View style={styles.heroIcon}>
+                  <Ionicons name="shield-checkmark" size={22} color={semantic.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.heroTitle}>Sua conta está protegida</Text>
+                  <Text style={styles.heroText}>
+                    Login JWT com refresh token + pushes só pro seu device.
+                  </Text>
+                </View>
+              </View>
+            </GlassCard>
+          </Animated.View>
+
+          {/* Methods */}
+          <Animated.View entering={FadeInDown.delay(80).duration(motion.timing.medium)}>
+            <SettingsGroup
+              header="AUTENTICAÇÃO"
+              footer="Biometria e 2FA chegam em breve. Suas preferências ficam salvas pra ativação automática."
+            >
+              <SettingsRow
+                icon="finger-print"
+                iconColor={aurora.cyan}
+                iconBg={aurora.cyanSoft}
+                label="Login por biometria"
+                toggle={biometricsEnabled}
+                onToggle={toggleBiometrics}
+              />
+              <SettingsRow
+                icon="key"
+                iconColor={premium.goldLight}
+                iconBg={premium.goldSoft}
+                label="Verificação em 2 etapas"
+                toggle={twoFactorEnabled}
+                onToggle={toggle2FA}
+              />
+            </SettingsGroup>
+          </Animated.View>
+
+          {/* Sessions */}
+          <Animated.View entering={FadeInDown.delay(160).duration(motion.timing.medium)}>
+            <SettingsGroup header="DEVICES">
+              <SettingsRow
+                icon="phone-portrait"
+                iconColor={aurora.magenta}
+                iconBg={aurora.magentaSoft}
+                label="Dispositivos conectados"
+                trailing="Ver todos"
+                onPress={() => router.push('/active-sessions' as any)}
+              />
+              <SettingsRow
+                icon="refresh"
+                iconColor={aurora.iris}
+                iconBg={aurora.cyanSoft}
+                label="Trocar senha"
+                onPress={() => router.push('/edit-profile' as any)}
+              />
+            </SettingsGroup>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg.primary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.bg.card,
+    backgroundColor: surface.glass,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  title: { fontSize: 17, fontWeight: '700', color: Colors.text.primary },
-  content: { padding: 16, gap: 10 },
-  card: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 12,
-    padding: 14,
     borderWidth: 1,
-    borderColor: Colors.border.subtle,
+    borderColor: surface.glassBorder,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary.muted,
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: semantic.successBg,
+    borderWidth: 1,
+    borderColor: `${semantic.success}55`,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  info: { flex: 1, gap: 2 },
-  itemTitle: { fontSize: 14, fontWeight: '700', color: Colors.text.primary },
-  itemDesc: { fontSize: 11, color: Colors.text.secondary, lineHeight: 15 },
+  heroTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: -0.1,
+  },
+  heroText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
 });

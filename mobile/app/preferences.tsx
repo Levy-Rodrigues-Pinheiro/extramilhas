@@ -1,16 +1,29 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { getContributeState, setContributeState } from '../src/lib/contribute-preference';
+import {
+  AuroraBackground,
+  SettingsGroup,
+  SettingsRow,
+  GlassCard,
+  PressableScale,
+  ShimmerSkeleton,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
-/**
- * Tela de preferências do usuário.
- * Hoje: toggle do crowdsourcing. Futuro: notificações, tema, moeda, etc.
- */
 export default function PreferencesScreen() {
-  const [contributing, setContributing] = useState<boolean | null>(null); // null = loading
+  const [contributing, setContributing] = useState<boolean | null>(null);
 
   useEffect(() => {
     getContributeState().then((s) => setContributing(s === 'accepted'));
@@ -22,119 +35,168 @@ export default function PreferencesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.6}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Preferências</Text>
-        <View style={{ width: 40 }} />
-      </View>
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Preferências</Text>
+            <Text style={styles.subtitle}>Comportamento do app</Text>
+          </View>
+        </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Crowdsourcing */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contribuição com a comunidade</Text>
-
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="people-outline" size={22} color="#8B5CF6" />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={styles.cardTitle}>Compartilhar preços vistos</Text>
-                <Text style={styles.cardDesc}>
-                  Quando você clicar em "Ver preço oficial", o app captura os preços que aparecerem na
-                  tela e envia pra melhorar a cobertura de rotas pra todos os usuários.
-                </Text>
-              </View>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View
+            entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+          >
+            <SettingsGroup
+              header="COMUNIDADE"
+              footer="Desligar não impede você de usar o app — só impede a captura de preços."
+            >
               {contributing === null ? (
-                <ActivityIndicator size="small" color="#8B5CF6" />
+                <View style={{ padding: 14 }}>
+                  <ShimmerSkeleton width="100%" height={20} radius="sm" />
+                </View>
               ) : (
-                <Switch
-                  value={contributing}
-                  onValueChange={toggle}
-                  thumbColor={contributing ? '#8B5CF6' : '#64748B'}
-                  trackColor={{ false: '#334155', true: '#6D28D9' }}
+                <SettingsRow
+                  icon="people"
+                  iconColor={aurora.cyan}
+                  iconBg={aurora.cyanSoft}
+                  label="Compartilhar preços vistos"
+                  toggle={contributing}
+                  onToggle={toggle}
                 />
               )}
-            </View>
-          </View>
+            </SettingsGroup>
+          </Animated.View>
 
-          <View style={styles.bullets}>
-            <View style={styles.bullet}>
-              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-              <Text style={styles.bulletText}>
-                <Text style={styles.bulletBold}>Capturado:</Text> milhas, tarifa, voo, horário — dados
-                públicos visíveis na tela.
-              </Text>
-            </View>
-            <View style={styles.bullet}>
-              <Ionicons name="close-circle" size={16} color="#EF4444" />
-              <Text style={styles.bulletText}>
-                <Text style={styles.bulletBold}>Não capturado:</Text> login, saldo, histórico pessoal,
-                cartão ou qualquer informação privada.
-              </Text>
-            </View>
-            <View style={styles.bullet}>
-              <Ionicons name="lock-closed" size={16} color="#64748B" />
-              <Text style={styles.bulletText}>
-                <Text style={styles.bulletBold}>Sua privacidade:</Text> a conexão usa SEU IP e cookies do
-                seu browser — igualzinho a você pesquisando manualmente.
-              </Text>
-            </View>
-          </View>
-        </View>
+          {/* Privacy breakdown */}
+          <Animated.View
+            entering={FadeInDown.delay(80).duration(motion.timing.medium)}
+            style={{ marginTop: space.sm }}
+          >
+            <Text style={styles.sectionLabel}>O QUE É CAPTURADO</Text>
+            <GlassCard radiusSize="lg" padding={14}>
+              <View style={styles.bulletsList}>
+                <BulletLine
+                  icon="checkmark-circle"
+                  color={semantic.success}
+                  bold="Capturado:"
+                  text="milhas, tarifa, voo, horário — dados públicos visíveis na tela."
+                />
+                <BulletLine
+                  icon="close-circle"
+                  color={semantic.danger}
+                  bold="Não capturado:"
+                  text="login, saldo, histórico pessoal, cartão."
+                />
+                <BulletLine
+                  icon="lock-closed"
+                  color={aurora.iris}
+                  bold="Privacidade:"
+                  text="conexão usa SEU IP e cookies — igual pesquisando manualmente."
+                />
+              </View>
+            </GlassCard>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
+    </AuroraBackground>
+  );
+}
 
-        <View style={styles.note}>
-          <Ionicons name="information-circle-outline" size={16} color="#94A3B8" />
-          <Text style={styles.noteText}>
-            Desligar essa opção não impede você de usar o app — apenas impede a captura de preços.
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+function BulletLine({
+  icon,
+  color,
+  bold,
+  text,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  color: string;
+  bold: string;
+  text: string;
+}) {
+  return (
+    <View style={styles.bulletRow}>
+      <Ionicons name={icon} size={15} color={color} style={{ marginTop: 1 }} />
+      <Text style={styles.bulletText}>
+        <Text style={styles.bulletBold}>{bold}</Text> {text}
+      </Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0F172A' },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 8, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
-    backgroundColor: '#0F172A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: { padding: 8, width: 40 },
-  title: { color: '#fff', fontSize: 18, fontWeight: '600', flex: 1, textAlign: 'center' },
-  content: { padding: 16 },
-
-  section: { marginBottom: 24 },
-  sectionTitle: {
-    color: '#94A3B8', fontSize: 12, fontWeight: '600',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
   },
-  card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1, borderColor: '#334155',
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  cardTitle: { color: '#F1F5F9', fontSize: 15, fontWeight: '600' },
-  cardDesc: { color: '#94A3B8', fontSize: 12, marginTop: 4, lineHeight: 18 },
-
-  bullets: { marginTop: 12, paddingLeft: 4 },
-  bullet: { flexDirection: 'row', gap: 8, marginTop: 10, alignItems: 'flex-start' },
-  bulletText: { flex: 1, color: '#CBD5E1', fontSize: 12, lineHeight: 17 },
-  bulletBold: { color: '#F1F5F9', fontWeight: '600' },
-
-  note: {
-    flexDirection: 'row', gap: 6,
-    padding: 12,
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-    marginTop: 12,
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
-  noteText: { flex: 1, color: '#94A3B8', fontSize: 11, lineHeight: 16 },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+  sectionLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    paddingHorizontal: space.md,
+  },
+  bulletsList: {
+    gap: 10,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  bulletText: {
+    flex: 1,
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  bulletBold: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+  },
 });

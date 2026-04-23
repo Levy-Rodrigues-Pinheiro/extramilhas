@@ -1,22 +1,35 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
-import { useActiveSessions, useRevokeSession, ActiveSession } from '../src/hooks/useSessions';
-import { EmptyState } from '../src/components/EmptyState';
-import { Colors } from '../src/lib/theme';
+import {
+  useActiveSessions,
+  useRevokeSession,
+  ActiveSession,
+} from '../src/hooks/useSessions';
+import {
+  AuroraBackground,
+  GlassCard,
+  PressableScale,
+  StaggerItem,
+  SkeletonListItem,
+  EmptyStateIllustrated,
+  aurora,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
-const PLATFORM_ICON: Record<string, keyof typeof import('@expo/vector-icons').Ionicons.glyphMap> = {
+const PLATFORM_ICON: Record<
+  string,
+  React.ComponentProps<typeof Ionicons>['name']
+> = {
   android: 'logo-android',
   ios: 'logo-apple',
   web: 'globe-outline',
@@ -28,156 +41,228 @@ export default function ActiveSessionsScreen() {
   const revoke = useRevokeSession();
 
   const handleRevoke = (s: ActiveSession) => {
+    haptics.warning();
     Alert.alert(
       'Desconectar dispositivo',
-      `Revogar acesso deste ${s.platform}? Ele vai parar de receber notificações push.`,
+      `Revogar acesso deste ${s.platform}? Ele vai parar de receber notificações.`,
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
           text: t('common.remove'),
           style: 'destructive',
-          onPress: () => revoke.mutate(s.id),
+          onPress: () => {
+            haptics.heavy();
+            revoke.mutate(s.id);
+          },
         },
       ],
     );
   };
 
-  const renderItem = ({ item }: { item: ActiveSession }) => {
-    const icon = PLATFORM_ICON[item.platform.toLowerCase()] || 'phone-portrait-outline';
-    const lastUsed = new Date(item.lastUsedAt);
-    const hoursAgo = Math.floor((Date.now() - lastUsed.getTime()) / 3600_000);
-    const lastUsedLabel =
-      hoursAgo < 1 ? 'há poucos minutos' : hoursAgo < 24 ? `${hoursAgo}h atrás` : `${Math.floor(hoursAgo / 24)}d atrás`;
-
-    return (
-      <View
-        style={styles.row}
-        accessible
-        accessibilityLabel={`${item.platform}${item.appVersion ? ' v' + item.appVersion : ''}, último acesso ${lastUsedLabel}`}
-      >
-        <View style={styles.iconBox}>
-          <Ionicons name={icon} size={20} color={Colors.primary.light} />
-        </View>
-        <View style={styles.info}>
-          <View style={styles.titleRow}>
-            <Text style={styles.platform}>{item.platform.toUpperCase()}</Text>
-            {item.isRecent && <View style={styles.dot} />}
-            {item.appVersion && <Text style={styles.version}>v{item.appVersion}</Text>}
-          </View>
-          <Text style={styles.meta}>Último acesso: {lastUsedLabel}</Text>
-          <Text style={styles.meta}>Conectado há {item.ageDays}d</Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => handleRevoke(item)}
-          disabled={revoke.isPending}
-          style={styles.revokeBtn}
-          accessibilityRole="button"
-          accessibilityLabel={`Desconectar ${item.platform}`}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="close-circle-outline" size={22} color={Colors.red.primary} />
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{t('profile.active_sessions')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {isLoading ? (
-        <View style={styles.loaderBox}>
-          <ActivityIndicator size="large" color={Colors.primary.light} />
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Dispositivos conectados</Text>
+            <Text style={styles.subtitle}>Revogue acesso quando quiser</Text>
+          </View>
         </View>
-      ) : isError ? (
-        <EmptyState icon="alert-circle-outline" title={t('errors.generic')} />
-      ) : !data || data.length === 0 ? (
-        <EmptyState
-          icon="phone-portrait-outline"
-          title="Nenhum dispositivo"
-          description="Conecte outros dispositivos pra recebê-los aqui."
-        />
-      ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(s) => s.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        />
-      )}
-    </SafeAreaView>
+
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 10 }}>
+            <SkeletonListItem />
+            <SkeletonListItem />
+          </View>
+        ) : isError ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0} glow="danger">
+              <EmptyStateIllustrated
+                variant="radar"
+                title="Erro ao carregar"
+                description="Não foi possível carregar os dispositivos."
+              />
+            </GlassCard>
+          </View>
+        ) : !data || data.length === 0 ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0}>
+              <EmptyStateIllustrated
+                variant="radar"
+                title="Nenhuma sessão ativa"
+                description="Seus dispositivos conectados aparecem aqui."
+              />
+            </GlassCard>
+          </View>
+        ) : (
+          <FlatList
+            data={data}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <StaggerItem index={index} baseDelay={80}>
+                <SessionCard session={item} onRevoke={() => handleRevoke(item)} />
+              </StaggerItem>
+            )}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg.primary },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.bg.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 17, fontWeight: '700', color: Colors.text.primary },
-  loaderBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: 16, paddingBottom: 40 },
+function SessionCard({
+  session,
+  onRevoke,
+}: {
+  session: ActiveSession;
+  onRevoke: () => void;
+}) {
+  const icon =
+    PLATFORM_ICON[session.platform.toLowerCase()] || 'phone-portrait-outline';
+  const lastUsed = new Date(session.lastUsedAt);
+  const hoursAgo = Math.floor((Date.now() - lastUsed.getTime()) / 3600_000);
+  const lastUsedLabel =
+    hoursAgo < 1
+      ? 'agora há pouco'
+      : hoursAgo < 24
+      ? `${hoursAgo}h atrás`
+      : `${Math.floor(hoursAgo / 24)}d atrás`;
+
+  return (
+    <GlassCard
+      radiusSize="lg"
+      padding={14}
+      glow={session.isRecent ? 'cyan' : 'none'}
+    >
+      <View style={cardStyles.row}>
+        <View style={cardStyles.iconBox}>
+          <Ionicons name={icon} size={22} color={aurora.cyan} />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <View style={cardStyles.titleRow}>
+            <Text style={cardStyles.platform}>
+              {session.platform.toUpperCase()}
+            </Text>
+            {session.isRecent && <View style={cardStyles.activeDot} />}
+            {session.appVersion && (
+              <Text style={cardStyles.version}>v{session.appVersion}</Text>
+            )}
+          </View>
+          <Text style={cardStyles.meta}>
+            <Ionicons name="time-outline" size={10} color={textTokens.muted} /> Último acesso:{' '}
+            {lastUsedLabel}
+          </Text>
+          <Text style={cardStyles.meta}>
+            <Ionicons name="calendar-outline" size={10} color={textTokens.muted} /> Conectado há{' '}
+            {session.ageDays}d
+          </Text>
+        </View>
+
+        <PressableScale onPress={onRevoke} haptic="none" style={cardStyles.revokeBtn}>
+          <Ionicons name="close-circle" size={22} color={semantic.danger} />
+        </PressableScale>
+      </View>
+    </GlassCard>
+  );
+}
+
+const cardStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 14,
-    backgroundColor: Colors.bg.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
   },
   iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: aurora.cyanSoft,
+    borderWidth: 1,
+    borderColor: `${aurora.cyan}55`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 3,
+  },
+  platform: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  activeDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: semantic.success,
+    shadowColor: semantic.success,
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+  },
+  version: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+  },
+  meta: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  revokeBtn: {
+    padding: 2,
+  },
+});
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary.muted,
+    backgroundColor: surface.glass,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
   },
-  info: { flex: 1, gap: 2 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  platform: { fontSize: 14, fontWeight: '700', color: Colors.text.primary },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.green.primary,
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
   },
-  version: { fontSize: 11, color: Colors.text.muted },
-  meta: { fontSize: 11, color: Colors.text.secondary },
-  revokeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  list: {
+    padding: space.md,
+    paddingBottom: 120,
   },
 });
