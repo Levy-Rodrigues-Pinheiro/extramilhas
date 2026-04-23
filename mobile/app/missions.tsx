@@ -1,11 +1,9 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
   Alert,
   RefreshControl,
 } from 'react-native';
@@ -13,37 +11,59 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useMissions, useClaimMission, Mission } from '../src/hooks/useMissions';
-import { haptic } from '../src/lib/haptic';
-import { SkeletonCard } from '../src/components/Skeleton';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  AnimatedNumber,
+  StaggerItem,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  ConfettiBurst,
+  type ConfettiBurstHandle,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
 /**
- * Missões — desafios opcionais que dão dias Premium grátis quando
- * completados. Foco em crowdsource (reports) e retenção (saldo, refer).
+ * Missões v2 — Apple Fitness-style completion celebration.
  *
- * Layout: lista com progress bar, sela de status, botão "Resgatar" quando
- * disponível.
+ * Signature moment: ao resgatar missão completa → confetti burst +
+ * haptic success + alert. Cada card tem icon colored + progress bar
+ * gradient + reward chip gold.
  */
 export default function MissionsScreen() {
   const { data, isLoading, isRefetching, refetch } = useMissions();
   const claim = useClaimMission();
+  const confettiRef = useRef<ConfettiBurstHandle>(null);
 
   const handleClaim = async (m: Mission) => {
     try {
-      haptic.tap();
+      haptics.medium();
       const res = await claim.mutateAsync(m.id);
-      haptic.success();
+      confettiRef.current?.burst();
+      haptics.success();
       Alert.alert(
         '🎉 Recompensa resgatada!',
         `Você ganhou ${res.rewardDays} dias Premium. Aproveite as oportunidades desbloqueadas!`,
       );
     } catch (err: any) {
-      haptic.error();
+      haptics.error();
       Alert.alert('Erro', err?.response?.data?.message || 'Falha ao resgatar');
     }
   };
 
-  const iconFor = (targetType: string) => {
+  const iconFor = (targetType: string): React.ComponentProps<typeof Ionicons>['name'] => {
     switch (targetType) {
       case 'bonus_reports_approved':
         return 'megaphone';
@@ -56,206 +76,453 @@ export default function MissionsScreen() {
     }
   };
 
+  // Stats resumidos
+  const completed = data?.missions?.filter((m) => m.claimed).length ?? 0;
+  const ready = data?.missions?.filter((m) => !m.claimed && m.progress >= m.targetCount).length ?? 0;
+  const active = data?.missions?.filter((m) => !m.claimed).length ?? 0;
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.titleBox}>
-          <Text style={styles.title}>Missões</Text>
-          <Text style={styles.subtitle}>Ganhe dias Premium grátis</Text>
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ConfettiBurst ref={confettiRef} />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Missões</Text>
+            <Text style={styles.subtitle}>Ganhe dias Premium grátis</Text>
+          </View>
         </View>
-      </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#8B5CF6" />}
-      >
-        {isLoading && (
-          <View>
-            {[0, 1, 2].map((i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </View>
-        )}
-
-        {!isLoading && data?.missions?.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="trophy-outline" size={48} color="#475569" />
-            <Text style={styles.emptyText}>Nenhuma missão ativa no momento.</Text>
-          </View>
-        )}
-
-        {data?.missions?.map((m) => {
-          const percent = Math.min(100, (m.progress / m.targetCount) * 100);
-          const canClaim = !m.claimed && m.progress >= m.targetCount;
-          const isCompleted = m.claimed;
-
-          return (
-            <View
-              key={m.id}
-              style={[
-                styles.card,
-                isCompleted && styles.cardCompleted,
-                canClaim && styles.cardReady,
-              ]}
-            >
-              <View style={styles.cardHeader}>
-                <View
-                  style={[
-                    styles.icon,
-                    canClaim && { backgroundColor: '#F59E0B33' },
-                    isCompleted && { backgroundColor: '#10B98133' },
-                  ]}
-                >
-                  <Ionicons
-                    name={iconFor(m.targetType) as any}
-                    size={22}
-                    color={isCompleted ? '#10B981' : canClaim ? '#F59E0B' : '#A78BFA'}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={() => {
+                haptics.medium();
+                refetch();
+              }}
+              tintColor={aurora.cyan}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoading ? (
+            <View style={{ gap: 14 }}>
+              <SkeletonCard />
+              <SkeletonCard />
+            </View>
+          ) : !data?.missions || data.missions.length === 0 ? (
+            <GlassCard radiusSize="xl" padding={0}>
+              <EmptyStateIllustrated
+                variant="trophy"
+                title="Nenhuma missão ativa"
+                description="Missões aparecem aqui automaticamente. Continue usando o app pra desbloquear Premium grátis."
+              />
+            </GlassCard>
+          ) : (
+            <>
+              {/* Stats hero */}
+              <Animated.View
+                entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+              >
+                <View style={styles.statsRow}>
+                  <StatMini
+                    icon="star"
+                    label="Ativas"
+                    value={active}
+                    color={aurora.cyan}
+                  />
+                  <StatMini
+                    icon="flash"
+                    label="Prontas"
+                    value={ready}
+                    color={premium.goldLight}
+                    highlight={ready > 0}
+                  />
+                  <StatMini
+                    icon="checkmark-circle"
+                    label="Concluídas"
+                    value={completed}
+                    color={semantic.success}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{m.title}</Text>
-                  <Text style={styles.cardDesc}>{m.description}</Text>
-                </View>
-                <View style={styles.reward}>
-                  <Text style={styles.rewardValue}>+{m.rewardDays}d</Text>
-                  <Text style={styles.rewardLabel}>Premium</Text>
+              </Animated.View>
+
+              {/* Missions list */}
+              <View style={{ marginTop: space.md }}>
+                <Text style={styles.sectionLabel}>Suas missões</Text>
+                <View style={{ gap: 12 }}>
+                  {data.missions.map((m, i) => (
+                    <StaggerItem key={m.id} index={i} baseDelay={120}>
+                      <MissionCard
+                        m={m}
+                        iconName={iconFor(m.targetType)}
+                        onClaim={() => handleClaim(m)}
+                        isPending={claim.isPending}
+                      />
+                    </StaggerItem>
+                  ))}
                 </View>
               </View>
 
-              {!isCompleted && (
-                <>
-                  <View style={styles.progressRow}>
-                    <Text style={styles.progressText}>
-                      Progresso: {m.progress}/{m.targetCount}
-                    </Text>
-                    <Text style={styles.progressPercent}>{percent.toFixed(0)}%</Text>
+              {/* Tip box */}
+              <Animated.View entering={FadeInDown.delay(400).duration(motion.timing.medium)}>
+                <GlassCard radiusSize="md" padding={12} style={styles.tipBox}>
+                  <View style={styles.tipIcon}>
+                    <Ionicons name="bulb" size={14} color={aurora.cyan} />
                   </View>
-                  <View style={styles.progressBar}>
-                    <View
-                      style={[
-                        styles.progressFill,
-                        { width: `${percent}%`, backgroundColor: canClaim ? '#F59E0B' : '#8B5CF6' },
-                      ]}
-                    />
-                  </View>
-                </>
-              )}
-
-              {canClaim && (
-                <TouchableOpacity
-                  onPress={() => handleClaim(m)}
-                  disabled={claim.isPending}
-                  style={[styles.claimBtn, claim.isPending && { opacity: 0.5 }]}
-                >
-                  <LinearGradient
-                    colors={['#F59E0B', '#F97316']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.claimGradient}
-                  >
-                    {claim.isPending ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <>
-                        <Ionicons name="gift" size={16} color="#fff" />
-                        <Text style={styles.claimText}>Resgatar {m.rewardDays}d Premium</Text>
-                      </>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-
-              {isCompleted && (
-                <View style={styles.completedBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                  <Text style={styles.completedText}>
-                    Resgatado{' '}
-                    {m.rewardClaimedAt &&
-                      new Date(m.rewardClaimedAt).toLocaleDateString('pt-BR')}
+                  <Text style={styles.tipText}>
+                    Progresso é contado desde o início. Missões novas aparecem aqui
+                    automaticamente.
                   </Text>
-                </View>
-              )}
-            </View>
-          );
-        })}
-
-        <View style={styles.tipBox}>
-          <Ionicons name="information-circle" size={16} color="#A78BFA" />
-          <Text style={styles.tipText}>
-            Progresso é contado desde o início de cada missão. Missões novas aparecem aqui automaticamente.
-          </Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+                </GlassCard>
+              </Animated.View>
+            </>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0F172A' },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
-  },
-  backBtn: { padding: 8, width: 40 },
-  titleBox: { flex: 1 },
-  title: { color: '#fff', fontSize: 19, fontWeight: '700' },
-  subtitle: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
+// ─── StatMini ───────────────────────────────────────────────────────────
 
-  content: { padding: 16, paddingBottom: 40 },
-  empty: { alignItems: 'center', gap: 10, marginTop: 40 },
-  emptyText: { color: '#94A3B8', fontSize: 13 },
+function StatMini({
+  icon,
+  label,
+  value,
+  color,
+  highlight,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  value: number;
+  color: string;
+  highlight?: boolean;
+}) {
+  return (
+    <GlassCard
+      radiusSize="lg"
+      padding={12}
+      glow={highlight ? 'gold' : 'none'}
+      style={statStyles.card}
+    >
+      <View style={[statStyles.iconWrap, { backgroundColor: `${color}1F`, borderColor: `${color}55` }]}>
+        <Ionicons name={icon} size={14} color={color} />
+      </View>
+      <AnimatedNumber value={value} format="integer" style={[statStyles.value, { color }]} />
+      <Text style={statStyles.label}>{label}</Text>
+    </GlassCard>
+  );
+}
 
+// ─── MissionCard ────────────────────────────────────────────────────────
+
+function MissionCard({
+  m,
+  iconName,
+  onClaim,
+  isPending,
+}: {
+  m: Mission;
+  iconName: React.ComponentProps<typeof Ionicons>['name'];
+  onClaim: () => void;
+  isPending: boolean;
+}) {
+  const percent = Math.min(100, (m.progress / m.targetCount) * 100);
+  const canClaim = !m.claimed && m.progress >= m.targetCount;
+  const isCompleted = m.claimed;
+
+  const iconColor = isCompleted
+    ? semantic.success
+    : canClaim
+    ? premium.goldLight
+    : aurora.cyan;
+  const iconBg = isCompleted
+    ? semantic.successBg
+    : canClaim
+    ? premium.goldSoft
+    : aurora.cyanSoft;
+
+  return (
+    <GlassCard
+      radiusSize="lg"
+      padding={16}
+      glow={canClaim ? 'gold' : 'none'}
+      style={isCompleted && { opacity: 0.65 }}
+    >
+      <View style={cardStyles.header}>
+        <View
+          style={[
+            cardStyles.iconBox,
+            { backgroundColor: iconBg, borderColor: `${iconColor}55` },
+          ]}
+        >
+          <Ionicons
+            name={isCompleted ? 'checkmark-circle' : iconName}
+            size={22}
+            color={iconColor}
+          />
+        </View>
+
+        <View style={{ flex: 1 }}>
+          <Text style={cardStyles.title}>{m.title}</Text>
+          <Text style={cardStyles.desc}>{m.description}</Text>
+        </View>
+
+        <View style={cardStyles.reward}>
+          <Text style={cardStyles.rewardValue}>+{m.rewardDays}d</Text>
+          <Text style={cardStyles.rewardLabel}>Premium</Text>
+        </View>
+      </View>
+
+      {!isCompleted && (
+        <>
+          <View style={cardStyles.progressRow}>
+            <Text style={cardStyles.progressText}>
+              {m.progress} / {m.targetCount}
+            </Text>
+            <Text style={[cardStyles.progressPercent, { color: iconColor }]}>
+              {percent.toFixed(0)}%
+            </Text>
+          </View>
+          <View style={cardStyles.progressTrack}>
+            <LinearGradient
+              colors={
+                canClaim
+                  ? (gradients.premium as any)
+                  : (gradients.auroraCyanMagenta as any)
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[cardStyles.progressFill, { width: `${percent}%` }]}
+            />
+          </View>
+        </>
+      )}
+
+      {canClaim && (
+        <View style={{ marginTop: 14 }}>
+          <AuroraButton
+            label={`Resgatar ${m.rewardDays}d Premium`}
+            onPress={onClaim}
+            loading={isPending}
+            variant="gold"
+            size="md"
+            icon="gift"
+            iconPosition="left"
+            fullWidth
+            haptic="success"
+          />
+        </View>
+      )}
+
+      {isCompleted && (
+        <View style={cardStyles.completedBadge}>
+          <Ionicons name="checkmark-circle" size={14} color={semantic.success} />
+          <Text style={cardStyles.completedText}>
+            Resgatado em{' '}
+            {m.rewardClaimedAt
+              ? new Date(m.rewardClaimedAt).toLocaleDateString('pt-BR')
+              : ''}
+          </Text>
+        </View>
+      )}
+    </GlassCard>
+  );
+}
+
+// ─── Styles ─────────────────────────────────────────────────────────────
+
+const statStyles = StyleSheet.create({
   card: {
-    padding: 16, borderRadius: 12,
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    marginBottom: 12,
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: 4,
   },
-  cardReady: { borderColor: '#F59E0B' },
-  cardCompleted: { opacity: 0.7 },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
-  icon: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: '#3B2F66',
-    alignItems: 'center', justifyContent: 'center',
+  iconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginBottom: 4,
   },
-  cardTitle: { color: '#F1F5F9', fontSize: 15, fontWeight: '700' },
-  cardDesc: { color: '#94A3B8', fontSize: 12, marginTop: 4, lineHeight: 16 },
-  reward: { alignItems: 'flex-end' },
-  rewardValue: { color: '#F59E0B', fontSize: 20, fontWeight: '800' },
-  rewardLabel: { color: '#64748B', fontSize: 10, fontWeight: '600', marginTop: 2 },
+  value: {
+    fontFamily: 'Inter_900Black',
+    fontSize: 24,
+    letterSpacing: -0.4,
+  },
+  label: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+});
 
+const cardStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    letterSpacing: -0.1,
+  },
+  desc: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  reward: {
+    alignItems: 'flex-end',
+  },
+  rewardValue: {
+    color: premium.goldLight,
+    fontFamily: 'Inter_900Black',
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  rewardLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 9,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
   progressRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginTop: 14,
     marginBottom: 6,
   },
-  progressText: { color: '#CBD5E1', fontSize: 12 },
-  progressPercent: { color: '#A78BFA', fontSize: 12, fontWeight: '700' },
-  progressBar: { height: 8, borderRadius: 4, backgroundColor: '#0F172A', overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4 },
-
-  claimBtn: { marginTop: 12, borderRadius: 10, overflow: 'hidden' },
-  claimGradient: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 12,
+  progressText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
   },
-  claimText: { color: '#fff', fontSize: 14, fontWeight: '700' },
-
+  progressPercent: {
+    fontFamily: 'Inter_900Black',
+    fontSize: 14,
+    letterSpacing: -0.2,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: surface.glass,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
   completedBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 8, paddingTop: 8,
-    borderTopWidth: 1, borderTopColor: '#334155',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: surface.glassBorder,
   },
-  completedText: { color: '#10B981', fontSize: 12, fontWeight: '600' },
+  completedText: {
+    color: semantic.success,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+});
 
-  tipBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    padding: 12, marginTop: 12,
-    borderRadius: 10, backgroundColor: '#1E293B',
-    borderWidth: 1, borderColor: '#334155',
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  tipText: { color: '#94A3B8', fontSize: 11, flex: 1, lineHeight: 15 },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  sectionLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  tipBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: space.md,
+  },
+  tipIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 8,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipText: {
+    flex: 1,
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
 });

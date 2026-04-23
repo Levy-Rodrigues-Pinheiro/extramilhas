@@ -38,6 +38,13 @@ export { LiveActivityBanner, default as LiveActivityBannerDefault } from './Live
 export { ContextMenu, default as ContextMenuDefault, type ContextMenuItem } from './ContextMenu';
 export { NumberPad, default as NumberPadDefault } from './NumberPad';
 export { FlyingPlaneScene, default as FlyingPlaneSceneDefault } from './FlyingPlaneScene';
+export { SegmentedControl, default as SegmentedControlDefault } from './SegmentedControl';
+export { AnimatedCheckmark, default as AnimatedCheckmarkDefault } from './AnimatedCheckmark';
+export {
+  WrappedStoryStack,
+  type WrappedStory,
+  default as WrappedStoryStackDefault,
+} from './WrappedStoryStack';
 
 // Design tokens re-export
 export {

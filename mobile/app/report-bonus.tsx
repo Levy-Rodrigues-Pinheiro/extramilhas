@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  TextInput,
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -15,23 +12,49 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  FadeInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+  withSpring,
+  Easing,
+} from 'react-native-reanimated';
 import { useCreateBonusReport } from '../src/hooks/useBonusReports';
-import { haptic } from '../src/lib/haptic';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  FloatingLabelInput,
+  AnimatedCheckmark,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
 const PROGRAMS = [
-  { slug: 'livelo', name: 'Livelo' },
-  { slug: 'esfera', name: 'Esfera' },
-  { slug: 'smiles', name: 'Smiles' },
-  { slug: 'tudoazul', name: 'TudoAzul' },
-  { slug: 'latampass', name: 'Latam Pass' },
+  { slug: 'livelo', name: 'Livelo', color: '#E91E63' },
+  { slug: 'esfera', name: 'Esfera', color: '#9C27B0' },
+  { slug: 'smiles', name: 'Smiles', color: '#FF9800' },
+  { slug: 'tudoazul', name: 'TudoAzul', color: '#2196F3' },
+  { slug: 'latampass', name: 'Latam Pass', color: '#F44336' },
 ];
 
 /**
- * Reportar bônus visto na rua → vai pra fila admin → vira oportunidade
- * pra todos os usuários quando aprovado.
+ * Report-bonus v2 — form delicious + success state com AnimatedCheckmark.
  *
- * Crowdsourcing principal do app — quanto mais gente reporta, mais
- * frescos os dados. Reduz dependência de scraping.
+ * Signature moment: submit → AnimatedCheckmark draws line in circle +
+ * confetti subtle + impact message "x usuários vão ser notificados".
  */
 export default function ReportBonusScreen() {
   const [from, setFrom] = useState('livelo');
@@ -40,19 +63,25 @@ export default function ReportBonusScreen() {
   const [expires, setExpires] = useState('');
   const [notes, setNotes] = useState('');
   const create = useCreateBonusReport();
-  const [submitted, setSubmitted] = useState<{ message: string; isDuplicate: boolean } | null>(null);
+  const [submitted, setSubmitted] = useState<{
+    message: string;
+    isDuplicate: boolean;
+  } | null>(null);
 
   const handleSubmit = async () => {
     const bonusNum = parseFloat(bonus.replace(',', '.'));
     if (isNaN(bonusNum) || bonusNum < 1 || bonusNum > 500) {
+      haptics.error();
       Alert.alert('Bônus inválido', 'Digite um número entre 1 e 500.');
       return;
     }
     if (from === to) {
+      haptics.error();
       Alert.alert('Programas iguais', 'Origem e destino não podem ser o mesmo programa.');
       return;
     }
     try {
+      haptics.medium();
       const result = await create.mutateAsync({
         fromProgramSlug: from,
         toProgramSlug: to,
@@ -61,292 +90,510 @@ export default function ReportBonusScreen() {
         notes: notes || undefined,
       });
       setSubmitted({ message: result.message, isDuplicate: result.isDuplicate });
-      if (result.isDuplicate) haptic.warning();
-      else haptic.success();
+      if (result.isDuplicate) haptics.warning();
+      else haptics.success();
     } catch (e: any) {
-      haptic.error();
+      haptics.error();
       Alert.alert('Erro', e?.response?.data?.message || e?.message || 'Falha ao enviar');
     }
   };
 
+  // Success state
   if (submitted) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.successBox}>
-          <View style={[styles.successIcon, { backgroundColor: submitted.isDuplicate ? '#451A03' : '#064E3B' }]}>
-            <Ionicons
-              name={submitted.isDuplicate ? 'information-circle' : 'checkmark-circle'}
-              size={56}
-              color={submitted.isDuplicate ? '#F59E0B' : '#10B981'}
-            />
+      <AuroraBackground intensity="hero" style={{ flex: 1 }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+          {/* Close btn */}
+          <View style={styles.successHeader}>
+            <PressableScale
+              onPress={() => {
+                haptics.tap();
+                router.back();
+              }}
+              haptic="none"
+              style={styles.iconBtn}
+            >
+              <Ionicons name="close" size={20} color={textTokens.primary} />
+            </PressableScale>
           </View>
-          <Text style={styles.successTitle}>
-            {submitted.isDuplicate ? 'Já temos esse!' : 'Obrigado! 🙏'}
-          </Text>
-          <Text style={styles.successText}>{submitted.message}</Text>
 
-          {/* Reforço de impacto social: quando admin aprovar, N usuários
-              são notificados — cria sensação de contribuição real */}
-          {!submitted.isDuplicate && (
-            <View style={styles.impactBox}>
-              <Ionicons name="people" size={16} color="#A78BFA" />
-              <Text style={styles.impactText}>
-                Assim que admin validar, <Text style={{ fontWeight: '800' }}>todo mundo no app recebe push</Text>.
-                Seu report vira oportunidade pra quem tem saldo nesse programa.
-              </Text>
-            </View>
-          )}
+          <View style={styles.successWrap}>
+            {/* Animated checkmark hero */}
+            <Animated.View entering={FadeIn.duration(300)}>
+              <AnimatedCheckmark
+                trigger={true}
+                size={120}
+                color={submitted.isDuplicate ? premium.goldLight : semantic.success}
+                strokeWidth={7}
+              />
+            </Animated.View>
 
-          {!submitted.isDuplicate && (
-            <View style={styles.impactBox}>
-              <Ionicons name="trophy" size={16} color="#F59E0B" />
-              <Text style={styles.impactText}>
-                Reports aprovados <Text style={{ fontWeight: '800' }}>sobem seu tier no ranking</Text>{' '}
-                + dão <Text style={{ fontWeight: '800' }}>dias Premium grátis</Text> via missões.
-              </Text>
-            </View>
-          )}
+            <Animated.Text
+              entering={FadeInUp.delay(400).duration(500)}
+              style={styles.successTitle}
+            >
+              {submitted.isDuplicate ? 'Já temos esse!' : 'Obrigado! 🙏'}
+            </Animated.Text>
 
-          <TouchableOpacity
-            onPress={() => {
-              setSubmitted(null);
-              setBonus('');
-              setNotes('');
-              setExpires('');
-            }}
-            style={styles.successBtn}
-          >
-            <Text style={styles.successBtnText}>Reportar outro bônus</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.successBtn, { backgroundColor: 'transparent' }]}
-          >
-            <Text style={[styles.successBtnText, { color: '#8B5CF6' }]}>Voltar pro app</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+            <Animated.Text
+              entering={FadeInUp.delay(550).duration(500)}
+              style={styles.successText}
+            >
+              {submitted.message}
+            </Animated.Text>
+
+            {!submitted.isDuplicate && (
+              <Animated.View
+                entering={FadeInUp.delay(750).duration(500)}
+                style={{ width: '100%', marginTop: space.xl }}
+              >
+                <GlassCard radiusSize="lg" padding={16} glow="cyan" style={styles.impactBox}>
+                  <View style={styles.impactIcon}>
+                    <Ionicons name="people" size={18} color={aurora.cyan} />
+                  </View>
+                  <Text style={styles.impactText}>
+                    Quando admin validar,{' '}
+                    <Text style={styles.impactBold}>todo mundo no app recebe push.</Text> Seu
+                    report vira oportunidade pra quem tem saldo nesse programa.
+                  </Text>
+                </GlassCard>
+              </Animated.View>
+            )}
+
+            <Animated.View
+              entering={FadeInUp.delay(900).duration(500)}
+              style={{ width: '100%', marginTop: space.xl, gap: 10 }}
+            >
+              <AuroraButton
+                label="Ver ranking de reporters"
+                onPress={() => {
+                  haptics.tap();
+                  router.replace('/leaderboard' as any);
+                }}
+                variant="primary"
+                size="lg"
+                icon="trophy"
+                iconPosition="left"
+                fullWidth
+                haptic="none"
+              />
+              <AuroraButton
+                label="Reportar outro"
+                onPress={() => {
+                  haptics.tap();
+                  setSubmitted(null);
+                  setBonus('');
+                  setExpires('');
+                  setNotes('');
+                }}
+                variant="ghost"
+                size="md"
+                fullWidth
+                haptic="none"
+              />
+            </Animated.View>
+          </View>
+        </SafeAreaView>
+      </AuroraBackground>
     );
   }
 
+  // Form state
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={24} color="#fff" />
-          </TouchableOpacity>
-          <View style={styles.titleBox}>
-            <Text style={styles.title}>Reportar bônus</Text>
-            <Text style={styles.subtitle}>Compartilha com a comunidade</Text>
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.intro}>
-            <Ionicons name="megaphone" size={28} color="#8B5CF6" />
-            <Text style={styles.introText}>
-              Viu um bônus na newsletter ou no site? Reporta aqui — todos os usuários ganham
-              quando o admin valida.
-            </Text>
-          </View>
-
-          {/* DE */}
-          <Text style={styles.label}>De qual programa?</Text>
-          <View style={styles.chipRow}>
-            {PROGRAMS.map((p) => (
-              <TouchableOpacity
-                key={p.slug}
-                onPress={() => setFrom(p.slug)}
-                style={[
-                  styles.chip,
-                  from === p.slug && { borderColor: '#8B5CF6', backgroundColor: '#3B2F66' },
-                ]}
-              >
-                <Text style={[styles.chipText, from === p.slug && { color: '#A78BFA', fontWeight: '700' }]}>
-                  {p.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* PARA */}
-          <Text style={styles.label}>Para qual programa?</Text>
-          <View style={styles.chipRow}>
-            {PROGRAMS.filter((p) => p.slug !== from).map((p) => (
-              <TouchableOpacity
-                key={p.slug}
-                onPress={() => setTo(p.slug)}
-                style={[
-                  styles.chip,
-                  to === p.slug && { borderColor: '#10B981', backgroundColor: '#064E3B' },
-                ]}
-              >
-                <Text style={[styles.chipText, to === p.slug && { color: '#34D399', fontWeight: '700' }]}>
-                  {p.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* BÔNUS % */}
-          <Text style={styles.label}>Quantos % de bônus?</Text>
-          <View style={styles.bonusRow}>
-            <TextInput
-              style={styles.bonusInput}
-              value={bonus}
-              onChangeText={(v) => setBonus(v.replace(/[^0-9.,]/g, '').slice(0, 5))}
-              keyboardType="numeric"
-              placeholder="ex: 100"
-              placeholderTextColor="#475569"
-            />
-            <Text style={styles.bonusSuffix}>%</Text>
-          </View>
-          <View style={styles.quickBonusRow}>
-            {[40, 60, 80, 100].map((b) => (
-              <TouchableOpacity
-                key={b}
-                onPress={() => setBonus(String(b))}
-                style={styles.quickBonusChip}
-              >
-                <Text style={styles.quickBonusText}>{b}%</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* EXPIRA EM */}
-          <Text style={styles.label}>Expira em (opcional)</Text>
-          <TextInput
-            style={styles.input}
-            value={expires}
-            onChangeText={setExpires}
-            placeholder="aaaa-mm-dd (ex: 2026-12-31)"
-            placeholderTextColor="#475569"
-            maxLength={10}
-          />
-
-          {/* OBSERVAÇÕES */}
-          <Text style={styles.label}>Observações (opcional)</Text>
-          <TextInput
-            style={[styles.input, { minHeight: 70, textAlignVertical: 'top' }]}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            placeholder="ex: 'Vi na newsletter de hoje, link tal'"
-            placeholderTextColor="#475569"
-            maxLength={500}
-          />
-
-          <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={create.isPending || !bonus}
-            style={[styles.submit, (!bonus || create.isPending) && { opacity: 0.5 }]}
-          >
-            <LinearGradient
-              colors={['#8B5CF6', '#3B82F6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.submitGradient}
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <PressableScale
+              onPress={() => router.back()}
+              haptic="tap"
+              style={styles.iconBtn}
             >
-              {create.isPending ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="send" size={16} color="#fff" />
-                  <Text style={styles.submitText}>Enviar reporte</Text>
-                </>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+            </PressableScale>
+            <View style={styles.titleBox}>
+              <Text style={styles.title}>Reportar bônus</Text>
+              <Text style={styles.subtitle}>Ajude a comunidade</Text>
+            </View>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Intro card */}
+            <Animated.View
+              entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+            >
+              <GlassCard radiusSize="lg" padding={16} glow="cyan">
+                <View style={styles.introRow}>
+                  <View style={styles.introIcon}>
+                    <Ionicons name="megaphone" size={18} color={aurora.cyan} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.introTitle}>
+                      Viu um bônus em algum lugar?
+                    </Text>
+                    <Text style={styles.introText}>
+                      Newsletter, site, telegram... reporta aqui. Admin valida, app avisa
+                      todo mundo, você sobe no ranking.
+                    </Text>
+                  </View>
+                </View>
+              </GlassCard>
+            </Animated.View>
+
+            {/* Origem → Destino */}
+            <Animated.View
+              entering={FadeInDown.delay(100).duration(motion.timing.medium)}
+              style={{ marginTop: space.md }}
+            >
+              <Text style={styles.sectionLabel}>ORIGEM → DESTINO</Text>
+
+              <GlassCard radiusSize="lg" padding={14}>
+                <Text style={styles.fieldLabel}>De qual programa</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={{ marginBottom: space.md }}
+                >
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {PROGRAMS.map((p) => (
+                      <ProgramChip
+                        key={`from-${p.slug}`}
+                        label={p.name}
+                        selected={from === p.slug}
+                        onPress={() => setFrom(p.slug)}
+                      />
+                    ))}
+                  </View>
+                </ScrollView>
+
+                <View style={styles.arrowRow}>
+                  <View style={styles.arrowLine} />
+                  <View style={styles.arrowIconWrap}>
+                    <Ionicons name="arrow-down" size={14} color={aurora.cyan} />
+                  </View>
+                  <View style={styles.arrowLine} />
+                </View>
+
+                <Text style={styles.fieldLabel}>Para qual programa</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                >
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {PROGRAMS.map((p) => (
+                      <ProgramChip
+                        key={`to-${p.slug}`}
+                        label={p.name}
+                        selected={to === p.slug}
+                        onPress={() => setTo(p.slug)}
+                      />
+                    ))}
+                  </View>
+                </ScrollView>
+              </GlassCard>
+            </Animated.View>
+
+            {/* Details */}
+            <Animated.View
+              entering={FadeInDown.delay(200).duration(motion.timing.medium)}
+              style={{ marginTop: space.md }}
+            >
+              <Text style={styles.sectionLabel}>DETALHES</Text>
+              <GlassCard radiusSize="lg" padding={14}>
+                <FloatingLabelInput
+                  label="Bônus % (1 a 500)"
+                  iconLeft="trending-up-outline"
+                  value={bonus}
+                  onChangeText={(v) => setBonus(v.replace(/[^0-9.,]/g, ''))}
+                  keyboardType="decimal-pad"
+                  maxLength={6}
+                />
+
+                <FloatingLabelInput
+                  label="Expira em (aaaa-mm-dd) — opcional"
+                  iconLeft="calendar-outline"
+                  value={expires}
+                  onChangeText={setExpires}
+                  maxLength={10}
+                />
+
+                <FloatingLabelInput
+                  label="Observações (link, fonte...) — opcional"
+                  iconLeft="document-text-outline"
+                  value={notes}
+                  onChangeText={setNotes}
+                  maxLength={300}
+                  multiline
+                />
+              </GlassCard>
+            </Animated.View>
+
+            {/* Submit */}
+            <Animated.View
+              entering={FadeInDown.delay(300).duration(motion.timing.medium)}
+              style={{ marginTop: space.xl }}
+            >
+              <AuroraButton
+                label="Enviar report"
+                onPress={handleSubmit}
+                loading={create.isPending}
+                disabled={!bonus || from === to}
+                variant="primary"
+                size="lg"
+                icon="send"
+                iconPosition="right"
+                fullWidth
+                haptic="medium"
+              />
+            </Animated.View>
+
+            <Text style={styles.footnote}>
+              Reports duplicados (mesma parceria) são dedupado e você não ganha ponto dobrado.
+            </Text>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
+// ─── ProgramChip ────────────────────────────────────────────────────────
+
+function ProgramChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <PressableScale
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
+      haptic="none"
+    >
+      <View style={[styles.chip, selected && styles.chipSelected]}>
+        {selected && (
+          <LinearGradient
+            colors={gradients.auroraCyanMagenta}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 999 }]}
+          />
+        )}
+        <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+// ─── Styles ─────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0F172A' },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: { padding: 8, width: 40 },
-  titleBox: { flex: 1 },
-  title: { color: '#fff', fontSize: 19, fontWeight: '700' },
-  subtitle: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
-  content: { padding: 16, paddingBottom: 40 },
-
-  intro: {
-    flexDirection: 'row', gap: 12, alignItems: 'center',
-    backgroundColor: '#1E293B', padding: 16, borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155', marginBottom: 20,
+  successHeader: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
   },
-  introText: { color: '#CBD5E1', fontSize: 13, flex: 1, lineHeight: 18 },
-
-  label: {
-    color: '#94A3B8', fontSize: 12, fontWeight: '600',
-    textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 16, marginBottom: 8,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
   },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: '#334155',
-    borderRadius: 20, backgroundColor: '#1E293B',
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
   },
-  chipText: { color: '#CBD5E1', fontSize: 13 },
-
-  bonusRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 8, paddingHorizontal: 14,
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
-  bonusInput: { flex: 1, color: '#F1F5F9', fontSize: 24, fontWeight: '700', paddingVertical: 14 },
-  bonusSuffix: { color: '#64748B', fontSize: 20, fontWeight: '600' },
-  quickBonusRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  quickBonusChip: {
-    paddingHorizontal: 14, paddingVertical: 6,
-    backgroundColor: '#1E293B', borderColor: '#334155', borderWidth: 1,
-    borderRadius: 16,
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
   },
-  quickBonusText: { color: '#A78BFA', fontSize: 12, fontWeight: '600' },
-
-  input: {
-    backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155',
-    borderRadius: 8, padding: 12,
-    color: '#F1F5F9', fontSize: 14,
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
   },
 
-  submit: { marginTop: 24, borderRadius: 10, overflow: 'hidden' },
-  submitGradient: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 14,
+  introRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
   },
-  submitText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-
-  successBox: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    padding: 32, gap: 16,
-  },
-  successIcon: {
-    width: 96, height: 96, borderRadius: 48,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  successTitle: { color: '#fff', fontSize: 24, fontWeight: '800' },
-  successText: { color: '#CBD5E1', fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  successBtn: {
-    marginTop: 12, paddingHorizontal: 24, paddingVertical: 14,
-    backgroundColor: '#8B5CF6', borderRadius: 10,
-  },
-  successBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  impactBox: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    padding: 14, marginTop: 8, marginHorizontal: 8,
-    backgroundColor: '#1E293B',
+  introIcon: {
+    width: 36,
+    height: 36,
     borderRadius: 12,
-    borderWidth: 1, borderColor: '#334155',
-    maxWidth: 360,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${aurora.cyan}44`,
   },
-  impactText: { color: '#CBD5E1', fontSize: 12, lineHeight: 17, flex: 1 },
+  introTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
+  introText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+
+  sectionLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  fieldLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    overflow: 'hidden',
+  },
+  chipSelected: {
+    borderColor: 'transparent',
+  },
+  chipText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+  chipTextSelected: {
+    color: '#041220',
+    fontFamily: 'Inter_700Bold',
+  },
+
+  arrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 10,
+  },
+  arrowLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: surface.separator,
+  },
+  arrowIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${aurora.cyan}66`,
+  },
+
+  footnote: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: space.lg,
+    paddingHorizontal: space.xl,
+    lineHeight: 16,
+  },
+
+  // Success
+  successWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: space.xl,
+    paddingBottom: space.hero,
+  },
+  successTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_900Black',
+    fontSize: 32,
+    letterSpacing: -0.8,
+    textAlign: 'center',
+    marginTop: space.xl,
+  },
+  successText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: space.md,
+  },
+  impactBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  impactIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${aurora.cyan}44`,
+  },
+  impactText: {
+    flex: 1,
+    color: textTokens.primary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  impactBold: {
+    fontFamily: 'Inter_700Bold',
+    color: aurora.cyan,
+  },
 });
