@@ -13,9 +13,9 @@
 import React from 'react';
 import { View, ViewProps, StyleSheet, StyleProp, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { surface, radius, aurora, premium, gradients } from '../../design/tokens';
+import { surface, radius, aurora, premium, gradients, system, semantic } from '../../design/tokens';
 
-type GlowColor = 'none' | 'aurora' | 'cyan' | 'magenta' | 'gold' | 'success' | 'danger';
+type GlowColor = 'none' | 'aurora' | 'cyan' | 'magenta' | 'gold' | 'success' | 'danger' | 'blue';
 
 type Props = ViewProps & {
   /** Intensidade do glow border — defaults to 'none'. */
@@ -38,8 +38,9 @@ const GLOW_COLORS: Record<GlowColor, string | null> = {
   cyan: aurora.cyan,
   magenta: aurora.magenta,
   gold: premium.goldLight,
-  success: '#34D399',
-  danger: '#F87171',
+  success: semantic.success,
+  danger: semantic.danger,
+  blue: system.blue,
 };
 
 const INTENSITY_BG: Record<NonNullable<Props['glassIntensity']>, string> = {

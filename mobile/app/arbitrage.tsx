@@ -3,33 +3,64 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   RefreshControl,
   Share,
   Linking,
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ThemedSafeArea } from '../src/components/ThemedSafeArea';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+  interpolate,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useTransferBonuses, TransferOpportunity } from '../src/hooks/useArbitrage';
 import { PaywallUpsellBanner, LockedOpportunityCard } from '../src/components/PaywallGate';
 import { FirstRunTip } from '../src/components/FirstRunTip';
 import { ReviewCompact } from '../src/components/ReviewCompact';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  AnimatedNumber,
+  StaggerItem,
+  ShimmerSkeleton,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  aurora,
+  premium,
+  semantic,
+  system,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
 type SortMode = 'best' | 'newest' | 'expiring';
 type FilterMode = 'all' | 'my_programs' | 'top_only';
 
 /**
- * Arbitragem de milhas — tela dedicada.
+ * Arbitrage v2 — core feature de monetização.
  *
- * Hoje: bônus de transferência (o cenário de maior valor).
- * Futuro: compra promocional, melhor programa por rota, expiração + ação.
+ * Wow moments:
+ *  - IMPERDÍVEL cards: glow gold + shimmer sweep diagonal no badge
+ *  - Gain % pulse proporcional ao ganho (>100% = pulse visível)
+ *  - Stagger entrance nas cards
+ *  - Filtros com selected state aurora
  */
 export default function ArbitrageScreen() {
   const { t } = useTranslation();
@@ -43,14 +74,12 @@ export default function ArbitrageScreen() {
     if (!data?.opportunities) return [];
     let list = [...data.opportunities];
 
-    // Filtros
     if (filterMode === 'my_programs') {
       list = list.filter((o) => (o.userSourceBalance ?? 0) > 0);
     } else if (filterMode === 'top_only') {
       list = list.filter((o) => o.classification === 'IMPERDIVEL');
     }
 
-    // Search (nome do programa origem ou destino)
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -60,7 +89,6 @@ export default function ArbitrageScreen() {
       );
     }
 
-    // Sort
     if (sortMode === 'best') {
       list.sort((a, b) => b.gainPercent - a.gainPercent);
     } else if (sortMode === 'expiring') {
@@ -70,450 +98,493 @@ export default function ArbitrageScreen() {
         return ax - bx;
       });
     }
-    // 'newest' = mantém ordem original (backend já ordena por createdAt desc)
 
     return list;
   }, [data, search, sortMode, filterMode]);
 
   return (
-    <ThemedSafeArea edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <View style={styles.titleBox}>
-          <Text style={styles.title}>{t('home.quick_opportunities')}</Text>
-          <Text style={styles.subtitle}>
-            {data?.isPersonalized
-              ? t('arbitrage.best_for_your_balance')
-              : t('arbitrage.subtitle')}
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>{t('home.quick_opportunities')}</Text>
+            <Text style={styles.subtitle}>
+              {data?.isPersonalized
+                ? t('arbitrage.best_for_your_balance')
+                : t('arbitrage.subtitle')}
+            </Text>
+          </View>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={() => {
+                haptics.medium();
+                refetch();
+              }}
+              tintColor={aurora.cyan}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {isLoading && (
+            <View style={{ gap: 14 }}>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </View>
+          )}
+
+          {error && (
+            <GlassCard glow="danger" radiusSize="lg" padding={20} style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={30} color={semantic.danger} />
+              <Text style={styles.errorText}>{t('errors.generic')}</Text>
+              <AuroraButton
+                label={t('common.try_again')}
+                onPress={() => refetch()}
+                variant="apple"
+                size="md"
+                icon="refresh"
+                iconPosition="left"
+              />
+            </GlassCard>
+          )}
+
+          {!isLoading && data && data.count === 0 && (
+            <View style={{ marginTop: space.md }}>
+              <GlassCard radiusSize="xl" padding={0}>
+                <EmptyStateIllustrated
+                  variant="radar"
+                  title={t('home.no_bonuses')}
+                  description={t('home.no_bonuses_notice')}
+                  ctaLabel="Configurar alerta"
+                  onCtaPress={() => router.push('/alerts/create' as any)}
+                />
+              </GlassCard>
+              <PressableScale
+                onPress={() => router.push('/bonus-history' as any)}
+                haptic="tap"
+                style={{ alignItems: 'center', marginTop: 12 }}
+              >
+                <Text style={styles.linkText}>Ver bônus recentes (últimos 30d) →</Text>
+              </PressableScale>
+            </View>
+          )}
+
+          <FirstRunTip
+            tipKey="arbitrage-how-v1"
+            title="Primeira vez vendo oportunidades?"
+            body="Cada card é uma janela de bônus de transferência. Se o ganho % for alto E você tiver saldo no programa origem, VALE transferir."
+            icon="help-circle-outline"
+          />
+
+          {data && data.count > 0 && (
+            <>
+              {/* Info banner */}
+              <Animated.View
+                entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+              >
+                <GlassCard radiusSize="md" padding={12} style={styles.infoBanner}>
+                  <View style={styles.infoIcon}>
+                    <Ionicons name="bulb" size={14} color={aurora.cyan} />
+                  </View>
+                  <Text style={styles.infoText}>
+                    <Text style={styles.infoBold}>Como funciona:</Text> transferir com bônus
+                    diminui o custo por milha. Quanto maior o ganho %, melhor.
+                  </Text>
+                </GlassCard>
+              </Animated.View>
+
+              {/* Search + filters */}
+              <Animated.View
+                entering={FadeInDown.delay(80).duration(motion.timing.medium)}
+                style={filters.box}
+              >
+                <GlassCard radiusSize="md" padding={12} style={filters.searchRow}>
+                  <Ionicons name="search" size={15} color={textTokens.muted} />
+                  <TextInput
+                    style={filters.searchInput}
+                    placeholder={t('common.search')}
+                    placeholderTextColor={textTokens.muted}
+                    value={search}
+                    onChangeText={setSearch}
+                    accessibilityLabel={t('common.search')}
+                    selectionColor={aurora.cyan}
+                  />
+                  {search.length > 0 && (
+                    <PressableScale onPress={() => setSearch('')} haptic="tap" hitSlop={8}>
+                      <Ionicons name="close-circle" size={17} color={textTokens.muted} />
+                    </PressableScale>
+                  )}
+                </GlassCard>
+
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={filters.chipsRow}
+                >
+                  {(
+                    [
+                      { key: 'all', label: t('arbitrage.filter_all') },
+                      { key: 'my_programs', label: t('arbitrage.filter_my_programs') },
+                      { key: 'top_only', label: t('arbitrage.filter_top_only') },
+                    ] as Array<{ key: FilterMode; label: string }>
+                  ).map((f) => (
+                    <FilterChip
+                      key={f.key}
+                      label={f.label}
+                      active={filterMode === f.key}
+                      onPress={() => setFilterMode(f.key)}
+                    />
+                  ))}
+                  <View style={filters.divider} />
+                  {(
+                    [
+                      { key: 'best', label: t('arbitrage.sort_best'), icon: 'trending-up' },
+                      { key: 'newest', label: t('arbitrage.sort_newest'), icon: 'calendar-outline' },
+                      { key: 'expiring', label: t('arbitrage.sort_expiring'), icon: 'time-outline' },
+                    ] as Array<{ key: SortMode; label: string; icon: any }>
+                  ).map((s) => (
+                    <FilterChip
+                      key={s.key}
+                      label={s.label}
+                      icon={s.icon}
+                      active={sortMode === s.key}
+                      onPress={() => setSortMode(s.key)}
+                    />
+                  ))}
+                </ScrollView>
+              </Animated.View>
+
+              {visible.length === 0 && (
+                <GlassCard radiusSize="lg" padding={24} style={{ alignItems: 'center' }}>
+                  <Text style={styles.emptyFilterText}>
+                    {search
+                      ? `Nenhuma oportunidade com "${search}"`
+                      : 'Nenhuma oportunidade com esses filtros'}
+                  </Text>
+                </GlassCard>
+              )}
+
+              {visible.map((op, i) => (
+                <StaggerItem key={op.id} index={i} baseDelay={160}>
+                  <OpportunityCard opportunity={op} />
+                </StaggerItem>
+              ))}
+
+              {data.shouldUpsell && data.lockedCount && data.lockedCount > 0 ? (
+                <>
+                  <PaywallUpsellBanner lockedCount={data.lockedCount} />
+                  {Array.from({ length: Math.min(2, data.lockedCount) }).map((_, i) => (
+                    <LockedOpportunityCard key={`locked-${i}`} index={i} />
+                  ))}
+                </>
+              ) : null}
+            </>
+          )}
+
+          {/* History link */}
+          <PressableScale
+            onPress={() => router.push('/bonus-history' as any)}
+            haptic="tap"
+            style={{ marginTop: space.md }}
+          >
+            <GlassCard radiusSize="md" padding={14} style={historyLink.box}>
+              <View style={historyLink.iconWrap}>
+                <Ionicons name="time-outline" size={16} color={aurora.cyan} />
+              </View>
+              <Text style={historyLink.text}>Ver histórico dos últimos 90 dias</Text>
+              <Ionicons name="chevron-forward" size={16} color={textTokens.muted} />
+            </GlassCard>
+          </PressableScale>
+
+          {/* Report CTA */}
+          <PressableScale
+            onPress={() => router.push('/report-bonus' as any)}
+            haptic="tap"
+            style={{ marginTop: space.sm }}
+          >
+            <GlassCard radiusSize="md" padding={14} glow="cyan" style={cta.box}>
+              <View style={cta.iconBox}>
+                <Ionicons name="megaphone" size={18} color={aurora.cyan} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={cta.title}>{t('arbitrage.report_cta_title')}</Text>
+                <Text style={cta.text}>{t('arbitrage.report_cta_text')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={textTokens.muted} />
+            </GlassCard>
+          </PressableScale>
+        </ScrollView>
+      </SafeAreaView>
+    </AuroraBackground>
+  );
+}
+
+// ─── FilterChip ─────────────────────────────────────────────────────────
+
+function FilterChip({
+  label,
+  icon,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: any;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <PressableScale
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
+      haptic="none"
+    >
+      <View style={[filters.chip, active && filters.chipActive]}>
+        {active && (
+          <LinearGradient
+            colors={gradients.auroraCyanMagenta}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 999 }]}
+          />
+        )}
+        {icon && (
+          <Ionicons
+            name={icon}
+            size={11}
+            color={active ? '#041220' : textTokens.muted}
+          />
+        )}
+        <Text style={[filters.chipText, active && filters.chipTextActive]}>{label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+// ─── OpportunityCard ────────────────────────────────────────────────────
+
+function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity }) {
+  const { t } = useTranslation();
+
+  const isImperdivel = o.classification === 'IMPERDIVEL';
+  const isGood = o.classification === 'BOA';
+  const color = isImperdivel ? premium.goldLight : isGood ? semantic.success : textTokens.muted;
+
+  const label = isImperdivel
+    ? t('arbitrage.classification_imperdivel')
+    : isGood
+    ? t('arbitrage.classification_boa')
+    : t('arbitrage.classification_normal');
+
+  const daysLeft =
+    o.expiresAt != null
+      ? Math.max(0, Math.ceil((new Date(o.expiresAt).getTime() - Date.now()) / 86_400_000))
+      : null;
+
+  // Pulse proporcional ao gain. >50% = pulsar, >100% = pulsar forte.
+  const gainIntensity = Math.min(1, o.gainPercent / 100);
+  const glowPulse = useSharedValue(0);
+
+  React.useEffect(() => {
+    if (gainIntensity < 0.4) return;
+    glowPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 1200, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+  }, [gainIntensity, glowPulse]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(glowPulse.value, [0, 1], [0.3, 0.75]),
+  }));
+
+  // Shimmer diagonal sweep nos IMPERDIVEL
+  const shimmerX = useSharedValue(0);
+  React.useEffect(() => {
+    if (!isImperdivel) return;
+    shimmerX.value = withRepeat(
+      withTiming(1, { duration: 2400, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, [isImperdivel, shimmerX]);
+
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(shimmerX.value, [0, 1], [-120, 260]) },
+    ],
+  }));
+
+  return (
+    <GlassCard
+      radiusSize="lg"
+      padding={16}
+      glow={isImperdivel ? 'gold' : isGood ? 'success' : 'none'}
+      style={{ marginBottom: space.sm, position: 'relative', overflow: 'hidden' }}
+    >
+      {/* Glow pulse layer */}
+      {gainIntensity >= 0.4 && (
+        <Animated.View
+          style={[
+            cardStyles.glowLayer,
+            glowStyle,
+            { backgroundColor: `${color}14` },
+          ]}
+          pointerEvents="none"
+        />
+      )}
+
+      {/* Header: badge + days */}
+      <View style={cardStyles.header}>
+        <View
+          style={[
+            cardStyles.badge,
+            { borderColor: color, backgroundColor: `${color}1F` },
+          ]}
+        >
+          {isImperdivel && (
+            <Animated.View
+              style={[cardStyles.shimmer, shimmerStyle]}
+              pointerEvents="none"
+            />
+          )}
+          <Text style={[cardStyles.badgeText, { color }]}>{label}</Text>
+        </View>
+        {daysLeft !== null && (
+          <View style={cardStyles.daysChip}>
+            <Ionicons name="time-outline" size={11} color={textTokens.muted} />
+            <Text style={cardStyles.daysText}>
+              {daysLeft > 0
+                ? t('wallet.expires_in_days', { days: daysLeft })
+                : t('wallet.expiring_soon')}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Transfer row */}
+      <View style={cardStyles.transferRow}>
+        <View style={cardStyles.programBox}>
+          <Text style={cardStyles.programLabel}>DE</Text>
+          <Text style={cardStyles.programName}>{o.fromProgram.name}</Text>
+          <Text style={cardStyles.programCpm}>
+            CPM R$ {o.fromProgram.avgCpm.toFixed(2)}
+          </Text>
+        </View>
+
+        <View style={cardStyles.arrowBox}>
+          <Ionicons name="arrow-forward" size={22} color={aurora.cyan} />
+          <View style={[cardStyles.bonusTag, { backgroundColor: `${color}22` }]}>
+            <Text style={[cardStyles.bonusText, { color }]}>
+              +{o.currentBonus.toFixed(0)}%
+            </Text>
+          </View>
+        </View>
+
+        <View style={[cardStyles.programBox, { alignItems: 'flex-end' }]}>
+          <Text style={cardStyles.programLabel}>PARA</Text>
+          <Text style={cardStyles.programName}>{o.toProgram.name}</Text>
+          <Text style={cardStyles.programCpm}>
+            CPM R$ {o.toProgram.avgCpm.toFixed(2)}
           </Text>
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor="#8B5CF6" />
-        }
-      >
-        {isLoading && (
-          <View style={styles.loader}>
-            <ActivityIndicator size="large" color="#8B5CF6" />
-            <Text style={styles.loaderText}>{t('common.loading')}</Text>
-          </View>
-        )}
+      {/* Metrics row */}
+      <View style={cardStyles.metricsRow}>
+        <View style={cardStyles.metric}>
+          <Text style={cardStyles.metricLabel}>CPM efetivo</Text>
+          <Text style={[cardStyles.metricValue, { color }]}>
+            R$ {o.effectiveCpm.toFixed(2)}
+          </Text>
+        </View>
+        <View style={cardStyles.metric}>
+          <Text style={cardStyles.metricLabel}>Ganho</Text>
+          <AnimatedNumber
+            value={o.gainPercent}
+            format="decimal"
+            decimals={1}
+            suffix="%"
+            style={[cardStyles.metricValue, { color }]}
+          />
+        </View>
+        <View style={cardStyles.metric}>
+          <Text style={cardStyles.metricLabel}>+/1000mi</Text>
+          <Text style={cardStyles.metricValue}>
+            R$ {o.valueGainPer1000.toFixed(2)}
+          </Text>
+        </View>
+      </View>
 
-        {error && (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={32} color="#EF4444" />
-            <Text style={styles.errorText}>{t('errors.generic')}</Text>
-            <TouchableOpacity
-              onPress={() => refetch()}
-              style={styles.retryBtn}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.try_again')}
-            >
-              <Text style={styles.retryBtnText}>{t('common.try_again')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {!isLoading && data && data.count === 0 && (
-          <View style={styles.emptyBox}>
-            <Ionicons name="trending-up-outline" size={48} color="#64748B" />
-            <Text style={styles.emptyTitle}>{t('home.no_bonuses')}</Text>
-            <Text style={styles.emptyText}>
-              {t('home.no_bonuses_notice')}
-            </Text>
-            <TouchableOpacity
-              onPress={() => router.push('/alerts/create' as any)}
-              activeOpacity={0.85}
-              style={styles.emptyCta}
-            >
-              <LinearGradient
-                colors={['#8B5CF6', '#3B82F6']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.emptyCtaGradient}
-              >
-                <Ionicons name="notifications" size={15} color="#fff" />
-                <Text style={styles.emptyCtaText}>Configurar alerta de bônus</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/bonus-history' as any)}
-              style={{ marginTop: 10 }}
-            >
-              <Text style={{ color: '#A78BFA', fontSize: 12, fontWeight: '600' }}>
-                Ver bônus recentes (últimos 30 dias) →
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <FirstRunTip
-          tipKey="arbitrage-how-v1"
-          title="Primeira vez vendo oportunidades?"
-          body="Cada card é uma janela de bônus de transferência. Se o ganho % for alto E você tiver saldo no programa origem, VALE transferir. Na dúvida, abre a Calculadora."
-          icon="help-circle-outline"
-        />
-
-        {data && data.count > 0 && (
-          <>
-            <View style={styles.infoBanner}>
-              <Ionicons name="information-circle-outline" size={18} color="#8B5CF6" />
-              <Text style={styles.infoText}>
-                <Text style={styles.infoBold}>Como funciona:</Text> transferir com bônus diminui o
-                custo por milha. Quanto maior o ganho %, mais vale o movimento.
-              </Text>
+      {/* Personal box */}
+      {o.userSourceBalance != null && o.userSourceBalance > 0 && (
+        <View style={cardStyles.personalBox}>
+          <View style={cardStyles.personalHeader}>
+            <View style={cardStyles.personalDot}>
+              <Ionicons name="wallet" size={11} color={semantic.success} />
             </View>
-
-            {/* Search + filters + sort */}
-            <View style={filters.box}>
-              <View style={filters.searchRow}>
-                <Ionicons name="search" size={16} color="#94A3B8" />
-                <TextInput
-                  style={filters.searchInput}
-                  placeholder={t('common.search')}
-                  placeholderTextColor="#64748B"
-                  value={search}
-                  onChangeText={setSearch}
-                  accessibilityLabel={t('common.search')}
-                />
-                {search.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearch('')}
-                    accessibilityRole="button"
-                    accessibilityLabel={t('common.close')}
-                    hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-                  >
-                    <Ionicons name="close-circle" size={18} color="#64748B" />
-                  </TouchableOpacity>
-                )}
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={filters.chipsRow}
-              >
-                {(
-                  [
-                    { key: 'all', label: t('arbitrage.filter_all') },
-                    { key: 'my_programs', label: t('arbitrage.filter_my_programs') },
-                    { key: 'top_only', label: t('arbitrage.filter_top_only') },
-                  ] as Array<{ key: FilterMode; label: string }>
-                ).map((f) => (
-                  <TouchableOpacity
-                    key={f.key}
-                    onPress={() => setFilterMode(f.key)}
-                    style={[filters.chip, filterMode === f.key && filters.chipActive]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: filterMode === f.key }}
-                    accessibilityLabel={f.label}
-                  >
-                    <Text style={[filters.chipText, filterMode === f.key && filters.chipTextActive]}>
-                      {f.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                <View style={filters.divider} />
-                {(
-                  [
-                    { key: 'best', label: t('arbitrage.sort_best') },
-                    { key: 'newest', label: t('arbitrage.sort_newest') },
-                    { key: 'expiring', label: t('arbitrage.sort_expiring') },
-                  ] as Array<{ key: SortMode; label: string }>
-                ).map((s) => (
-                  <TouchableOpacity
-                    key={s.key}
-                    onPress={() => setSortMode(s.key)}
-                    style={[filters.chip, sortMode === s.key && filters.chipActive]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: sortMode === s.key }}
-                    accessibilityLabel={`${t('arbitrage.sort_by')}: ${s.label}`}
-                  >
-                    <Ionicons
-                      name={
-                        s.key === 'best' ? 'trending-up' : s.key === 'expiring' ? 'time-outline' : 'calendar-outline'
-                      }
-                      size={12}
-                      color={sortMode === s.key ? '#A78BFA' : '#64748B'}
-                    />
-                    <Text style={[filters.chipText, sortMode === s.key && filters.chipTextActive]}>
-                      {s.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            {visible.length === 0 && (
-              <View style={{ padding: 24, alignItems: 'center' }}>
-                <Text style={{ color: '#94A3B8', fontSize: 13 }}>
-                  {search
-                    ? `Nenhuma oportunidade com "${search}"`
-                    : 'Nenhuma oportunidade com esses filtros'}
-                </Text>
-              </View>
-            )}
-
-            {visible.map((op) => (
-              <OpportunityCard key={op.id} opportunity={op} />
-            ))}
-
-            {/* Paywall: banner + 2 cards locked como preview */}
-            {data.shouldUpsell && data.lockedCount && data.lockedCount > 0 ? (
-              <>
-                <PaywallUpsellBanner lockedCount={data.lockedCount} />
-                {Array.from({ length: Math.min(2, data.lockedCount) }).map((_, i) => (
-                  <LockedOpportunityCard key={`locked-${i}`} index={i} />
-                ))}
-              </>
-            ) : null}
-          </>
-        )}
-
-        {/* Link pro histórico completo */}
-        <TouchableOpacity
-          onPress={() => router.push('/bonus-history' as any)}
-          activeOpacity={0.85}
-          style={historyLink.box}
-        >
-          <Ionicons name="time-outline" size={18} color="#A78BFA" />
-          <Text style={historyLink.text}>Ver histórico dos últimos 90 dias →</Text>
-        </TouchableOpacity>
-
-        {/* CTA Reportar bônus — sempre visível, não só quando vazio */}
-        <TouchableOpacity
-          onPress={() => router.push('/report-bonus' as any)}
-          activeOpacity={0.85}
-          style={cta.box}
-        >
-          <View style={cta.iconBox}>
-            <Ionicons name="megaphone" size={20} color="#8B5CF6" />
+            <Text style={cardStyles.personalTitle}>Pra você</Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={cta.title}>{t('arbitrage.report_cta_title')}</Text>
-            <Text style={cta.text}>{t('arbitrage.report_cta_text')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#64748B" />
-        </TouchableOpacity>
-      </ScrollView>
-    </ThemedSafeArea>
-  );
-}
-
-const filters = StyleSheet.create({
-  box: {
-    marginTop: 4,
-    marginBottom: 14,
-    gap: 8,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#141C2F',
-    borderWidth: 1,
-    borderColor: '#253349',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 40,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#F8FAFC',
-    paddingVertical: 0,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingRight: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#253349',
-    backgroundColor: '#141C2F',
-  },
-  chipActive: {
-    borderColor: '#8B5CF6',
-    backgroundColor: '#3B2F66',
-  },
-  chipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  chipTextActive: {
-    color: '#A78BFA',
-  },
-  divider: {
-    width: 1,
-    height: 20,
-    backgroundColor: '#253349',
-    marginHorizontal: 4,
-  },
-});
-
-const historyLink = StyleSheet.create({
-  box: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center',
-    paddingVertical: 12, marginTop: 16,
-    borderRadius: 10,
-    borderWidth: 1, borderColor: '#3B2F66',
-    backgroundColor: '#1E1B4B',
-  },
-  text: { color: '#A78BFA', fontSize: 13, fontWeight: '600' },
-});
-
-const cta = StyleSheet.create({
-  box: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: '#1E293B', borderColor: '#3B2F66', borderWidth: 1,
-    padding: 16, borderRadius: 14, marginTop: 16,
-  },
-  iconBox: {
-    width: 44, height: 44, borderRadius: 12,
-    backgroundColor: '#3B2F66', alignItems: 'center', justifyContent: 'center',
-  },
-  title: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
-  text: { color: '#94A3B8', fontSize: 12, marginTop: 2 },
-});
-
-function OpportunityCard({ opportunity: o }: { opportunity: TransferOpportunity }) {
-  const { t } = useTranslation();
-  const color =
-    o.classification === 'IMPERDIVEL' ? '#10B981' : o.classification === 'BOA' ? '#F59E0B' : '#64748B';
-  const label =
-    o.classification === 'IMPERDIVEL'
-      ? t('arbitrage.classification_imperdivel')
-      : o.classification === 'BOA'
-      ? t('arbitrage.classification_boa')
-      : t('arbitrage.classification_normal');
-
-  const daysLeft =
-    o.expiresAt != null
-      ? Math.max(0, Math.ceil((new Date(o.expiresAt).getTime() - Date.now()) / (86_400_000)))
-      : null;
-
-  return (
-    <View style={styles.card}>
-      <LinearGradient
-        colors={[`${color}20`, `${color}05`]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.cardGradient}
-      >
-        <View style={styles.cardHeader}>
-          <View style={[styles.badge, { backgroundColor: `${color}25`, borderColor: color }]}>
-            <Text style={[styles.badgeText, { color }]}>{label}</Text>
-          </View>
-          {daysLeft !== null && (
-            <Text style={styles.daysLeft}>
-              {daysLeft > 0 ? t('wallet.expires_in_days', { days: daysLeft }) : t('wallet.expiring_soon')}
+          <Text style={cardStyles.personalText}>
+            Seu saldo de{' '}
+            <Text style={cardStyles.personalBold}>
+              {o.userSourceBalance.toLocaleString('pt-BR')}
+            </Text>{' '}
+            pts {o.fromProgram.name} vira{' '}
+            <Text style={cardStyles.personalBold}>
+              {o.potentialResultingMiles?.toLocaleString('pt-BR')}
+            </Text>{' '}
+            mi {o.toProgram.name} — extra capturado:{' '}
+            <Text style={[cardStyles.personalBold, { color: semantic.success }]}>
+              R$ {o.potentialValueGain?.toFixed(2)}
             </Text>
-          )}
+          </Text>
         </View>
+      )}
 
-        <View style={styles.transferRow}>
-          <View style={styles.programBox}>
-            <Text style={styles.programLabel}>DE</Text>
-            <Text style={styles.programName}>{o.fromProgram.name}</Text>
-            <Text style={styles.programCpm}>CPM R$ {o.fromProgram.avgCpm.toFixed(2)}</Text>
-          </View>
-
-          <View style={styles.arrowBox}>
-            <Ionicons name="arrow-forward" size={20} color="#8B5CF6" />
-            <Text style={styles.bonusText}>+{o.currentBonus.toFixed(0)}%</Text>
-          </View>
-
-          <View style={styles.programBox}>
-            <Text style={styles.programLabel}>PARA</Text>
-            <Text style={styles.programName}>{o.toProgram.name}</Text>
-            <Text style={styles.programCpm}>CPM R$ {o.toProgram.avgCpm.toFixed(2)}</Text>
-          </View>
-        </View>
-
-        <View style={styles.metricsRow}>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>CPM efetivo</Text>
-            <Text style={[styles.metricValue, { color }]}>R$ {o.effectiveCpm.toFixed(2)}</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>Ganho</Text>
-            <Text style={[styles.metricValue, { color }]}>{o.gainPercent.toFixed(1)}%</Text>
-          </View>
-          <View style={styles.metric}>
-            <Text style={styles.metricLabel}>+/1.000mi</Text>
-            <Text style={styles.metricValue}>R$ {o.valueGainPer1000.toFixed(2)}</Text>
-          </View>
-        </View>
-
-        {o.userSourceBalance != null && o.userSourceBalance > 0 && (
-          <View style={styles.personalBox}>
-            <Text style={styles.personalTitle}>Pra você:</Text>
-            <Text style={styles.personalText}>
-              Você tem <Text style={styles.personalBold}>{o.userSourceBalance.toLocaleString('pt-BR')}</Text>{' '}
-              pontos {o.fromProgram.name}. Transferindo agora viram{' '}
-              <Text style={styles.personalBold}>
-                {o.potentialResultingMiles?.toLocaleString('pt-BR')}
-              </Text>{' '}
-              milhas {o.toProgram.name} — valor extra capturado: R${' '}
-              <Text style={styles.personalBold}>{o.potentialValueGain?.toFixed(2)}</Text>
-            </Text>
-          </View>
-        )}
-
-        {/* CTAs duplos: principal = ir transferir, secundário = share.
-            A11y: labels descrevem AÇÃO, hitSlop aumenta tap target. */}
-        <View style={styles.ctaRow}>
-          <TouchableOpacity
+      {/* CTAs */}
+      <View style={cardStyles.ctaRow}>
+        <View style={{ flex: 1 }}>
+          <AuroraButton
+            label={`Transferir · ${o.fromProgram.name}`}
             onPress={() => openTransferFlow(o)}
-            activeOpacity={0.85}
-            style={styles.transferBtn}
-            accessibilityRole="link"
-            accessibilityLabel={`Abrir site do ${o.fromProgram.name} pra transferir ${o.currentBonus.toFixed(0)}% de bônus`}
-          >
-            <LinearGradient
-              colors={['#8B5CF6', '#3B82F6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.transferGradient}
-            >
-              <Ionicons name="open-outline" size={16} color="#fff" />
-              <Text style={styles.transferText}>{t('arbitrage.transfer_button')} · {o.fromProgram.name}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => shareOpportunity(o)}
-            activeOpacity={0.7}
-            style={styles.shareBtn}
-            accessibilityRole="button"
-            accessibilityLabel={t('arbitrage.share_aria')}
-            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-          >
-            <Ionicons name="share-social-outline" size={18} color="#25D366" />
-          </TouchableOpacity>
+            variant="primary"
+            size="md"
+            icon="open-outline"
+            iconPosition="left"
+            fullWidth
+            haptic="medium"
+          />
         </View>
+        <PressableScale
+          onPress={() => shareOpportunity(o)}
+          haptic="tap"
+          style={cardStyles.shareBtn}
+        >
+          <Ionicons name="share-social-outline" size={18} color="#25D366" />
+        </PressableScale>
+      </View>
 
-        {/* Review compact: funcionou ou não + agregado */}
-        <ReviewCompact partnershipId={o.id} />
-      </LinearGradient>
-    </View>
+      <ReviewCompact partnershipId={o.id} />
+    </GlassCard>
   );
 }
 
-// URLs oficiais dos programas de origem — user pula direto pra fazer
-// transferência. Fallback em Google search quando desconhecido.
+// ─── Helpers ────────────────────────────────────────────────────────────
+
 const PROGRAM_URLS: Record<string, string> = {
   livelo: 'https://www.livelo.com.br/transfira-seus-pontos',
   esfera: 'https://www.esferasantanderbanespa.com.br/',
@@ -523,6 +594,7 @@ const PROGRAM_URLS: Record<string, string> = {
 };
 
 async function openTransferFlow(o: TransferOpportunity) {
+  haptics.medium();
   const url = PROGRAM_URLS[o.fromProgram.slug];
   if (url) {
     await Linking.openURL(url).catch(() => {});
@@ -533,133 +605,383 @@ async function openTransferFlow(o: TransferOpportunity) {
 }
 
 async function shareOpportunity(o: TransferOpportunity) {
+  haptics.tap();
   const bonus = Math.round(o.currentBonus);
   const gain = o.gainPercent.toFixed(1);
   const message =
     `🎁 Bônus ativo: ${bonus}% ${o.fromProgram.name} → ${o.toProgram.name}\n\n` +
-    `Ganho real de ${gain}% no valor das milhas. Descobri no Milhas Extras — baixe o app pra calcular na sua carteira:\n\n` +
+    `Ganho real de ${gain}% no valor das milhas. Descobri no Milhas Extras:\n\n` +
     `https://milhasextras.com.br`;
   try {
     await Share.share({ message });
   } catch {
-    /* user cancelou */
+    /* cancelled */
   }
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0F172A' },
+// ─── Styles ─────────────────────────────────────────────────────────────
+
+const filters = StyleSheet.create({
+  box: {
+    marginTop: space.xs,
+    marginBottom: space.md,
+    gap: 10,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: textTokens.primary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    paddingVertical: 0,
+    includeFontPadding: false,
+  },
+  chipsRow: {
+    gap: 6,
+    paddingHorizontal: 2,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    overflow: 'hidden',
+  },
+  chipActive: {
+    borderColor: 'transparent',
+  },
+  chipText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+  chipTextActive: {
+    color: '#041220',
+    fontFamily: 'Inter_700Bold',
+  },
+  divider: {
+    width: 1,
+    height: 20,
+    backgroundColor: surface.separator,
+    marginHorizontal: 4,
+    alignSelf: 'center',
+  },
+});
+
+const cardStyles = StyleSheet.create({
+  glowLayer: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
+  },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 8, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1E293B',
-  },
-  backBtn: { padding: 8, width: 40 },
-  titleBox: { flex: 1 },
-  title: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  subtitle: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
-  content: { padding: 16, paddingBottom: 32 },
-
-  loader: { alignItems: 'center', paddingVertical: 60 },
-  loaderText: { color: '#94A3B8', marginTop: 12, fontSize: 13 },
-
-  errorBox: { alignItems: 'center', paddingVertical: 40, gap: 12 },
-  errorText: { color: '#F1F5F9', fontSize: 14, textAlign: 'center' },
-  retryBtn: { backgroundColor: '#1E293B', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  retryBtnText: { color: '#8B5CF6', fontWeight: '600' },
-
-  ctaRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  transferBtn: { flex: 1, borderRadius: 10, overflow: 'hidden' },
-  transferGradient: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 12,
-  },
-  transferText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  shareBtn: {
-    width: 46, height: 46,
-    alignItems: 'center', justifyContent: 'center',
-    borderRadius: 10,
-    backgroundColor: '#064E3B',
-    borderWidth: 1, borderColor: '#25D366',
-  },
-  shareText: { color: '#25D366', fontSize: 12, fontWeight: '600' },
-
-  emptyBox: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 24, gap: 10 },
-  emptyCta: { marginTop: 12, borderRadius: 10, overflow: 'hidden' },
-  emptyCtaGradient: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 20, paddingVertical: 12,
-  },
-  emptyCtaText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  emptyTitle: { color: '#F1F5F9', fontSize: 16, fontWeight: '600' },
-  emptyText: { color: '#94A3B8', fontSize: 13, textAlign: 'center', lineHeight: 18 },
-
-  infoBanner: {
-    flexDirection: 'row', gap: 10,
-    backgroundColor: '#1E293B',
-    borderRadius: 8, padding: 12,
-    borderWidth: 1, borderColor: '#334155',
-    marginBottom: 16, alignItems: 'flex-start',
-  },
-  infoText: { flex: 1, color: '#CBD5E1', fontSize: 12, lineHeight: 18 },
-  infoBold: { color: '#F1F5F9', fontWeight: '600' },
-
-  card: { marginBottom: 14, borderRadius: 16, overflow: 'hidden' },
-  cardGradient: {
-    padding: 16,
-    backgroundColor: '#1E293B',
-    borderWidth: 1, borderColor: '#334155',
-    borderRadius: 16,
-  },
-
-  cardHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 14,
   },
   badge: {
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 12, borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  daysLeft: { color: '#94A3B8', fontSize: 11 },
-
-  transferRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  programBox: { flex: 1 },
+  shimmer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 60,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    transform: [{ skewX: '-20deg' }],
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  daysChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: surface.glass,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  daysText: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  transferRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  programBox: {
+    flex: 1,
+  },
   programLabel: {
-    color: '#64748B', fontSize: 10, fontWeight: '600',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2,
+    color: textTokens.dim,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 2,
   },
-  programName: { color: '#F1F5F9', fontSize: 15, fontWeight: '700' },
-  programCpm: { color: '#94A3B8', fontSize: 11, marginTop: 2 },
-
+  programName: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  programCpm: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 2,
+  },
   arrowBox: {
-    paddingHorizontal: 12, alignItems: 'center', gap: 4,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    gap: 6,
+  },
+  bonusTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   bonusText: {
-    color: '#8B5CF6', fontSize: 13, fontWeight: '700',
-    backgroundColor: '#3B2F66',
-    paddingHorizontal: 6, paddingVertical: 2,
-    borderRadius: 4,
+    fontSize: 11,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.3,
   },
-
   metricsRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    paddingTop: 12, borderTopWidth: 1, borderTopColor: '#334155',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: surface.glassBorder,
   },
-  metric: { flex: 1, alignItems: 'center' },
+  metric: {
+    flex: 1,
+    alignItems: 'center',
+  },
   metricLabel: {
-    color: '#64748B', fontSize: 10, fontWeight: '500',
-    textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4,
+    color: textTokens.dim,
+    fontSize: 9,
+    fontFamily: 'Inter_700Bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  metricValue: { color: '#F1F5F9', fontSize: 14, fontWeight: '700' },
-
+  metricValue: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+  },
   personalBox: {
-    marginTop: 14, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: '#334155',
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: surface.glassBorder,
+  },
+  personalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  personalDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: semantic.successBg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   personalTitle: {
-    color: '#10B981', fontSize: 11, fontWeight: '700',
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
+    color: semantic.success,
+    fontSize: 10,
+    fontFamily: 'Inter_700Bold',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  personalText: { color: '#CBD5E1', fontSize: 12, lineHeight: 18 },
-  personalBold: { color: '#F1F5F9', fontWeight: '700' },
+  personalText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  personalBold: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  shareBtn: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: 'rgba(37, 211, 102, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 211, 102, 0.45)',
+  },
+});
+
+const historyLink = StyleSheet.create({
+  box: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    flex: 1,
+    color: textTokens.primary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+});
+
+const cta = StyleSheet.create({
+  box: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+  },
+  text: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    marginTop: 2,
+  },
+});
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  titleBox: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+
+  errorBox: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  errorText: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+
+  linkText: {
+    color: aurora.cyan,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+  },
+
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: space.md,
+  },
+  infoIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: aurora.cyanSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoText: {
+    flex: 1,
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  infoBold: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+  },
+
+  emptyFilterText: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+  },
 });

@@ -35,13 +35,20 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { PressableScale } from './PressableScale';
-import { aurora, premium, text as textTokens, gradients, surface } from '../../design/tokens';
+import {
+  aurora,
+  premium,
+  system,
+  text as textTokens,
+  gradients,
+  surface,
+} from '../../design/tokens';
 import { motion } from '../../design/motion';
 import { useReduceMotion } from '../../design/hooks';
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-type Variant = 'primary' | 'gold' | 'ghost' | 'danger';
+type Variant = 'primary' | 'apple' | 'gold' | 'ghost' | 'danger' | 'success';
 type Size = 'sm' | 'md' | 'lg';
 
 type Props = {
@@ -55,7 +62,7 @@ type Props = {
   disabled?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
-  haptic?: 'tap' | 'medium' | 'success';
+  haptic?: 'tap' | 'select' | 'medium' | 'success' | 'warning' | 'error' | 'none';
 };
 
 const SIZE_CONFIG: Record<Size, { height: number; padHorizontal: number; fontSize: number }> = {
@@ -66,16 +73,21 @@ const SIZE_CONFIG: Record<Size, { height: number; padHorizontal: number; fontSiz
 
 const VARIANT_GRADIENTS: Record<Variant, [string, string] | [string, string, string] | null> = {
   primary: gradients.auroraCyanMagenta,
+  // Apple HIG blue — padrão iOS pra actions
+  apple: [system.blue, '#0060DF'],
   gold: [premium.goldLight, premium.goldDark],
   ghost: null,
-  danger: ['#F87171', '#DC2626'],
+  danger: ['#FF6961', system.red],
+  success: ['#66E88A', system.green],
 };
 
 const VARIANT_TEXT_COLOR: Record<Variant, string> = {
   primary: textTokens.onAurora,
+  apple: '#FFFFFF',
   gold: textTokens.onGold,
   ghost: textTokens.primary,
-  danger: '#FFF',
+  danger: '#FFFFFF',
+  success: '#FFFFFF',
 };
 
 export function AuroraButton({
@@ -173,8 +185,10 @@ export function AuroraButton({
       style={[
         baseStyle,
         variant === 'primary' && styles.primaryGlow,
+        variant === 'apple' && styles.appleGlow,
         variant === 'gold' && styles.goldGlow,
         variant === 'danger' && styles.dangerGlow,
+        variant === 'success' && styles.successGlow,
         style,
       ]}
     >
@@ -223,6 +237,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
+  appleGlow: {
+    shadowColor: system.blue,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 8,
+  },
   goldGlow: {
     shadowColor: premium.goldLight,
     shadowOffset: { width: 0, height: 4 },
@@ -231,7 +252,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   dangerGlow: {
-    shadowColor: '#F87171',
+    shadowColor: system.red,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  successGlow: {
+    shadowColor: system.green,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 14,

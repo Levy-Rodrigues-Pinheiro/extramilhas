@@ -1,6 +1,10 @@
-# Milhas Extras Design System — "Aurora"
+# Milhas Extras Design System — "Aurora + Apple HIG"
+
+**Base:** palette oficial da Apple (iOS 17 / macOS Sonoma Human Interface Guidelines) — systemColors dark mode, label hierarchy com alpha, fill scale (primary/secondary/tertiary/quaternary).
 
 **Motion personality:** _"Jet landing on glass."_ Confident approach, controlled flare, zero rubber. Movimento aéreo, física realista, pouso suave.
+
+**Assinatura Aurora:** cyan→iris→magenta alinhado com `system.teal` + `system.indigo` + `system.purple` da Apple. Usar APENAS em hero/celebration. Para CTAs universais, use `system.blue` (AuroraButton variant="apple").
 
 ---
 
@@ -30,13 +34,51 @@ mobile/src/components/primitives/
 
 ---
 
-## 🎨 Paleta
+## 🎨 Paleta (Apple HIG dark mode)
 
-- **Background**: deep-space navy (`#070B18 → #0A1020 → #0E1630 → #121C3D`)
-- **Aurora** (assinatura): cyan `#22D3EE` → iris `#818CF8` → magenta `#E879F9`
-- **Premium** (gold): `#F59E0B → #FBBF24` (use APENAS em reward/PRO)
-- **Semantic**: success `#34D399`, warning `#FBBF24`, danger `#F87171`, info `#60A5FA`
-- **Glass**: `rgba(255,255,255,0.04)` com border `rgba(255,255,255,0.08)`
+### Backgrounds (sistema iOS)
+- `bg.base`       `#050810`  — quase preto com navy sutil (aurora respira)
+- `bg.layer1`     `#1C1C1E`  — secondarySystemBackground (cards/sheets)
+- `bg.layer2`     `#2C2C2E`  — tertiary (nested cards)
+- `bg.layer3`     `#3A3A3C`  — quaternary (elevated)
+
+### System colors (Apple iOS 17)
+- `system.blue`    `#0A84FF` — **CTAs universais** (use `AuroraButton variant="apple"`)
+- `system.green`   `#30D158` — success
+- `system.red`     `#FF453A` — destructive
+- `system.orange`  `#FF9F0A` — warning
+- `system.yellow`  `#FFD60A` — info/highlight
+- `system.purple`  `#BF5AF2` — accent
+- `system.indigo`  `#5E5CE6` — bridge
+- `system.teal`    `#64D2FF` — info/brand
+- `system.pink`    `#FF375F`
+
+### Labels (alpha hierarchy — Apple standard)
+- `text.primary`     `#FFFFFF` (100%)
+- `text.secondary`   `rgba(235,235,245,0.60)` (60%)
+- `text.tertiary`    `rgba(235,235,245,0.30)` (30%)
+- `text.quaternary`  `rgba(235,235,245,0.18)` (18%)
+
+### Fills (iOS material scale)
+- `fill.primary`     20% alpha (grouped backgrounds)
+- `fill.secondary`   16% alpha (card hover)
+- `fill.tertiary`    12% alpha (inactive)
+- `fill.quaternary`  8%  alpha (subtle dividers)
+
+### Aurora (nossa brand accent)
+- `aurora.cyan`    `#64D2FF` = `system.teal`
+- `aurora.iris`    `#5E5CE6` = `system.indigo`
+- `aurora.magenta` `#BF5AF2` = `system.purple`
+- Uso: **apenas** em hero/celebration/brand moments
+
+### Premium (gold)
+- `premium.gold`       `#FFD60A` = `system.yellow`
+- `premium.goldLight`  `#FFE066`
+- Uso: PRO badge, streak rewards, top-3 leaderboard
+
+### Separators
+- `surface.separator`   `rgba(84,84,88,0.35)` (Apple nonOpaqueSeparator)
+- `surface.glassBorder` `rgba(84,84,88,0.65)` (Apple opaqueSeparator)
 
 ## ⏱ Timing
 
@@ -230,18 +272,21 @@ Via `useReduceMotion()` hook de `@/design/hooks`.
 
 ---
 
-## 🎯 Next screens a redesenhar (ordem de prioridade)
+## 🎯 Screens migrated
 
-Baseado no audit inicial (10 prioritárias):
+**Flagship + hero** (9 screens redesenhadas):
+1. ✅ `(tabs)/index.tsx` — home hero aurora + streak pulse + stagger
+2. ✅ `(tabs)/_layout.tsx` — FloatingTabBar custom (indicator spring)
+3. ✅ `(auth)/login.tsx` — aurora + contrail SVG + floating inputs
+4. ✅ `(auth)/register.tsx` — espelho do login + referral
+5. ✅ `(auth)/onboarding.tsx` — parallax + worm indicator + highlight tags
+6. ✅ `wallet.tsx` — AnimatedNumber + aurora bottom sheet + stagger
+7. ✅ `transfer-calculator.tsx` — verdict banner ink-fill + stagger
+8. ✅ `leaderboard.tsx` — holographic tier card + you-are-here ring
+9. ✅ `welcome-quiz.tsx` — confetti reveal + AnimatedNumber no payoff
+10. ✅ `arbitrage.tsx` — gain% pulse proporcional + IMPERDÍVEL shimmer
 
-| # | Screen | Esforço | Wow-factor |
-|---|---|---|---|
-| 4 | onboarding.tsx | M | parallax + worm indicator + shimmer CTA |
-| 5 | wallet.tsx (tabs) | M | animated balance + delta chips |
-| 6 | arbitrage.tsx | M | gain% glow proporcional, shimmer IMPERDÍVEL |
-| 7 | simulator.tsx (tabs) | G | paper-fold reveal + arc animado origem-destino |
-| 8 | leaderboard.tsx | M | holographic card por tier + you-are-here ring |
-| 9 | calculator.tsx (tabs) | M | verdict banner com ink-fill wipe |
-| 10 | welcome-quiz.tsx | M | confetti + roll-up no reveal final |
-
-Cada migração = 30-60min com os primitives já prontos.
+**Remaining** (use migration guide):
+- `alerts.tsx` (tab) — empty state + stagger (M effort)
+- `simulator.tsx` (tab) — paper-fold + arc SVG (G effort)
+- Outras screens "deep" (admin, edit-profile, etc) — quick wins

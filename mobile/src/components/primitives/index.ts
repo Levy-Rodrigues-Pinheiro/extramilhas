@@ -30,7 +30,22 @@ export { FloatingTabBar, default as FloatingTabBarDefault } from './FloatingTabB
 export { FloatingLabelInput, default as FloatingLabelInputDefault } from './FloatingLabelInput';
 
 // Design tokens re-export
-export { default as tokens, bg, aurora, premium, text, semantic, surface, gradients, radius, space, type, shadow } from '../../design/tokens';
+export {
+  default as tokens,
+  bg,
+  aurora,
+  premium,
+  text,
+  semantic,
+  surface,
+  fill,
+  system,
+  gradients,
+  radius,
+  space,
+  type,
+  shadow,
+} from '../../design/tokens';
 export { default as motion, timing, curve, timingConfig, springConfig } from '../../design/motion';
 export { default as haptics } from '../../design/haptics';
 export { useReduceMotion } from '../../design/hooks';
