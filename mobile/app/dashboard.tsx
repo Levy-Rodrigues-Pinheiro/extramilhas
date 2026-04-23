@@ -4,8 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
   Share,
   Alert,
 } from 'react-native';
@@ -13,15 +11,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import { useDashboardStats, useExportCsv } from '../src/hooks/useDashboard';
-import { Colors, Gradients } from '../src/lib/theme';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  AnimatedNumber,
+  StaggerItem,
+  SkeletonCard,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
-/**
- * Dashboard pessoal do user — stats de uso e economia estimada.
- * Export: dispara mutação que baixa CSV do backend (LGPD-ready) e usa
- * Share.share com o conteúdo inline (pra não precisar de expo-sharing).
- */
 export default function DashboardScreen() {
   const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useDashboardStats();
@@ -29,283 +40,403 @@ export default function DashboardScreen() {
 
   const handleExport = async () => {
     try {
+      haptics.medium();
       const result = await exportCsv.mutateAsync();
+      haptics.success();
       await Share.share({
         title: result.filename,
         message: result.csv,
       });
     } catch {
+      haptics.error();
       Alert.alert(t('common.error'), t('errors.generic'));
     }
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('dashboard.title')}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary.light} />
-        </View>
-      ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{t('errors.generic')}</Text>
-          <TouchableOpacity
-            onPress={() => refetch()}
-            style={styles.retryBtn}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.try_again')}
-          >
-            <Text style={styles.retryText}>{t('common.try_again')}</Text>
-          </TouchableOpacity>
-        </View>
-      ) : data ? (
-        <ScrollView contentContainerStyle={styles.content}>
-          {/* Hero: economia estimada */}
-          <LinearGradient
-            colors={['#10B981', '#3B82F6']}
-            style={styles.hero}
-          >
-            <Text style={styles.heroLabel}>{t('dashboard.savings_total')}</Text>
-            <Text style={styles.heroValue}>
-              R$ {data.savingsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </Text>
-            <Text style={styles.heroNote}>{data.savingsEstimateNote}</Text>
-          </LinearGradient>
-
-          {/* Grid de stats */}
-          <View style={styles.grid}>
-            <StatCard
-              icon="notifications"
-              label={t('dashboard.alerts_count')}
-              value={String(data.notifications.total)}
-              sub={t('dashboard.savings_last_month') + `: ${data.notifications.lastMonth}`}
-            />
-            <StatCard
-              icon="alarm-outline"
-              label={t('alerts_screen.title')}
-              value={String(data.alertsConfigured)}
-              sub={data.alertsConfigured > 0 ? t('alerts_screen.active') : ''}
-            />
-            <StatCard
-              icon="trophy-outline"
-              label={t('missions.title')}
-              value={String(data.missionsCompleted)}
-              sub={t('missions.progress', { current: data.missionsCompleted, target: data.missionsCompleted })}
-            />
-            <StatCard
-              icon="wallet-outline"
-              label={t('wallet.total_miles')}
-              value={data.walletTotalMiles.toLocaleString('pt-BR')}
-              sub={t('home.programs_count', { count: data.walletPrograms })}
-            />
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>{t('dashboard.title')}</Text>
+            <Text style={styles.subtitle}>Seu progresso em milhas</Text>
           </View>
+        </View>
 
-          {/* Export */}
-          <View style={styles.exportBox}>
-            <Text style={styles.exportTitle}>{t('profile.export_data')}</Text>
-            <Text style={styles.exportText}>
-              Formato CSV com carteira, alertas, família e notificações.
-            </Text>
-            <TouchableOpacity
-              onPress={handleExport}
-              disabled={exportCsv.isPending}
-              style={styles.exportBtn}
-              accessibilityRole="button"
-              accessibilityLabel={t('dashboard.export_csv')}
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 14 }}>
+            <SkeletonCard />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <SkeletonCard />
+              </View>
+              <View style={{ flex: 1 }}>
+                <SkeletonCard />
+              </View>
+            </View>
+          </View>
+        ) : isError ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard glow="danger" radiusSize="lg" padding={20} style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={30} color={semantic.danger} />
+              <Text style={styles.errorText}>{t('errors.generic')}</Text>
+              <AuroraButton
+                label={t('common.try_again')}
+                onPress={() => refetch()}
+                variant="apple"
+                size="md"
+                icon="refresh"
+              />
+            </GlassCard>
+          </View>
+        ) : data ? (
+          <ScrollView
+            contentContainerStyle={styles.content}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hero: economia total */}
+            <Animated.View
+              entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
             >
-              <LinearGradient
-                colors={Gradients.primary as unknown as readonly [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.exportBtnGradient}
-              >
-                {exportCsv.isPending ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="download-outline" size={16} color="#fff" />
-                    <Text style={styles.exportBtnText}>{t('dashboard.export_csv')}</Text>
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.hero}>
+                <LinearGradient
+                  colors={gradients.success}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <LinearGradient
+                  colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.5)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                />
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={[StyleSheet.absoluteFill, { height: '45%' }]}
+                />
 
-          <Text style={styles.footer}>
-            Gerado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
-          </Text>
-        </ScrollView>
-      ) : null}
-    </SafeAreaView>
+                <View style={styles.heroContent}>
+                  <View style={styles.heroIconWrap}>
+                    <Ionicons name="trending-up" size={20} color="#FFF" />
+                  </View>
+                  <Text style={styles.heroLabel}>{t('dashboard.savings_total')}</Text>
+                  <AnimatedNumber
+                    value={data.savingsTotal}
+                    format="currency"
+                    style={styles.heroValue}
+                  />
+                  <Text style={styles.heroNote}>{data.savingsEstimateNote}</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Stats grid */}
+            <View style={styles.grid}>
+              <StaggerItem index={0} baseDelay={100}>
+                <StatCard
+                  icon="notifications"
+                  label={t('dashboard.alerts_count')}
+                  value={data.notifications.total}
+                  sub={`${data.notifications.lastMonth} este mês`}
+                  color={aurora.cyan}
+                />
+              </StaggerItem>
+              <StaggerItem index={1} baseDelay={100}>
+                <StatCard
+                  icon="alarm"
+                  label={t('alerts_screen.title')}
+                  value={data.alertsConfigured}
+                  sub={data.alertsConfigured > 0 ? 'ativos' : 'nenhum'}
+                  color={aurora.magenta}
+                />
+              </StaggerItem>
+              <StaggerItem index={2} baseDelay={100}>
+                <StatCard
+                  icon="trophy"
+                  label={t('missions.title')}
+                  value={data.missionsCompleted}
+                  sub="completas"
+                  color={premium.goldLight}
+                />
+              </StaggerItem>
+              <StaggerItem index={3} baseDelay={100}>
+                <StatCard
+                  icon="wallet"
+                  label={t('wallet.total_miles')}
+                  value={data.walletTotalMiles}
+                  sub={`${data.walletPrograms} programa${data.walletPrograms !== 1 ? 's' : ''}`}
+                  color={semantic.success}
+                  large
+                />
+              </StaggerItem>
+            </View>
+
+            {/* Export */}
+            <Animated.View
+              entering={FadeInDown.delay(400).duration(motion.timing.medium)}
+              style={{ marginTop: space.md }}
+            >
+              <GlassCard radiusSize="lg" padding={18} glow="cyan" style={styles.exportBox}>
+                <View style={styles.exportHeader}>
+                  <View style={styles.exportIconWrap}>
+                    <Ionicons name="cloud-download" size={18} color={aurora.cyan} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.exportTitle}>{t('profile.export_data')}</Text>
+                    <Text style={styles.exportText}>
+                      CSV com carteira, alertas, família e notificações (LGPD-ready).
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ height: 12 }} />
+
+                <AuroraButton
+                  label={t('dashboard.export_csv')}
+                  onPress={handleExport}
+                  loading={exportCsv.isPending}
+                  variant="apple"
+                  size="md"
+                  icon="download"
+                  iconPosition="left"
+                  fullWidth
+                  haptic="medium"
+                />
+              </GlassCard>
+            </Animated.View>
+
+            <Text style={styles.footer}>
+              Gerado em {new Date(data.generatedAt).toLocaleString('pt-BR')}
+            </Text>
+          </ScrollView>
+        ) : null}
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
+
+// ─── StatCard ──────────────────────────────────────────────────────────
 
 function StatCard({
   icon,
   label,
   value,
   sub,
+  color,
+  large,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  value: string;
+  value: number;
   sub?: string;
+  color: string;
+  large?: boolean;
 }) {
   return (
-    <View
-      style={styles.statCard}
-      accessible
+    <GlassCard
+      radiusSize="lg"
+      padding={14}
+      style={[cardStyles.card, large && { flexBasis: '100%' }]}
       accessibilityLabel={`${label}: ${value}${sub ? `. ${sub}` : ''}`}
     >
-      <View style={styles.statIcon}>
-        <Ionicons name={icon} size={18} color={Colors.primary.light} />
+      <View style={[cardStyles.iconWrap, { backgroundColor: `${color}1F`, borderColor: `${color}55` }]}>
+        <Ionicons name={icon} size={18} color={color} />
       </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-      {sub ? <Text style={styles.statSub}>{sub}</Text> : null}
-    </View>
+      <AnimatedNumber
+        value={value}
+        format="integer"
+        style={[cardStyles.value, { color }]}
+      />
+      <Text style={cardStyles.label}>{label}</Text>
+      {sub ? <Text style={cardStyles.sub}>{sub}</Text> : null}
+    </GlassCard>
   );
 }
 
+// ─── Styles ─────────────────────────────────────────────────────────────
+
+const cardStyles = StyleSheet.create({
+  card: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  value: {
+    fontFamily: 'Inter_900Black',
+    fontSize: 28,
+    letterSpacing: -0.6,
+  },
+  label: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
+  sub: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+});
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg.primary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.bg.card,
+    backgroundColor: surface.glass,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.text.primary,
-  },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  errorText: { color: Colors.text.secondary, marginBottom: 12 },
-  retryBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: Colors.bg.card,
-    borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.border.default,
+    borderColor: surface.glassBorder,
   },
-  retryText: { color: Colors.primary.light, fontWeight: '600' },
-  content: { padding: 16, paddingBottom: 40 },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+
+  errorBox: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  errorText: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+
   hero: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    borderRadius: 24,
+    overflow: 'hidden',
+    minHeight: 160,
+    shadowColor: semantic.success,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 22,
+    elevation: 14,
   },
-  heroLabel: { color: '#fff', opacity: 0.85, fontSize: 13, fontWeight: '600' },
+  heroContent: {
+    padding: space.xl,
+    zIndex: 1,
+  },
+  heroIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  heroLabel: {
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   heroValue: {
-    color: '#fff',
-    fontSize: 36,
-    fontWeight: '800',
-    marginVertical: 4,
+    color: '#FFF',
+    fontFamily: 'Inter_900Black',
+    fontSize: 44,
+    lineHeight: 48,
+    letterSpacing: -1.4,
+    marginTop: 6,
   },
-  heroNote: { color: '#fff', opacity: 0.75, fontSize: 11, lineHeight: 15 },
+  heroNote: {
+    color: 'rgba(255,255,255,0.85)',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 17,
+  },
+
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginBottom: 16,
+    marginTop: space.md,
   },
-  statCard: {
-    width: '48%',
-    backgroundColor: Colors.bg.card,
+
+  exportBox: {
+    gap: 4,
+  },
+  exportHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  exportIconWrap: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-  },
-  statIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary.muted,
+    backgroundColor: aurora.cyanSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.text.primary,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  statSub: {
-    fontSize: 10,
-    color: Colors.text.muted,
-    marginTop: 2,
-  },
-  exportBox: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 14,
-    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border.subtle,
-    marginBottom: 12,
+    borderColor: `${aurora.cyan}44`,
   },
   exportTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 4,
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: -0.1,
   },
   exportText: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: Colors.text.secondary,
-    marginBottom: 12,
-    lineHeight: 16,
+    marginTop: 2,
+    lineHeight: 17,
   },
-  exportBtn: {},
-  exportBtnGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 44,
-    borderRadius: 12,
-  },
-  exportBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
-  },
+
   footer: {
+    color: textTokens.dim,
+    fontFamily: 'Inter_500Medium',
     fontSize: 11,
-    color: Colors.text.muted,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: space.xl,
   },
 });

@@ -4,18 +4,19 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   TextInput,
   Modal,
-  ActivityIndicator,
   Alert,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import {
   useNotes,
@@ -24,8 +25,25 @@ import {
   useDeleteNote,
   Note,
 } from '../src/hooks/useNotes';
-import { EmptyState } from '../src/components/EmptyState';
-import { Colors, Gradients } from '../src/lib/theme';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  StaggerItem,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  FloatingLabelInput,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
 export default function NotesScreen() {
   const { t } = useTranslation();
@@ -38,11 +56,12 @@ export default function NotesScreen() {
   const [editing, setEditing] = useState<Note | null>(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [remindAt, setRemindAt] = useState(''); // yyyy-mm-dd[THH:MM]
+  const [remindAt, setRemindAt] = useState('');
   const [tag, setTag] = useState('GERAL');
   const [recurrence, setRecurrence] = useState<'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'>('NONE');
 
   const openModal = (note?: Note) => {
+    haptics.tap();
     if (note) {
       setEditing(note);
       setTitle(note.title);
@@ -64,10 +83,12 @@ export default function NotesScreen() {
 
   const handleSave = async () => {
     if (!title.trim() || !body.trim()) {
+      haptics.error();
       Alert.alert('Dados inválidos', 'Título e corpo obrigatórios.');
       return;
     }
     try {
+      haptics.medium();
       if (editing) {
         await update.mutateAsync({
           id: editing.id,
@@ -86,370 +107,570 @@ export default function NotesScreen() {
           recurrence,
         } as any);
       }
+      haptics.success();
       setModalOpen(false);
     } catch {
+      haptics.error();
       Alert.alert(t('common.error'), t('errors.generic'));
     }
   };
 
   const handleTogglePin = (note: Note) => {
+    haptics.select();
     update.mutate({ id: note.id, isPinned: !note.isPinned });
   };
 
-  const handleArchive = (note: Note) => {
-    update.mutate({ id: note.id, isArchived: true });
-  };
-
   const handleDelete = (note: Note) => {
+    haptics.warning();
     Alert.alert('Remover nota?', `"${note.title}" será apagada permanentemente.`, [
       { text: t('common.cancel'), style: 'cancel' },
-      { text: t('common.remove'), style: 'destructive', onPress: () => del.mutate(note.id) },
+      {
+        text: t('common.remove'),
+        style: 'destructive',
+        onPress: () => {
+          haptics.heavy();
+          del.mutate(note.id);
+        },
+      },
     ]);
   };
 
-  const renderItem = ({ item }: { item: Note }) => {
-    const hasReminder = item.remindAt && !item.remindSent;
-    return (
-      <TouchableOpacity
-        style={[styles.card, item.isPinned && styles.cardPinned]}
-        onPress={() => openModal(item)}
-        activeOpacity={0.75}
-        accessibilityRole="button"
-        accessibilityLabel={`${item.isPinned ? 'Fixada: ' : ''}${item.title}`}
+  const handleArchive = (note: Note) => {
+    haptics.select();
+    update.mutate({ id: note.id, isArchived: true });
+  };
+
+  return (
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Minhas notas</Text>
+            <Text style={styles.subtitle}>Lembretes e estratégias</Text>
+          </View>
+          <PressableScale
+            onPress={() => openModal()}
+            haptic="medium"
+            style={styles.addBtn}
+          >
+            <LinearGradient
+              colors={gradients.auroraCyanMagenta}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Ionicons name="add" size={22} color="#041220" />
+          </PressableScale>
+        </View>
+
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 12 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        ) : !data || data.length === 0 ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0}>
+              <EmptyStateIllustrated
+                variant="search"
+                title="Nenhuma nota ainda"
+                description="Use pra lembrar estratégias, datas de bônus e TODOs. Reminder opcional vira push na data."
+                ctaLabel="Criar primeira nota"
+                onCtaPress={() => openModal()}
+              />
+            </GlassCard>
+          </View>
+        ) : (
+          <FlatList
+            data={data}
+            keyExtractor={(n) => n.id}
+            renderItem={({ item, index }) => (
+              <StaggerItem index={index} baseDelay={80}>
+                <NoteCard
+                  note={item}
+                  onPress={() => openModal(item)}
+                  onTogglePin={() => handleTogglePin(item)}
+                  onArchive={() => handleArchive(item)}
+                  onDelete={() => handleDelete(item)}
+                />
+              </StaggerItem>
+            )}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        {/* Modal: new/edit note */}
+        {modalOpen && (
+          <Modal visible animationType="none" transparent onRequestClose={() => setModalOpen(false)}>
+            <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
+              <Pressable>
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                  <Animated.View
+                    entering={SlideInDown.duration(motion.timing.base)
+                      .springify()
+                      .damping(28)
+                      .stiffness(180)}
+                    exiting={SlideOutDown.duration(motion.timing.base)}
+                    style={styles.modalCard}
+                  >
+                    <View style={styles.modalHandle} />
+
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>
+                        {editing ? 'Editar nota' : 'Nova nota'}
+                      </Text>
+                      <PressableScale
+                        onPress={() => setModalOpen(false)}
+                        haptic="tap"
+                        style={styles.modalClose}
+                      >
+                        <Ionicons name="close" size={20} color={textTokens.secondary} />
+                      </PressableScale>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      <FloatingLabelInput
+                        label="Título"
+                        iconLeft="document-text-outline"
+                        value={title}
+                        onChangeText={setTitle}
+                        maxLength={200}
+                      />
+
+                      <Text style={styles.fieldLabel}>Conteúdo</Text>
+                      <View style={styles.bodyInputWrap}>
+                        <TextInput
+                          value={body}
+                          onChangeText={setBody}
+                          placeholder="Digite aqui..."
+                          placeholderTextColor={textTokens.muted}
+                          multiline
+                          maxLength={5000}
+                          style={styles.bodyInput}
+                          selectionColor={aurora.cyan}
+                        />
+                      </View>
+
+                      <FloatingLabelInput
+                        label="Reminder (aaaa-mm-dd[Thh:mm])"
+                        iconLeft="alarm-outline"
+                        value={remindAt}
+                        onChangeText={setRemindAt}
+                        maxLength={16}
+                      />
+
+                      {remindAt.length > 0 && (
+                        <>
+                          <Text style={styles.fieldLabel}>Repetir</Text>
+                          <View style={styles.recurrenceRow}>
+                            {(
+                              [
+                                { key: 'NONE', label: 'Uma vez' },
+                                { key: 'DAILY', label: 'Todo dia' },
+                                { key: 'WEEKLY', label: 'Semanal' },
+                                { key: 'MONTHLY', label: 'Mensal' },
+                              ] as Array<{
+                                key: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+                                label: string;
+                              }>
+                            ).map((r) => (
+                              <RecurrenceChip
+                                key={r.key}
+                                label={r.label}
+                                selected={recurrence === r.key}
+                                onPress={() => setRecurrence(r.key)}
+                              />
+                            ))}
+                          </View>
+                        </>
+                      )}
+
+                      <FloatingLabelInput
+                        label="Tag"
+                        iconLeft="pricetag-outline"
+                        value={tag}
+                        onChangeText={setTag}
+                        maxLength={20}
+                      />
+
+                      <AuroraButton
+                        label={editing ? 'Salvar alterações' : 'Criar nota'}
+                        onPress={handleSave}
+                        loading={create.isPending || update.isPending}
+                        variant="primary"
+                        size="lg"
+                        icon="checkmark"
+                        iconPosition="left"
+                        fullWidth
+                        haptic="medium"
+                      />
+                    </ScrollView>
+                  </Animated.View>
+                </KeyboardAvoidingView>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        )}
+      </SafeAreaView>
+    </AuroraBackground>
+  );
+}
+
+// ─── NoteCard ───────────────────────────────────────────────────────────
+
+function NoteCard({
+  note,
+  onPress,
+  onTogglePin,
+  onArchive,
+  onDelete,
+}: {
+  note: Note;
+  onPress: () => void;
+  onTogglePin: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const hasReminder = note.remindAt && !note.remindSent;
+  return (
+    <PressableScale onPress={onPress} haptic="tap">
+      <GlassCard
+        radiusSize="lg"
+        padding={14}
+        glow={note.isPinned ? 'gold' : 'none'}
       >
-        <View style={styles.cardHeader}>
+        <View style={cardStyles.header}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>
-              {item.isPinned && '📌 '}{item.title}
+            <Text style={cardStyles.title} numberOfLines={1}>
+              {note.isPinned && '📌 '}
+              {note.title}
             </Text>
-            <View style={styles.cardMeta}>
-              <Text style={styles.cardTag}>#{item.tag}</Text>
+            <View style={cardStyles.metaRow}>
+              <View style={cardStyles.tagChip}>
+                <Text style={cardStyles.tagText}>#{note.tag}</Text>
+              </View>
               {hasReminder && (
-                <View style={styles.remindChip}>
-                  <Ionicons name="alarm-outline" size={10} color={Colors.yellow.primary} />
-                  <Text style={styles.remindText}>{fmtShortDate(item.remindAt!)}</Text>
+                <View style={cardStyles.reminderChip}>
+                  <Ionicons name="alarm" size={10} color={premium.goldLight} />
+                  <Text style={cardStyles.reminderText}>
+                    {fmtShortDate(note.remindAt!)}
+                  </Text>
                 </View>
               )}
             </View>
           </View>
-          <TouchableOpacity
-            onPress={() => handleTogglePin(item)}
-            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel={item.isPinned ? 'Desafixar' : 'Fixar'}
-          >
+
+          <PressableScale onPress={onTogglePin} haptic="none" hitSlop={8}>
             <Ionicons
-              name={item.isPinned ? 'star' : 'star-outline'}
+              name={note.isPinned ? 'star' : 'star-outline'}
               size={18}
-              color={item.isPinned ? Colors.yellow.primary : Colors.text.muted}
+              color={note.isPinned ? premium.goldLight : textTokens.muted}
             />
-          </TouchableOpacity>
+          </PressableScale>
         </View>
-        <Text style={styles.cardBody} numberOfLines={3}>
-          {item.body}
+
+        <Text style={cardStyles.body} numberOfLines={3}>
+          {note.body}
         </Text>
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            onPress={() => handleArchive(item)}
-            style={styles.actionBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Arquivar"
-            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-          >
-            <Ionicons name="archive-outline" size={14} color={Colors.text.muted} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleDelete(item)}
-            style={styles.actionBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Excluir"
-            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-          >
-            <Ionicons name="trash-outline" size={14} color={Colors.red.primary} />
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    );
-  };
 
+        <View style={cardStyles.actions}>
+          <PressableScale
+            onPress={onArchive}
+            haptic="none"
+            style={cardStyles.actionBtn}
+            hitSlop={8}
+          >
+            <Ionicons name="archive-outline" size={13} color={textTokens.muted} />
+            <Text style={cardStyles.actionText}>Arquivar</Text>
+          </PressableScale>
+          <PressableScale
+            onPress={onDelete}
+            haptic="none"
+            style={cardStyles.actionBtn}
+            hitSlop={8}
+          >
+            <Ionicons name="trash-outline" size={13} color={semantic.danger} />
+            <Text style={[cardStyles.actionText, { color: semantic.danger }]}>
+              Excluir
+            </Text>
+          </PressableScale>
+        </View>
+      </GlassCard>
+    </PressableScale>
+  );
+}
+
+function RecurrenceChip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Minhas notas</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => openModal()}
-          accessibilityRole="button"
-          accessibilityLabel="Nova nota"
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
+    <PressableScale
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
+      haptic="none"
+    >
+      <View style={[styles.recChip, selected && styles.recChipActive]}>
+        {selected && (
+          <LinearGradient
+            colors={gradients.auroraCyanMagenta}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 999 }]}
+          />
+        )}
+        <Text style={[styles.recText, selected && styles.recTextActive]}>{label}</Text>
       </View>
-
-      {isLoading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={Colors.primary.light} />
-        </View>
-      ) : !data || data.length === 0 ? (
-        <EmptyState
-          icon="document-text-outline"
-          title="Nenhuma nota"
-          description="Use pra lembrar estratégias, datas de bônus e TODOs. Reminder opcional vira push na data."
-        />
-      ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(n) => n.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        />
-      )}
-
-      <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalBackdrop}
-        >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editing ? 'Editar nota' : 'Nova nota'}</Text>
-              <TouchableOpacity onPress={() => setModalOpen(false)} accessibilityLabel={t('common.close')}>
-                <Ionicons name="close" size={22} color={Colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Título"
-              placeholderTextColor={Colors.text.muted}
-              maxLength={200}
-              accessibilityLabel="Título"
-            />
-            <TextInput
-              style={[styles.input, styles.inputMulti]}
-              value={body}
-              onChangeText={setBody}
-              placeholder="Conteúdo"
-              placeholderTextColor={Colors.text.muted}
-              multiline
-              maxLength={5000}
-              accessibilityLabel="Conteúdo"
-            />
-            <Text style={styles.fieldLabel}>Reminder (opcional, aaaa-mm-dd ou aaaa-mm-ddThh:mm)</Text>
-            <TextInput
-              style={styles.input}
-              value={remindAt}
-              onChangeText={setRemindAt}
-              placeholder="2026-05-10T14:00"
-              placeholderTextColor={Colors.text.muted}
-              maxLength={16}
-              accessibilityLabel="Data do lembrete"
-            />
-
-            {/* Recurrence picker — só faz sentido se tem reminder */}
-            {remindAt.length > 0 && (
-              <>
-                <Text style={styles.fieldLabel}>Repetir</Text>
-                <View style={styles.recurrenceRow}>
-                  {(
-                    [
-                      { key: 'NONE', label: 'Uma vez' },
-                      { key: 'DAILY', label: 'Todo dia' },
-                      { key: 'WEEKLY', label: 'Semanal' },
-                      { key: 'MONTHLY', label: 'Mensal' },
-                    ] as Array<{ key: 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'; label: string }>
-                  ).map((r) => (
-                    <TouchableOpacity
-                      key={r.key}
-                      onPress={() => setRecurrence(r.key)}
-                      style={[
-                        styles.recurrenceChip,
-                        recurrence === r.key && styles.recurrenceChipActive,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: recurrence === r.key }}
-                      accessibilityLabel={r.label}
-                    >
-                      <Text
-                        style={[
-                          styles.recurrenceText,
-                          recurrence === r.key && styles.recurrenceTextActive,
-                        ]}
-                      >
-                        {r.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            )}
-
-            <Text style={styles.fieldLabel}>Tag</Text>
-            <TextInput
-              style={styles.input}
-              value={tag}
-              onChangeText={setTag}
-              placeholder="GERAL"
-              placeholderTextColor={Colors.text.muted}
-              maxLength={20}
-              accessibilityLabel="Tag"
-            />
-            <TouchableOpacity
-              onPress={handleSave}
-              disabled={create.isPending || update.isPending}
-              style={styles.submit}
-              accessibilityRole="button"
-              accessibilityLabel="Salvar"
-            >
-              <LinearGradient
-                colors={Gradients.primary as unknown as readonly [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.submitGradient}
-              >
-                {create.isPending || update.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.submitText}>Salvar</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
+    </PressableScale>
   );
 }
 
 function fmtShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
 }
 
+// ─── Styles ─────────────────────────────────────────────────────────────
+
+const cardStyles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 8,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    letterSpacing: -0.1,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 5,
+    flexWrap: 'wrap',
+  },
+  tagChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: aurora.cyanSoft,
+    borderWidth: 1,
+    borderColor: `${aurora.cyan}44`,
+  },
+  tagText: {
+    color: aurora.cyan,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  reminderChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: premium.goldSoft,
+    borderWidth: 1,
+    borderColor: `${premium.gold}55`,
+  },
+  reminderText: {
+    color: premium.goldLight,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
+  body: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 14,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: surface.glassBorder,
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionText: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+});
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg.primary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.bg.card,
+    backgroundColor: surface.glass,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
   },
-  title: { fontSize: 17, fontWeight: '700', color: Colors.text.primary },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary.start,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: aurora.cyan,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: 16, paddingBottom: 40 },
-  card: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
+  list: {
+    padding: space.md,
+    paddingBottom: 120,
   },
-  cardPinned: { borderColor: Colors.yellow.border, backgroundColor: Colors.yellow.bg },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: Colors.text.primary },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  cardTag: { fontSize: 10, color: Colors.primary.light, fontWeight: '600' },
-  remindChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: Colors.yellow.bg,
-  },
-  remindText: { fontSize: 9, color: Colors.yellow.primary, fontWeight: '600' },
-  cardBody: { fontSize: 12, color: Colors.text.secondary, lineHeight: 16, marginTop: 6 },
-  cardActions: {
-    flexDirection: 'row',
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7,11,24,0.72)',
     justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 8,
   },
-  actionBtn: { padding: 4 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalCard: {
-    backgroundColor: Colors.bg.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
+    backgroundColor: '#0A1020',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: space.xl,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: surface.glassBorder,
+    maxHeight: '92%',
+  },
+  modalHandle: {
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: space.md,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: space.md,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.text.primary },
-  fieldLabel: { fontSize: 11, color: Colors.text.secondary, fontWeight: '600', marginTop: 10, marginBottom: 4 },
-  input: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: Colors.text.primary,
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 10,
+  modalTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  modalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fieldLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  bodyInputWrap: {
     borderWidth: 1,
-    borderColor: Colors.border.default,
-    marginTop: 8,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    borderRadius: 14,
+    padding: 12,
+    minHeight: 100,
+    marginBottom: 18,
   },
-  inputMulti: { minHeight: 120, textAlignVertical: 'top' },
+  bodyInput: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
   recurrenceRow: {
     flexDirection: 'row',
-    gap: 6,
     flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 18,
   },
-  recurrenceChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 16,
+  recChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: Colors.border.default,
-    backgroundColor: Colors.bg.surface,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    overflow: 'hidden',
   },
-  recurrenceChipActive: {
-    borderColor: Colors.primary.start,
-    backgroundColor: Colors.primary.muted,
+  recChipActive: {
+    borderColor: 'transparent',
   },
-  recurrenceText: { fontSize: 11, fontWeight: '600', color: Colors.text.secondary },
-  recurrenceTextActive: { color: Colors.primary.light },
-  submit: { marginTop: 20 },
-  submitGradient: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  submitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  recText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+  recTextActive: {
+    color: '#041220',
+    fontFamily: 'Inter_700Bold',
+  },
 });
