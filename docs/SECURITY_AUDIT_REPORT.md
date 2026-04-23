@@ -163,15 +163,45 @@ Auditoria achou **11 vulnerabilidades reais** (2 CRÍTICAS, 3 ALTAS, 5 MÉDIAS, 
 
 ---
 
-## 📋 Recomendações pendentes (não fixados nesta sessão)
+## 🧹 Ações de remediação pós-auditoria (executadas)
 
-1. **Apple Sign-In**: implementar validação JWKS (hoje retorna `UnauthorizedException` — mais seguro que o bypass anterior, mas user Apple não consegue logar).
-2. **Pre-commit hook com gitleaks** ou `detect-secrets` — bloqueia próximos leaks automaticamente.
-3. **GitHub Secret Scanning + Push Protection** — habilitar no repo (Settings → Security).
-4. **`JWT_SECRET.length >= 32` check fora de prod** — em configuration.ts.
-5. **Auditoria Supabase logs** nos últimos 4 dias (período que senha admin vazada era válida) — verificar queries suspeitas no projeto `fequnpessfvfjtytiymy`.
-6. **Rotação periódica de secrets** — cron que rota JWT a cada 90d? Fora do escopo desta sessão.
-7. **Limpeza git history** — se repo for tornado público, rodar `git filter-repo --replace-text` para purgar senhas/JWTs antigos do histórico.
+| Ação | Status |
+|---|---|
+| Pre-commit hook `.githooks/pre-commit` (AWS/GitHub/Slack/Stripe/Anthropic/PEM/JWT + arquivos banidos) | ✅ ativado via `git config core.hooksPath .githooks` |
+| `JWT_SECRET.length >= 32` fail-fast em todos os env (`validateJwtSecret()`) | ✅ `configuration.ts` |
+| GitHub Secret Scanning habilitado via gh API | ✅ `secret_scanning: enabled` |
+| GitHub Push Protection habilitado via gh API | ✅ `secret_scanning_push_protection: enabled` |
+| `git filter-branch` removendo `.claude/settings.local.json` de 111 commits | ✅ purge local completo |
+| Force-push do histórico limpo pro GitHub | ✅ `git push --force-with-lease` |
+| Verificação: arquivo 404 no API `/repos/.../contents/` | ✅ |
+| Verificação: senha `L-DiXbgxAfX46eMS3` não aparece em nenhum commit atual | ✅ |
+| Rotação 2ª vez da senha admin (anterior exposta em chat) | ✅ salva em `~/.extramilhas-secrets/admin-password.txt` |
+
+## ⚠️ Cache GitHub residual (commits orphan)
+
+**Importante:** após o force-push, commits antigos como `de27cfb` ainda são acessíveis via URL direta no GitHub por até 90 dias, porque o garbage collector do GitHub não roda imediatamente. Esses commits "orphans" ainda contêm o patch original com a senha admin + JWT.
+
+**Mitigação atual (suficiente na prática):**
+- ✅ Senha admin antiga: **rotacionada** → retorna 401 em prod
+- ✅ JWT admin antigo: `JWT_SECRET` foi rotacionado → o token vazado não valida (signature mismatch)
+- ✅ Refresh tokens antigos: revogados pelo `reset-admin-password.ts`
+- **Resultado:** os dados ainda visíveis via commit orphan são credenciais mortas — úteis pra análise forense, não pra ataque.
+
+**Ação ideal (opcional, para remover rastro completo):**
+1. Abrir ticket em https://support.github.com/contact
+2. Assunto: "Remove cached views of sensitive data"
+3. Corpo: informar repo `Levy-Rodrigues-Pinheiro/extramilhas`, que o histórico foi reescrito via force-push, e pedir GC imediato dos commits orphan (SHAs: `de27cfb`, `139c11b`, `bb23ac6` entre outros).
+4. GitHub normalmente processa em 1-3 dias úteis.
+
+Também: se o repo teve **forks**, cada fork mantém o histórico independentemente — verificar e notificar os owners.
+
+## 📋 Outras recomendações pendentes (não automatizáveis nesta sessão)
+
+1. **Apple Sign-In**: implementar validação JWKS (`jose` lib) — hoje retorna `UnauthorizedException` (seguro, mas usuários Apple não conseguem logar).
+2. **Auditoria Supabase logs** nos últimos 4 dias no projeto `fequnpessfvfjtytiymy`: buscar queries suspeitas no período em que a senha admin vazada era válida (antes da rotação em 2026-04-23).
+3. **Rotação periódica de secrets** — cron que rotaciona `JWT_SECRET` a cada 90 dias via Fly API.
+4. **Bug bounty program** em HackerOne/Intigriti quando atingir >10k usuários.
+5. **WAF na borda** (Cloudflare em frente ao Fly) — proteção adicional contra DDoS + rate-limit global.
 
 ---
 
