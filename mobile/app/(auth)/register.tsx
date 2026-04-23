@@ -20,6 +20,7 @@ import {
   GlassCard,
   PressableScale,
   FloatingLabelInput,
+  FlyingPlaneScene,
   aurora,
   system,
   semantic,
@@ -117,6 +118,14 @@ export default function RegisterScreen() {
                 <Text style={styles.headerTitle}>Criar conta</Text>
                 <Text style={styles.headerSub}>Começe a ganhar com milhas</Text>
               </View>
+            </Animated.View>
+
+            {/* Scene compacta do avião voando — consistência com login */}
+            <Animated.View
+              entering={FadeIn.delay(60).duration(motion.timing.medium)}
+              style={styles.sceneWrap}
+            >
+              <FlyingPlaneScene size={100} intensity="cruising" haloColor={aurora.cyan} />
             </Animated.View>
 
             <Animated.View
@@ -266,8 +275,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: space.lg,
+    marginBottom: space.md,
     marginTop: 4,
+  },
+  sceneWrap: {
+    alignItems: 'center',
+    marginVertical: space.md,
   },
   backBtn: {
     width: 40,

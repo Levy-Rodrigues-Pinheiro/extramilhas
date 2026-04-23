@@ -37,6 +37,7 @@ export { ActivityRings, default as ActivityRingsDefault } from './ActivityRings'
 export { LiveActivityBanner, default as LiveActivityBannerDefault } from './LiveActivityBanner';
 export { ContextMenu, default as ContextMenuDefault, type ContextMenuItem } from './ContextMenu';
 export { NumberPad, default as NumberPadDefault } from './NumberPad';
+export { FlyingPlaneScene, default as FlyingPlaneSceneDefault } from './FlyingPlaneScene';
 
 // Design tokens re-export
 export {
