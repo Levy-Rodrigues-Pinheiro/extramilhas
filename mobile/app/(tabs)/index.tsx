@@ -42,6 +42,9 @@ import {
   ConfettiBurst,
   ShimmerSkeleton,
   EmptyStateIllustrated,
+  LiveActivityBanner,
+  TiltCard3D,
+  SymbolEffect,
   type ConfettiBurstHandle,
   aurora,
   premium,
@@ -121,11 +124,32 @@ export default function HomeScreen() {
     .filter((o) => o.classification !== 'NORMAL')
     .slice(0, 3);
 
+  // Dynamic Island banner: só aparece quando tem um IMPERDIVEL ativo
+  const hotDeal = React.useMemo(
+    () => (bonuses.data?.opportunities || []).find((o) => o.classification === 'IMPERDIVEL'),
+    [bonuses.data],
+  );
+  const [bannerDismissed, setBannerDismissed] = React.useState(false);
+  const showLiveBanner = !!hotDeal && !bannerDismissed;
+
   return (
     <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <OnboardingTour />
         <ConfettiBurst ref={confettiRef} />
+
+        {/* 🔥 Live Activity Banner (Dynamic Island-style) */}
+        <LiveActivityBanner
+          visible={showLiveBanner}
+          icon="flame"
+          title={`Bônus imperdível · +${hotDeal?.currentBonus.toFixed(0) ?? 0}%`}
+          subtitle={
+            hotDeal ? `${hotDeal.fromProgram.name} → ${hotDeal.toProgram.name}` : undefined
+          }
+          accent="aurora"
+          onPress={() => router.push('/arbitrage' as any)}
+          onDismiss={() => setBannerDismissed(true)}
+        />
 
         <ScrollView
           contentContainerStyle={styles.content}
@@ -201,16 +225,17 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          {/* ─── Hero: Wallet value ──────────────────────── */}
+          {/* ─── Hero: Wallet value (3D Tilt card — drag finger to tilt) ── */}
           <Animated.View
             entering={FadeInDown.delay(60).duration(motion.timing.medium).springify().damping(20)}
           >
-            <PressableScale
-              onPress={() => router.push('/(tabs)/wallet' as any)}
-              haptic="tap"
-              pressedScale={0.985}
-            >
-              <View style={styles.hero}>
+            <TiltCard3D tiltIntensity={6} style={{ marginBottom: space.lg }}>
+              <PressableScale
+                onPress={() => router.push('/(tabs)/wallet' as any)}
+                haptic="tap"
+                pressedScale={0.995}
+              >
+                <View style={[styles.hero, { marginBottom: 0 }]}>
                 {/* Gradient layer */}
                 <LinearGradient
                   colors={gradients.aurora}
@@ -263,7 +288,8 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               </View>
-            </PressableScale>
+              </PressableScale>
+            </TiltCard3D>
           </Animated.View>
 
           {/* ─── Quick actions ───────────────────────────── */}

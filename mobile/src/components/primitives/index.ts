@@ -29,6 +29,15 @@ export { AuroraButton, default as AuroraButtonDefault } from './AuroraButton';
 export { FloatingTabBar, default as FloatingTabBarDefault } from './FloatingTabBar';
 export { FloatingLabelInput, default as FloatingLabelInputDefault } from './FloatingLabelInput';
 
+// Jobs-level innovative components
+export { SymbolEffect, default as SymbolEffectDefault } from './SymbolEffect';
+export { TiltCard3D, default as TiltCard3DDefault } from './TiltCard3D';
+export { ScrollDrivenHeader, default as ScrollDrivenHeaderDefault } from './ScrollDrivenHeader';
+export { ActivityRings, default as ActivityRingsDefault } from './ActivityRings';
+export { LiveActivityBanner, default as LiveActivityBannerDefault } from './LiveActivityBanner';
+export { ContextMenu, default as ContextMenuDefault, type ContextMenuItem } from './ContextMenu';
+export { NumberPad, default as NumberPadDefault } from './NumberPad';
+
 // Design tokens re-export
 export {
   default as tokens,

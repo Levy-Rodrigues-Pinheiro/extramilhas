@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   SlideInDown,
   SlideOutDown,
+  FadeInDown,
 } from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import {
@@ -37,6 +38,7 @@ import {
   SkeletonCard,
   EmptyStateIllustrated,
   FloatingLabelInput,
+  ActivityRings,
   aurora,
   premium,
   semantic,
@@ -134,6 +136,9 @@ export default function GoalsScreen() {
           <FlatList
             data={data}
             keyExtractor={(g) => g.id}
+            ListHeaderComponent={
+              <GoalsRingsHero goals={data.filter((g) => !g.completedAt).slice(0, 3)} />
+            }
             renderItem={({ item, index }) => {
               const programName = programs?.find((p: any) => p.id === item.programId)?.name;
               return (
@@ -260,6 +265,32 @@ export default function GoalsScreen() {
         )}
       </SafeAreaView>
     </AuroraBackground>
+  );
+}
+
+// ─── GoalsRingsHero (Apple Watch Activity style) ──────────────────────
+
+function GoalsRingsHero({ goals }: { goals: UserGoal[] }) {
+  if (goals.length === 0) return null;
+
+  const ringColors = [aurora.cyan, aurora.magenta, premium.goldLight];
+  const rings = goals.slice(0, 3).map((g, i) => ({
+    value: Math.min(1, g.percent / 100),
+    color: ringColors[i],
+    label: g.title.length > 18 ? g.title.slice(0, 16) + '…' : g.title,
+  }));
+
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+    >
+      <GlassCard radiusSize="xl" padding={20} style={{ marginBottom: space.md }}>
+        <Text style={heroStyles.label}>SEU PROGRESSO</Text>
+        <View style={heroStyles.row}>
+          <ActivityRings rings={rings} size={180} strokeWidth={14} gap={6} showLabels={true} />
+        </View>
+      </GlassCard>
+    </Animated.View>
   );
 }
 
@@ -662,5 +693,19 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: '#041220',
     fontFamily: 'Inter_700Bold',
+  },
+});
+
+const heroStyles = StyleSheet.create({
+  label: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: space.md,
+  },
+  row: {
+    alignItems: 'center',
   },
 });

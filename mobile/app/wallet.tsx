@@ -35,6 +35,10 @@ import {
   StaggerItem,
   EmptyStateIllustrated,
   FloatingLabelInput,
+  TiltCard3D,
+  ContextMenu,
+  SymbolEffect,
+  type ContextMenuItem,
   aurora,
   premium,
   semantic,
@@ -159,10 +163,11 @@ export default function WalletScreen() {
 
           {data && (
             <>
-              {/* ─── Hero ─────────────────────── */}
+              {/* ─── Hero (3D Tilt — drag finger over card) ─── */}
               <Animated.View
                 entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
               >
+                <TiltCard3D tiltIntensity={7}>
                 <View style={styles.hero}>
                   <LinearGradient
                     colors={gradients.aurora}
@@ -208,6 +213,7 @@ export default function WalletScreen() {
                     </View>
                   </View>
                 </View>
+                </TiltCard3D>
               </Animated.View>
 
               {/* ─── Expiry warning ─────────────── */}
@@ -297,7 +303,33 @@ function BalanceCard({
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
+
+  // ContextMenu items (long-press no card)
+  const menuItems: ContextMenuItem[] = [
+    {
+      icon: 'pencil',
+      label: t('common.edit'),
+      onPress: onEdit,
+    },
+    {
+      icon: 'share-outline',
+      label: 'Compartilhar saldo',
+      onPress: () => {
+        haptics.tap();
+        // Could wire up Share.share here
+      },
+    },
+    {
+      icon: 'trash-outline',
+      label: t('common.remove'),
+      onPress: onDelete,
+      destructive: true,
+      separatorBefore: true,
+    },
+  ];
+
   return (
+    <ContextMenu items={menuItems}>
     <GlassCard
       radiusSize="lg"
       padding={16}
@@ -346,6 +378,7 @@ function BalanceCard({
         </PressableScale>
       </View>
     </GlassCard>
+    </ContextMenu>
   );
 }
 
