@@ -45,6 +45,12 @@ export {
   type WrappedStory,
   default as WrappedStoryStackDefault,
 } from './WrappedStoryStack';
+export { SwipeableStack, default as SwipeableStackDefault } from './SwipeableStack';
+export {
+  ComparisonBars,
+  type ComparisonRow,
+  default as ComparisonBarsDefault,
+} from './ComparisonBars';
 
 // Design tokens re-export
 export {

@@ -1,362 +1,780 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useArticles } from '../../src/hooks/useArticles';
 import { useAuthStore } from '../../src/store/auth.store';
-import { EmptyState } from '../../src/components/EmptyState';
-import { Colors } from '../../src/lib/theme';
 import type { Article } from '../../src/types';
+import {
+  AuroraBackground,
+  GlassCard,
+  PressableScale,
+  StaggerItem,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../../src/components/primitives';
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Guias: '#3B82F6',
-  Dicas: '#22c55e',
-  Notícias: '#f59e0b',
-  Tutoriais: '#3b82f6',
-  Avaliações: '#8b5cf6',
+const CATEGORY_META: Record<
+  string,
+  { color: string; icon: React.ComponentProps<typeof Ionicons>['name'] }
+> = {
+  Guias: { color: aurora.cyan, icon: 'book' },
+  Dicas: { color: semantic.success, icon: 'bulb' },
+  Notícias: { color: premium.goldLight, icon: 'newspaper' },
+  Tutoriais: { color: aurora.iris, icon: 'school' },
+  Avaliações: { color: aurora.magenta, icon: 'star' },
 };
 
-function getExcerpt(body: string): string {
+const getCategoryMeta = (cat: string) =>
+  CATEGORY_META[cat] ?? { color: textTokens.muted, icon: 'document-text' as const };
+
+function getExcerpt(body: string, len = 120): string {
   const clean = body
     .replace(/^#{1,6}\s+/gm, '')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\n+/g, ' ')
     .trim();
-  return clean.length > 100 ? clean.slice(0, 100) + '...' : clean;
+  return clean.length > len ? clean.slice(0, len) + '…' : clean;
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('pt-BR', {
+  return new Date(dateStr).toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: 'short',
-    year: 'numeric',
   });
 }
 
-function ArticleCard({ article, isPro }: { article: Article; isPro: boolean }) {
-  const isLocked = (article as Article & { isProOnly?: boolean }).isProOnly && !isPro;
-  const catColor = CATEGORY_COLORS[article.category] ?? '#3B82F6';
-  const excerpt = getExcerpt(article.body);
-
-  const handlePress = () => {
-    if (isLocked) {
-      router.push('/subscription');
-    } else {
-      router.push(`/articles/${article.slug}`);
-    }
-  };
-
-  return (
-    <TouchableOpacity
-      style={[styles.card, isLocked && styles.cardLocked]}
-      onPress={handlePress}
-      activeOpacity={0.8}
-    >
-      <View style={styles.cardTop}>
-        <View
-          style={[
-            styles.categoryBadge,
-            { backgroundColor: `${catColor}20`, borderColor: catColor },
-          ]}
-        >
-          <Text style={[styles.categoryText, { color: catColor }]}>{article.category}</Text>
-        </View>
-        {(article as Article & { isProOnly?: boolean }).isProOnly && (
-          <View style={styles.proBadge}>
-            <Ionicons name="star" size={10} color="#a78bfa" />
-            <Text style={styles.proBadgeText}>PRO</Text>
-          </View>
-        )}
-        {isLocked && (
-          <View style={styles.lockIcon}>
-            <Ionicons name="lock-closed" size={14} color="#475569" />
-          </View>
-        )}
-      </View>
-
-      <Text style={[styles.cardTitle, isLocked && styles.cardTitleLocked]} numberOfLines={2}>
-        {article.title}
-      </Text>
-      <Text style={styles.cardExcerpt} numberOfLines={3}>
-        {excerpt}
-      </Text>
-
-      <View style={styles.cardFooter}>
-        <Text style={styles.cardDate}>{formatDate(article.publishedAt)}</Text>
-        <Ionicons
-          name={isLocked ? 'lock-closed-outline' : 'chevron-forward'}
-          size={14}
-          color="#475569"
-        />
-      </View>
-    </TouchableOpacity>
-  );
+function calcReadingTime(body: string): number {
+  const words = body.split(/\s+/).length;
+  return Math.max(1, Math.round(words / 220)); // ~220 wpm
 }
 
+/**
+ * Articles v2 — Apple News-style feed.
+ *
+ * Signature: hero top story (card grande full-width) + category filter pills
+ * + standard cards abaixo.
+ */
 export default function ArticlesScreen() {
   const { user } = useAuthStore();
   const { data: articlesData, isLoading, isError, refetch } = useArticles();
+  const [filter, setFilter] = useState<string | null>(null);
 
   const isPro = user?.plan === 'PRO';
-  const articles = articlesData?.data ?? [];
+  const allArticles: Article[] = articlesData?.data ?? [];
+
+  // Extract unique categories
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    allArticles.forEach((a) => set.add(a.category));
+    return Array.from(set);
+  }, [allArticles]);
+
+  // Filtered + sorted
+  const articles = useMemo(() => {
+    let list = [...allArticles];
+    if (filter) list = list.filter((a) => a.category === filter);
+    return list.sort(
+      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    );
+  }, [allArticles, filter]);
+
+  const topStory = articles[0];
+  const rest = articles.slice(1);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color="#f8fafc" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Artigos e Guias</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B82F6" />
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Artigos</Text>
+            <Text style={styles.subtitle}>Guias, dicas, notícias</Text>
+          </View>
         </View>
-      ) : isError ? (
-        <EmptyState
-          icon="wifi-outline"
-          title="Erro ao carregar"
-          description="Não foi possível carregar os artigos. Tente novamente."
-          action={
-            <TouchableOpacity style={styles.retryButton} onPress={() => refetch()} activeOpacity={0.7}>
-              <Text style={styles.retryButtonText}>Tentar novamente</Text>
-            </TouchableOpacity>
-          }
-        />
-      ) : (
-        <FlatList
-          data={articles}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            !isPro && articles.some((a) => (a as Article & { isProOnly?: boolean }).isProOnly) ? (
-              <TouchableOpacity
-                style={styles.paywallCard}
-                onPress={() => router.push('/subscription')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.paywallLeft}>
-                  <View style={styles.paywallIconContainer}>
-                    <Ionicons name="star" size={20} color="#a78bfa" />
+
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 14 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        ) : isError ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0} glow="danger">
+              <EmptyStateIllustrated
+                variant="radar"
+                title="Erro ao carregar"
+                description="Não foi possível carregar os artigos."
+                ctaLabel="Tentar novamente"
+                onCtaPress={() => refetch()}
+              />
+            </GlassCard>
+          </View>
+        ) : articles.length === 0 ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0}>
+              <EmptyStateIllustrated
+                variant="search"
+                title="Nenhum artigo ainda"
+                description="Estamos preparando conteúdo. Volte em breve."
+              />
+            </GlassCard>
+          </View>
+        ) : (
+          <FlatList
+            data={rest}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <View>
+                {/* Paywall banner */}
+                {!isPro &&
+                  allArticles.some(
+                    (a) => (a as Article & { isProOnly?: boolean }).isProOnly,
+                  ) && (
+                    <Animated.View
+                      entering={FadeIn.duration(motion.timing.medium)}
+                      style={{ marginBottom: space.md }}
+                    >
+                      <PressableScale
+                        onPress={() => {
+                          haptics.tap();
+                          router.push('/subscription');
+                        }}
+                        haptic="none"
+                      >
+                        <View style={styles.paywallBanner}>
+                          <LinearGradient
+                            colors={gradients.premium as any}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                          <LinearGradient
+                            colors={['rgba(0,0,0,0.1)', 'rgba(0,0,0,0.35)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={StyleSheet.absoluteFill}
+                          />
+                          <View style={styles.paywallContent}>
+                            <Ionicons name="star" size={16} color={textTokens.onGold} />
+                            <Text style={styles.paywallText}>
+                              Libere artigos PRO com análises profundas
+                            </Text>
+                            <Ionicons
+                              name="chevron-forward"
+                              size={16}
+                              color={textTokens.onGold}
+                            />
+                          </View>
+                        </View>
+                      </PressableScale>
+                    </Animated.View>
+                  )}
+
+                {/* Category filter */}
+                {categories.length > 1 && (
+                  <Animated.View
+                    entering={FadeInDown.duration(motion.timing.medium)}
+                  >
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ marginBottom: space.md }}
+                      contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}
+                    >
+                      <CategoryChip
+                        label="Todos"
+                        active={filter === null}
+                        onPress={() => setFilter(null)}
+                      />
+                      {categories.map((cat) => (
+                        <CategoryChip
+                          key={cat}
+                          label={cat}
+                          icon={getCategoryMeta(cat).icon}
+                          color={getCategoryMeta(cat).color}
+                          active={filter === cat}
+                          onPress={() => setFilter(cat)}
+                        />
+                      ))}
+                    </ScrollView>
+                  </Animated.View>
+                )}
+
+                {/* Top story hero */}
+                {topStory && (
+                  <Animated.View
+                    entering={FadeInDown.duration(motion.timing.medium)
+                      .springify()
+                      .damping(22)}
+                  >
+                    <TopStoryCard article={topStory} isPro={isPro} />
+                  </Animated.View>
+                )}
+
+                {rest.length > 0 && (
+                  <View style={{ marginTop: space.lg }}>
+                    <Text style={styles.sectionLabel}>MAIS RECENTES</Text>
                   </View>
-                  <View style={styles.paywallTextContainer}>
-                    <Text style={styles.paywallTitle}>Conteúdo exclusivo para assinantes Pro</Text>
-                    <Text style={styles.paywallDesc}>
-                      Acesse guias completos, tutoriais avançados e conteúdo exclusivo
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.paywallButton}
-                  onPress={() => router.push('/subscription')}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.paywallButtonText}>Assinar Pro</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            ) : null
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon="book-outline"
-              title="Nenhum artigo disponível"
-              description="Ainda não há artigos publicados. Volte em breve!"
-            />
-          }
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          renderItem={({ item }) => <ArticleCard article={item} isPro={isPro} />}
-        />
-      )}
-    </SafeAreaView>
+                )}
+              </View>
+            }
+            renderItem={({ item, index }) => (
+              <StaggerItem index={index} baseDelay={100}>
+                <StandardArticleCard article={item} isPro={isPro} />
+              </StaggerItem>
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+          />
+        )}
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors.bg.primary,
-  },
-  header: {
+// ─── CategoryChip ──────────────────────────────────────────────────────
+
+function CategoryChip({
+  label,
+  icon,
+  color,
+  active,
+  onPress,
+}: {
+  label: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  color?: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <PressableScale
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
+      haptic="none"
+    >
+      <View style={[chipStyles.chip, active && chipStyles.chipActive]}>
+        {active && (
+          <LinearGradient
+            colors={gradients.auroraCyanMagenta}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 999 }]}
+          />
+        )}
+        {icon && (
+          <Ionicons
+            name={icon}
+            size={12}
+            color={active ? '#041220' : color ?? textTokens.secondary}
+          />
+        )}
+        <Text style={[chipStyles.text, active && chipStyles.textActive]}>{label}</Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+// ─── TopStoryCard (hero da feed — Apple News big card) ─────────────────
+
+function TopStoryCard({ article, isPro }: { article: Article; isPro: boolean }) {
+  const isProOnly = (article as Article & { isProOnly?: boolean }).isProOnly;
+  const isLocked = isProOnly && !isPro;
+  const meta = getCategoryMeta(article.category);
+  const excerpt = getExcerpt(article.body, 160);
+  const readingTime = calcReadingTime(article.body);
+
+  const handlePress = () => {
+    haptics.tap();
+    if (isLocked) router.push('/subscription');
+    else router.push(`/articles/${article.slug}` as any);
+  };
+
+  return (
+    <PressableScale onPress={handlePress} haptic="none" pressedScale={0.98}>
+      <View style={topStyles.card}>
+        {/* BG gradient — aurora pra featured */}
+        <LinearGradient
+          colors={
+            isLocked
+              ? (['#1C1C1E', '#2C2C2E', '#3A3A3C'] as [string, string, string])
+              : (gradients.aurora as any)
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.18)', 'rgba(0,0,0,0.62)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={topStyles.content}>
+          {/* Featured tag */}
+          <View style={topStyles.topRow}>
+            <View style={topStyles.featuredBadge}>
+              <Ionicons name="star" size={10} color="#FFF" />
+              <Text style={topStyles.featuredText}>EM DESTAQUE</Text>
+            </View>
+            {isProOnly && (
+              <View style={[topStyles.proBadge, isLocked && topStyles.proBadgeLocked]}>
+                <Ionicons
+                  name={isLocked ? 'lock-closed' : 'star'}
+                  size={10}
+                  color={textTokens.onGold}
+                />
+                <Text style={topStyles.proText}>PRO</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Category */}
+          <View style={topStyles.categoryChip}>
+            <Ionicons name={meta.icon} size={11} color="#FFF" />
+            <Text style={topStyles.categoryText}>{article.category}</Text>
+          </View>
+
+          {/* Title */}
+          <Text style={topStyles.title} numberOfLines={3}>
+            {article.title}
+          </Text>
+
+          {/* Excerpt */}
+          {!isLocked && (
+            <Text style={topStyles.excerpt} numberOfLines={3}>
+              {excerpt}
+            </Text>
+          )}
+
+          {/* Meta row */}
+          <View style={topStyles.metaRow}>
+            <View style={topStyles.metaItem}>
+              <Ionicons name="calendar-outline" size={11} color="rgba(255,255,255,0.7)" />
+              <Text style={topStyles.metaText}>{formatDate(article.publishedAt)}</Text>
+            </View>
+            <View style={topStyles.metaDot} />
+            <View style={topStyles.metaItem}>
+              <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.7)" />
+              <Text style={topStyles.metaText}>{readingTime} min</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </PressableScale>
+  );
+}
+
+// ─── StandardArticleCard ───────────────────────────────────────────────
+
+function StandardArticleCard({ article, isPro }: { article: Article; isPro: boolean }) {
+  const isProOnly = (article as Article & { isProOnly?: boolean }).isProOnly;
+  const isLocked = isProOnly && !isPro;
+  const meta = getCategoryMeta(article.category);
+  const excerpt = getExcerpt(article.body, 110);
+  const readingTime = calcReadingTime(article.body);
+
+  const handlePress = () => {
+    haptics.tap();
+    if (isLocked) router.push('/subscription');
+    else router.push(`/articles/${article.slug}` as any);
+  };
+
+  return (
+    <PressableScale onPress={handlePress} haptic="none" pressedScale={0.97}>
+      <GlassCard
+        radiusSize="lg"
+        padding={14}
+        style={[isLocked && { opacity: 0.68 }]}
+      >
+        <View style={standardStyles.card}>
+          {/* Left: category icon tile */}
+          <View
+            style={[
+              standardStyles.iconTile,
+              {
+                backgroundColor: `${meta.color}1F`,
+                borderColor: `${meta.color}55`,
+              },
+            ]}
+          >
+            <Ionicons name={meta.icon} size={22} color={meta.color} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            {/* Category + date row */}
+            <View style={standardStyles.topRow}>
+              <Text style={[standardStyles.category, { color: meta.color }]}>
+                {article.category.toUpperCase()}
+              </Text>
+              <Text style={standardStyles.date}>{formatDate(article.publishedAt)}</Text>
+              {isProOnly && (
+                <View style={standardStyles.proTag}>
+                  <Ionicons
+                    name={isLocked ? 'lock-closed' : 'star'}
+                    size={8}
+                    color={premium.goldLight}
+                  />
+                  <Text style={standardStyles.proText}>PRO</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Title */}
+            <Text
+              style={[standardStyles.title, isLocked && { color: textTokens.muted }]}
+              numberOfLines={2}
+            >
+              {article.title}
+            </Text>
+
+            {/* Excerpt */}
+            {!isLocked && (
+              <Text style={standardStyles.excerpt} numberOfLines={2}>
+                {excerpt}
+              </Text>
+            )}
+
+            {/* Reading time */}
+            <View style={standardStyles.footer}>
+              <View style={standardStyles.timeRow}>
+                <Ionicons name="time-outline" size={10} color={textTokens.dim} />
+                <Text style={standardStyles.timeText}>{readingTime} min leitura</Text>
+              </View>
+              <Ionicons
+                name={isLocked ? 'lock-closed-outline' : 'arrow-forward'}
+                size={13}
+                color={textTokens.muted}
+              />
+            </View>
+          </View>
+        </View>
+      </GlassCard>
+    </PressableScale>
+  );
+}
+
+// ─── Styles ─────────────────────────────────────────────────────────────
+
+const chipStyles = StyleSheet.create({
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#141C2F',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#141C2F',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#253349',
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    overflow: 'hidden',
   },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#f8fafc',
+  chipActive: {
+    borderColor: 'transparent',
   },
-  headerSpacer: {
-    width: 40,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  paywallCard: {
-    backgroundColor: '#1e1b4b',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: '#4338ca',
-  },
-  paywallLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 12,
-  },
-  paywallIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2e1065',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  paywallTextContainer: {
-    flex: 1,
-  },
-  paywallTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#f8fafc',
-    marginBottom: 4,
-  },
-  paywallDesc: {
+  text: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 12,
-    color: '#94a3b8',
-    lineHeight: 16,
   },
-  paywallButton: {
-    backgroundColor: '#7c3aed',
-    borderRadius: 10,
-    paddingVertical: 10,
+  textActive: {
+    color: '#041220',
+    fontFamily: 'Inter_700Bold',
+  },
+});
+
+const topStyles = StyleSheet.create({
+  card: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    minHeight: 260,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
+    elevation: 14,
+  },
+  content: {
+    padding: space.xl,
+    zIndex: 1,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  paywallButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  separator: {
-    height: 10,
-  },
-  card: {
-    backgroundColor: '#141C2F',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#253349',
-  },
-  cardLocked: {
-    opacity: 0.75,
-  },
-  cardTop: {
+  featuredBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-    flexWrap: 'wrap',
-  },
-  categoryBadge: {
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.3)',
     borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.26)',
   },
-  categoryText: {
-    fontSize: 11,
-    fontWeight: '700',
+  featuredText: {
+    color: '#FFF',
+    fontFamily: 'Inter_900Black',
+    fontSize: 10,
+    letterSpacing: 1.2,
   },
   proBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#2e1065',
-    borderRadius: 6,
-    paddingHorizontal: 7,
+    gap: 4,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: '#7c3aed',
+    borderRadius: 999,
+    backgroundColor: premium.goldLight,
   },
-  proBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#a78bfa',
+  proBadgeLocked: {
+    backgroundColor: `${premium.goldLight}CC`,
   },
-  lockIcon: {
-    marginLeft: 'auto',
+  proText: {
+    color: textTokens.onGold,
+    fontFamily: 'Inter_900Black',
+    fontSize: 9,
+    letterSpacing: 0.8,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#f8fafc',
-    lineHeight: 24,
-    marginBottom: 6,
-  },
-  cardTitleLocked: {
-    color: '#94a3b8',
-  },
-  cardExcerpt: {
-    fontSize: 13,
-    color: '#94a3b8',
-    lineHeight: 19,
-    marginBottom: 12,
-  },
-  cardFooter: {
+  categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
-  cardDate: {
-    fontSize: 12,
-    color: '#475569',
+  categoryText: {
+    color: '#FFF',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
   },
-  retryButton: {
-    backgroundColor: '#818CF8',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
+  title: {
+    color: '#FFF',
+    fontFamily: 'Inter_900Black',
+    fontSize: 26,
+    lineHeight: 30,
+    letterSpacing: -0.6,
+    marginTop: 12,
   },
-  retryButtonText: {
+  excerpt: {
+    color: 'rgba(255,255,255,0.82)',
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 10,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    color: 'rgba(255,255,255,0.78)',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+});
+
+const standardStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  iconTile: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  category: {
+    fontFamily: 'Inter_900Black',
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  date: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+  proTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: premium.goldSoft,
+    borderWidth: 1,
+    borderColor: `${premium.gold}55`,
+    marginLeft: 'auto',
+  },
+  proText: {
+    color: premium.goldLight,
+    fontFamily: 'Inter_900Black',
+    fontSize: 8,
+    letterSpacing: 0.4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
     fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
+    lineHeight: 19,
+    letterSpacing: -0.1,
+    marginTop: 2,
+  },
+  excerpt: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  timeText: {
+    color: textTokens.dim,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+  },
+});
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 22,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+
+  listContent: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+
+  sectionLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+
+  paywallBanner: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowColor: premium.goldLight,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  paywallContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    zIndex: 1,
+  },
+  paywallText: {
+    flex: 1,
+    color: textTokens.onGold,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    letterSpacing: 0.1,
   },
 });
