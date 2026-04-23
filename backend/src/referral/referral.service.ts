@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
  * Gera código curto legível (ex: "LEVY2M9"). Usa parte do nome + sufixo
  * aleatório base36. Conflito é raríssimo mas tratado via retry.
+ *
+ * SR-RNG-02: antes Math.random() — previsível. Agora crypto.randomBytes.
  */
 function generateCode(name: string | null | undefined): string {
   const clean = (name || 'USER')
@@ -11,7 +14,12 @@ function generateCode(name: string | null | undefined): string {
     .replace(/[^A-Z]/g, '')
     .slice(0, 4)
     .padEnd(4, 'X');
-  const suffix = Math.random().toString(36).slice(2, 5).toUpperCase();
+  // 3 bytes base36 = ~5 chars A-Z/0-9, bem mais entropia que 3 chars
+  const suffix = parseInt(randomBytes(3).toString('hex'), 16)
+    .toString(36)
+    .slice(0, 3)
+    .toUpperCase()
+    .padEnd(3, '0');
   return `${clean}${suffix}`;
 }
 

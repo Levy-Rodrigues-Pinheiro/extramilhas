@@ -97,18 +97,75 @@ export class AuthService {
     return { user: this.sanitizeUser(user), ...tokens };
   }
 
+  /**
+   * SECURITY FIX (CRITICAL — SR-SOCIAL-TAKEOVER):
+   * Valida o OAuth id_token contra o provider ANTES de emitir JWTs nossos.
+   * Antes: aceitava `{email}` do body → account takeover trivial de qualquer user.
+   * Agora: email é extraído do token verificado, nunca do body.
+   */
+  private async verifyGoogleIdToken(idToken: string): Promise<{ email: string; name?: string; sub: string }> {
+    // Endpoint oficial do Google pra validar id_token sem instalar SDK.
+    // Retorna 400 se token inválido/expirado/assinatura errada.
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    if (!clientId) {
+      throw new UnauthorizedException('Social login Google não configurado no servidor');
+    }
+    let res: Response;
+    try {
+      res = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch {
+      throw new UnauthorizedException('Falha verificando token Google (timeout/network)');
+    }
+    if (!res.ok) throw new UnauthorizedException('Token Google inválido');
+    const payload: any = await res.json();
+    // Validações mandatórias (OWASP / Google docs):
+    if (payload.aud !== clientId) {
+      throw new UnauthorizedException('Token Google com aud inesperado');
+    }
+    if (payload.iss !== 'https://accounts.google.com' && payload.iss !== 'accounts.google.com') {
+      throw new UnauthorizedException('Token Google com issuer inválido');
+    }
+    if (!payload.email || payload.email_verified === 'false') {
+      throw new UnauthorizedException('Email Google não verificado');
+    }
+    return { email: String(payload.email).toLowerCase(), name: payload.name, sub: payload.sub };
+  }
+
+  private async verifyAppleIdToken(_idToken: string): Promise<{ email: string; name?: string; sub: string }> {
+    // Apple Sign-In requer JWKS validation (kid → chave pública → verify JWT).
+    // Implementar via `jose` ou `jsonwebtoken + node-fetch` em follow-up.
+    // Por enquanto, bloquear pra evitar o mesmo bypass.
+    throw new UnauthorizedException(
+      'Apple Sign-In ainda não está habilitado no servidor. Use Google ou email/senha.',
+    );
+  }
+
   async socialAuth(dto: SocialAuthDto) {
-    if (!dto.email) {
-      throw new BadRequestException('Email is required for social authentication');
+    if (!dto.token) {
+      throw new BadRequestException('OAuth token é obrigatório');
     }
 
-    let user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    // Verifica o token REAL com o provider e extrai email verificado.
+    // O dto.email do body é IGNORADO (era o vetor de attack).
+    let verified: { email: string; name?: string; sub: string };
+    if (dto.provider === 'GOOGLE') {
+      verified = await this.verifyGoogleIdToken(dto.token);
+    } else if (dto.provider === 'APPLE') {
+      verified = await this.verifyAppleIdToken(dto.token);
+    } else {
+      throw new BadRequestException('Provider inválido');
+    }
+
+    const email = verified.email;
+    let user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user) {
       user = await this.prisma.user.create({
         data: {
-          email: dto.email,
-          name: dto.name || dto.email.split('@')[0],
+          email,
+          name: verified.name || email.split('@')[0],
           authProvider: String(dto.provider),
         },
       });

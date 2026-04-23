@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Pre-commit hook — blockia secrets comuns antes do commit.
+#
+# Para ativar:
+#   git config core.hooksPath .githooks
+#
+# Scan de:
+#  - AWS Access Keys (AKIA…)
+#  - GitHub PAT (ghp_, gho_, ghs_, ghr_)
+#  - Slack tokens (xoxb-, xoxp-, xoxa-, xoxr-)
+#  - Google API Keys (AIzaSy…)
+#  - Stripe live keys (sk_live_, rk_live_)
+#  - Anthropic keys (sk-ant-)
+#  - OpenAI keys (sk-[A-Za-z0-9]{40,}) — heurística
+#  - PEM private keys
+#  - JWT tokens (eyJ… eyJ… …) com payload não-trivial
+#  - Password= / API_KEY= não-placeholder
+#  - Arquivos banidos (.claude/settings.local.json, .env, *.pem, *.p12)
+set -e
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+FAIL=0
+
+# Arquivos banidos (não deveriam nunca entrar no repo)
+BANNED_PATTERNS=(
+  '\.claude/settings\.local\.json$'
+  '(^|/)\.env$'
+  '(^|/)\.env\.local$'
+  '(^|/)\.env\.production$'
+  '\.pem$'
+  '\.p12$'
+  '\.pfx$'
+  '\.key$'
+  'id_rsa$'
+  'id_ed25519$'
+)
+for f in $STAGED_FILES; do
+  for pat in "${BANNED_PATTERNS[@]}"; do
+    if echo "$f" | grep -qE "$pat"; then
+      echo "❌ PRE-COMMIT: arquivo banido '$f' (match: $pat)"
+      echo "   Se realmente precisa commitar, use: git commit --no-verify"
+      FAIL=1
+    fi
+  done
+done
+
+# Conteúdo de secrets — só em arquivos texto staged
+scan_pattern() {
+  local label="$1"
+  local pattern="$2"
+  local matches
+  matches=$(git diff --cached --unified=0 -- $STAGED_FILES 2>/dev/null | grep -E "^\+" | grep -E "$pattern" || true)
+  if [ -n "$matches" ]; then
+    echo "❌ PRE-COMMIT: '$label' detectado em staged changes:"
+    echo "$matches" | head -5 | sed 's/^/    /'
+    echo ""
+    FAIL=1
+  fi
+}
+
+scan_pattern "AWS Access Key"          'AKIA[0-9A-Z]{16}'
+scan_pattern "GitHub PAT"              '(ghp|gho|ghs|ghr|ghu)_[A-Za-z0-9]{30,}'
+scan_pattern "Slack Token"             'xox[baprs]-[A-Za-z0-9-]{10,}'
+scan_pattern "Google API Key"          'AIzaSy[A-Za-z0-9_\-]{33}'
+scan_pattern "Stripe Live Key"         '(sk|rk)_live_[A-Za-z0-9]{24,}'
+scan_pattern "Anthropic API Key"       'sk-ant-(api|admin)[0-9]{2}-[A-Za-z0-9_\-]{80,}'
+scan_pattern "OpenAI API Key"          'sk-[A-Za-z0-9]{48}'
+scan_pattern "PEM Private Key"         '\-+BEGIN (RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY\-+'
+scan_pattern "JWT Token (3 parts)"     'eyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{20,}\.[A-Za-z0-9_\-]{20,}'
+scan_pattern "Supabase Service Key"    'eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]*role.{0,100}service_role'
+
+# Password=value heurístico — ignora placeholders comuns.
+# SÓ pega quando o valor é uma STRING literal (" ou '), com conteúdo alfanum
+# comprido. Property names como `secret: validateJwt(...)` não matcham porque
+# o valor depois de `:` não começa com aspas.
+# IGNORA .md/.rst (docs frequentemente descrevem padrões de ataque em prose).
+CODE_FILES=$(echo "$STAGED_FILES" | grep -vE '\.(md|rst|txt|adoc)$' || true)
+if [ -n "$CODE_FILES" ]; then
+  PASS_LINES=$(git diff --cached --unified=0 -- $CODE_FILES 2>/dev/null | grep -E "^\+" \
+    | grep -iE '(password|passwd|pwd|secret|token|api[_-]?key|apikey|bearer)[[:space:]]*[=:][[:space:]]*["\x27][A-Za-z0-9_\-\+\=\/\.]{12,}["\x27]' \
+    | grep -ivE '(change[_-]?me|example|placeholder|xxx+|your[_-]|<[^>]+>|\*{3,}|_REDACTED_|TODO|FIXME|\$\{|\$ENV|process\.env|default[_-]|test[_-]|mock[_-]|fake[_-]|dummy)' \
+    || true)
+else
+  PASS_LINES=""
+fi
+if [ -n "$PASS_LINES" ]; then
+  echo "⚠️  PRE-COMMIT: possível password/secret hardcoded (revise manualmente):"
+  echo "$PASS_LINES" | head -5 | sed 's/^/    /'
+  echo ""
+  echo "   Se for falso-positivo: git commit --no-verify"
+  FAIL=1
+fi
+
+if [ $FAIL -ne 0 ]; then
+  echo ""
+  echo "🚫 Commit ABORTADO — possíveis secrets detectados."
+  echo "   Remova os secrets e recomite, ou --no-verify se sabe que é falso-positivo."
+  exit 1
+fi
+
+exit 0

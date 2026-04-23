@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { Public } from '../common/decorators/public.decorator';
 import { FlightCacheService } from './flight-cache.service';
 import { ScraperFlightResult } from './scraper-client.service';
@@ -36,14 +37,30 @@ interface WebhookPayload {
 export class ScraperWebhookController {
   private readonly logger = new Logger(ScraperWebhookController.name);
   private readonly expectedSecret: string;
+  private readonly crowdsourcedHmacSecret: string;
 
   constructor(private cache: FlightCacheService) {
     this.expectedSecret = process.env.SCRAPER_WEBHOOK_SECRET || '';
+    // SR-CROWDSOURCED-01: antes era hardcode 'crowdsourced-v1' no bundle mobile —
+    // qualquer user podia extrair e injetar dados fake no cache.
+    // Agora: secret distinto em env var, validado via HMAC+timingSafe.
+    // Mobile app recebe esse secret via config endpoint autenticado.
+    this.crowdsourcedHmacSecret = process.env.CROWDSOURCED_HMAC_SECRET || '';
     if (!this.expectedSecret) {
       this.logger.warn(
         'SCRAPER_WEBHOOK_SECRET não configurado — webhook aceitará qualquer request!',
       );
     }
+  }
+
+  /**
+   * Comparação constant-time — evita timing side-channel que vaze bytes do secret.
+   */
+  private safeCompare(a: string, b: string): boolean {
+    const aBuf = Buffer.from(a || '', 'utf8');
+    const bBuf = Buffer.from(b || '', 'utf8');
+    if (aBuf.length !== bBuf.length) return false;
+    return timingSafeEqual(aBuf, bBuf);
   }
 
   @Public()
@@ -54,15 +71,34 @@ export class ScraperWebhookController {
   @ApiOperation({ summary: 'Recebe resultados de scrapers externos (GH Actions, CF Workers, crowdsourcing)' })
   async receiveScraperResult(
     @Headers('x-scraper-secret') secret: string,
+    @Headers('x-crowdsourced-signature') crowdSig: string,
+    @Headers('x-crowdsourced-timestamp') crowdTs: string,
     @Body() payload: WebhookPayload,
   ) {
-    // Source crowdsourcing (mobile) usa secret mais frouxo — "crowdsourced-v1".
-    // Dados são saneados com sanity checks abaixo e passam por mesmos limites.
     const isCrowdsourced = typeof payload?.source === 'string' && payload.source.startsWith('crowdsourced-');
-    const validSecret =
-      !this.expectedSecret ||
-      secret === this.expectedSecret ||
-      (isCrowdsourced && secret === 'crowdsourced-v1');
+
+    let validSecret = false;
+    if (!this.expectedSecret) {
+      // Dev mode sem secret — aceita tudo (warning já logado no ctor).
+      validSecret = true;
+    } else if (secret && this.safeCompare(secret, this.expectedSecret)) {
+      // GH Actions / CF Worker com secret compartilhado (timing-safe).
+      validSecret = true;
+    } else if (isCrowdsourced && this.crowdsourcedHmacSecret && crowdSig && crowdTs) {
+      // Crowdsourced: HMAC(secret, ts + "." + JSON body).
+      // Timestamp rejeitado se >5min (replay window).
+      const now = Math.floor(Date.now() / 1000);
+      const ts = parseInt(crowdTs, 10);
+      if (Number.isFinite(ts) && Math.abs(now - ts) <= 300) {
+        const canonical = `${crowdTs}.${JSON.stringify(payload)}`;
+        const expected = createHmac('sha256', this.crowdsourcedHmacSecret)
+          .update(canonical)
+          .digest('hex');
+        if (this.safeCompare(crowdSig, expected)) {
+          validSecret = true;
+        }
+      }
+    }
 
     if (!validSecret) {
       this.logger.warn(`Webhook rejeitado (secret inválido) — source=${payload?.source}`);

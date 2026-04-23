@@ -48,6 +48,10 @@ desktop.ini
 *.swp
 *.swo
 
+# Claude Code local settings (contains per-user permissions + potential leaks)
+.claude/settings.local.json
+**/.claude/settings.local.json
+
 # Scraper sessions (captured cookies — regenerate)
 scraper/data/sessions/
 **/data/sessions/

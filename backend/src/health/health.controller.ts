@@ -1,6 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard, Role } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -130,9 +133,13 @@ export class HealthController {
     return body;
   }
 
-  @Public()
+  // SR-HEALTH-LEAK-01: antes era @Public — expunha user count + integrações
+  // pra reconhecimento. Agora requer admin JWT.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth()
   @Get('extended')
-  @ApiOperation({ summary: 'Health detalhado + counts de tabelas (ops dashboard)' })
+  @ApiOperation({ summary: 'Health detalhado + counts de tabelas (admin only)' })
   async extended() {
     const started = Date.now();
     const [

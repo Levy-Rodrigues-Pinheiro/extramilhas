@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { createHash, createHmac, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertSafeExternalUrl, SSRFViolation } from '../common/helpers/ssrf-guard';
 
 /**
  * Outbound webhooks. Parceiros registram URL + eventos; app POSTa payload
@@ -49,6 +50,17 @@ export class WebhooksService {
     if (!/^https?:\/\//.test(params.url)) {
       throw new ForbiddenException('URL precisa ser http(s)');
     }
+    // SSRF guard (SR-SSRF-01): bloqueia localhost, IPs privados, metadata cloud.
+    try {
+      await assertSafeExternalUrl(params.url);
+    } catch (err) {
+      if (err instanceof SSRFViolation) {
+        throw new BadRequestException(
+          'URL de webhook inválida: não é permitido apontar pra rede interna, localhost ou metadata cloud.',
+        );
+      }
+      throw err;
+    }
     const secret = randomBytes(32).toString('hex');
     const created = await (this.prisma as any).outboundWebhook.create({
       data: {
@@ -92,14 +104,33 @@ export class WebhooksService {
     event: string,
   ): Promise<{ ok: boolean; status?: number; error?: string }> {
     try {
+      // SSRF re-check at dispatch time (DNS rebinding mitigation):
+      // mesmo que a URL tenha passado no create, resolver DNS de novo
+      // bloqueia se o domínio foi repointado pra IP privado posteriormente.
+      try {
+        await assertSafeExternalUrl(url);
+      } catch (err) {
+        if (err instanceof SSRFViolation) {
+          return { ok: false, error: `SSRF block: ${err.message.slice(0, 200)}` };
+        }
+        throw err;
+      }
       const signature = createHmac('sha256', secret).update(body).digest('hex');
+      // Timestamp + signed-digest (SR-REPLAY-01): evita replay attack mesmo
+      // se o body HTTP for vazado em logs.
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const signatureV2 = createHmac('sha256', secret)
+        .update(`${timestamp}.${body}`)
+        .digest('hex');
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Milhasextras-Signature': signature,
+          'X-Milhasextras-Signature': signature, // legado (v1) — só body
+          'X-Milhasextras-Signature-V2': signatureV2, // novo (v2) — ts+body
+          'X-Milhasextras-Timestamp': timestamp,
           'X-Milhasextras-Event': event,
         },
         body,

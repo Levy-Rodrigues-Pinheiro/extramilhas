@@ -116,6 +116,11 @@ import { PodcastModule } from './podcast/podcast.module';
       { name: 'short', ttl: 1000, limit: 10 },
       { name: 'medium', ttl: 10000, limit: 50 },
       { name: 'long', ttl: 60000, limit: 200 },
+      // SR-THROTTLE-AUTH: throttler dedicado pra endpoints sensíveis de auth.
+      // default limits permissivos aqui, @Throttle({auth:{...}}) nos controllers
+      // aperta pra 5/min em login/register, 3/5min em forgot-password etc.
+      { name: 'auth', ttl: 60000, limit: 1000 },
+      { name: 'default', ttl: 60000, limit: 1000 },
     ]),
     BullModule.forRootAsync({
       inject: [ConfigService],

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { randomInt } from 'crypto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { successResponse } from '../common/helpers/response.helper';
 import { PrismaService } from '../prisma/prisma.service';
@@ -161,7 +162,9 @@ export class NotificationPreferencesController {
       throw new HttpException('Número inválido', HttpStatus.BAD_REQUEST);
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // SR-RNG-01: antes usava Math.random() — previsível se atacante obtém seed V8.
+    // Agora: crypto.randomInt (CSPRNG) garante imprevisibilidade.
+    const code = String(randomInt(100000, 1_000_000));
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10min
     this.pendingCodes.set(userId, { code, expiresAt, phone: phoneE164 });
 

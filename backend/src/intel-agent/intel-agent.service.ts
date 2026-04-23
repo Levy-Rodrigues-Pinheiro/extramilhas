@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { createHash } from 'crypto';
 import { LlmExtractor, ExtractedBonus } from './llm-extractor.service';
 import { TelegramAdapter } from './telegram-adapter.service';
+import { assertSafeExternalUrl, SSRFViolation } from '../common/helpers/ssrf-guard';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const cheerio: typeof import('cheerio') = require('cheerio');
 
@@ -356,6 +357,16 @@ export class IntelAgentService {
       text = await this.telegram.fetchChannelText(handle);
       htmlBytes = text.length;
     } else {
+      // SSRF guard (SR-SSRF-02): admin preview + cron fetch não pode apontar
+      // pra rede interna (metadata, localhost, RFC1918) mesmo com admin auth.
+      try {
+        await assertSafeExternalUrl(params.url);
+      } catch (err) {
+        if (err instanceof SSRFViolation) {
+          throw new BadRequestException(`URL bloqueada: ${err.message.slice(0, 200)}`);
+        }
+        throw err;
+      }
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 15_000);
       const res = await fetch(params.url, {
