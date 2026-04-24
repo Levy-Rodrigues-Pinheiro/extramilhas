@@ -37,6 +37,7 @@ export {
   type UnderlineInputHandle,
   default as UnderlineInputDefault,
 } from './UnderlineInput';
+export { AuroraInput, default as AuroraInputDefault } from './AuroraInput';
 export { PaperPlaneOrbit, default as PaperPlaneOrbitDefault } from './PaperPlaneOrbit';
 
 // Jobs-level innovative components

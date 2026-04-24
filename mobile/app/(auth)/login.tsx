@@ -1,49 +1,47 @@
 /**
- * Login — Aurora UI editorial hero.
+ * Login — Port fiel do login-page.tsx Aurora UI (web) para React Native.
  *
- * Conceitos aplicados:
+ * Arquitetura visual (mesma hierarquia do template):
  *
- *  1. TIPOGRAFIA EDITORIAL CINEMATOGRÁFICA
- *     - Hero display 56-64px com quebra de linha dramática
- *     - Palavra-chave em SerifItalic (Georgia-Italic) — padrão Aurora UI
- *     - Overline small-caps spaced como teaser
+ *  ┌──────────────────────────────────────────┐
+ *  │ [ Milhas Extras ]              (atmos.)  │ ← logo canto superior
+ *  │                                           │
+ *  │            ┌─────────────────┐            │
+ *  │            │    ┌────┐       │            │
+ *  │            │    │ 🔒 │ gradient sq       │
+ *  │            │    └────┘                    │
+ *  │            │  Bem-vindo de *volta*        │ ← heading com serif italic
+ *  │            │  Entre para continuar...     │
+ *  │            │                              │
+ *  │            │  [ 🍎 Continuar com Apple ]  │ ← social primary (white bg)
+ *  │            │  [ G  Continuar com Google ] │ ← social ghost (glass)
+ *  │            │                              │
+ *  │            │  ─────── ou com email ─────  │
+ *  │            │                              │
+ *  │            │  Email                       │
+ *  │            │  [ ✉ ________________ ]      │
+ *  │            │  Senha                       │
+ *  │            │  [ 🔒 _________ 👁 ]         │
+ *  │            │  [ ] Lembrar       Esqueceu? │
+ *  │            │                              │
+ *  │            │  [   Entrar →   ] gradient  │
+ *  │            │                              │
+ *  │            │  Ainda não tem conta? Criar  │
+ *  │            └─────────────────┘            │
+ *  │                                           │
+ *  │   Ao continuar, Termos + Privacidade...  │ ← footer minúsculo
+ *  └──────────────────────────────────────────┘
  *
- *  2. MESH BG + NOISE — intensity="hero" (2 orbs vibrantes + grão)
- *
- *  3. AVIÃO COMO ORNAMENTO, NÃO CENTRO
- *     - FlyingPlaneScene pequeno (80px) no canto superior direito
- *     - Não compete com o hero tipográfico
- *
- *  4. INPUTS MINIMALISTAS (UnderlineInput)
- *     - Underline cyan com glow ao focar (estilo Apple HIG)
- *     - Zero glass box — respira
- *     - Shake horizontal on error + haptic
- *
- *  5. CTA PILL GRADIENT
- *     - AuroraButton variant='gradient' (blue → purple + glow)
- *     - Pill radius 100 — Aurora UI signature
- *
- *  6. SOCIAL LOGIN COMO GHOST PILLS INLINE
- *     - 2 botões ghost pill lado a lado (Apple + Google)
- *     - Não domina o form
- *
- *  7. STAGGER ENTRANCE CASCADE
- *     - Cada elemento entra 80-120ms após o anterior
- *     - FadeInDown.springify — bounce suave Aurora UI
- *
- *  8. HAPTIC RICH
- *     - focus: select (tic)
- *     - submit: medium (base)
- *     - success: success (double tic)
- *     - error: shake + error haptic
- *
- *  9. FOOTER EDITORIAL
- *     - "Primeira vez? Criar conta" — entry point óbvio
- *     - Tagline com SerifItalic — "Milhas, não só voos."
- *
- * 10. LAYOUT RESPIRANTE
- *     - Muito espaço negativo (pattern Aurora UI)
- *     - Hero ocupa 40% da tela, form desce naturalmente
+ * Conceitos Aurora UI aplicados (mapeamento web → RN):
+ *  - motion.div initial/animate → Animated.View entering FadeIn/FadeInDown
+ *  - Reveal direction="scale" → FadeIn scale entrance
+ *  - MagneticButton → PressableScale pressedScale 0.96 (approx)
+ *  - AnimatePresence signin/signup swap → não usado (rotas separadas)
+ *  - mesh-bg + noise → AuroraBackground intensity="hero"
+ *  - PaperPlaneOrbit como atmospheric layer (fundo)
+ *  - gradient-text + serif-italic → GradientText italic fontFamily=Georgia
+ *  - GlassCard padding 48/40 → GlassCard radiusSize="xl" padding={32}
+ *  - Lock icon quadrado gradient → LinearGradient 64x64 radius 18 com lock SVG
  */
 
 import React, { useRef, useState } from 'react';
@@ -55,6 +53,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  TextInput,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -62,21 +62,21 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   FadeInDown,
   FadeIn,
-  FadeInUp,
+  ZoomIn,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  withSequence,
   Easing,
   interpolate,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../src/store/auth.store';
 import {
   AuroraBackground,
   AuroraButton,
-  UnderlineInput,
-  type UnderlineInputHandle,
+  AuroraInput,
+  GlassCard,
   PressableScale,
   PaperPlaneOrbit,
   SerifItalic,
@@ -94,59 +94,57 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [emailError, setEmailError] = useState<string | undefined>();
   const [passwordError, setPasswordError] = useState<string | undefined>();
   const { login, isLoading } = useAuthStore();
 
-  const emailRef = useRef<UnderlineInputHandle>(null);
-  const passwordRef = useRef<UnderlineInputHandle>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
-  // Breathing glow no CTA (aurora do botão pulsa lentamente)
-  const ctaGlow = useSharedValue(0);
+  // Breath glow no lock icon — respira lentamente
+  const iconBreath = useSharedValue(0);
   React.useEffect(() => {
-    ctaGlow.value = withRepeat(
-      withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+    iconBreath.value = withRepeat(
+      withTiming(1, { duration: 2800, easing: Easing.inOut(Easing.quad) }),
       -1,
       true,
     );
-  }, [ctaGlow]);
-  const ctaBreathStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(ctaGlow.value, [0, 1], [0.35, 0.65]),
-    transform: [{ scale: interpolate(ctaGlow.value, [0, 1], [1.0, 1.04]) }],
+  }, [iconBreath]);
+  const iconGlowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: interpolate(iconBreath.value, [0, 1], [0.35, 0.7]),
   }));
 
   const validate = () => {
     let valid = true;
     setEmailError(undefined);
     setPasswordError(undefined);
-
     if (!email.trim()) {
       setEmailError('Informe seu e-mail');
-      emailRef.current?.shake();
       valid = false;
     } else if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
       setEmailError('E-mail inválido');
-      emailRef.current?.shake();
       valid = false;
     }
     if (!password) {
       setPasswordError('Informe sua senha');
-      if (valid) passwordRef.current?.shake(); // só uma shake ao mesmo tempo
       valid = false;
     }
     return valid;
   };
 
   const handleLogin = async () => {
-    if (!validate()) return;
+    if (!validate()) {
+      haptics.error();
+      return;
+    }
     try {
       haptics.medium();
       await login(email.trim(), password);
       haptics.success();
     } catch {
-      emailRef.current?.shake();
-      passwordRef.current?.shake();
-      setPasswordError('Credenciais incorretas. Tente de novo.');
+      haptics.error();
+      setPasswordError('Credenciais incorretas. Tente novamente.');
     }
   };
 
@@ -157,191 +155,270 @@ export default function LoginScreen() {
 
   return (
     <AuroraBackground intensity="hero" style={{ flex: 1 }}>
-      {/* ─── Avião de papel branco (3/4 perspective) orbitando em figura-8 ─── */}
+      {/* Atmosfera: avião de papel orbitando em fundo */}
       <PaperPlaneOrbit
-        planeSize={56}
-        duration={26000}
-        pathAmplitudeX={0.38}
-        pathAmplitudeY={0.28}
+        planeSize={52}
+        duration={28000}
+        pathAmplitudeX={0.40}
+        pathAmplitudeY={0.30}
         showTrail
         trailCount={14}
       />
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        {/* Logo/marca no canto superior esquerdo (Aurora UI web: position:fixed top:28 left:32) */}
+        <Animated.View
+          entering={FadeInDown.duration(800).easing(Easing.bezier(0.16, 1, 0.3, 1) as any)}
+          style={styles.logoCorner}
+        >
+          <GradientText
+            fontSize={20}
+            fontWeight="700"
+            letterSpacing={-0.6}
+            fontFamily="Inter_700Bold"
+            colors={[textTokens.primary, aurora.cyan]}
+          >
+            Milhas Extras
+          </GradientText>
+        </Animated.View>
+
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-
           <ScrollView
             contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* ─── Overline (small-caps teaser) ─── */}
-            <Animated.View entering={FadeIn.duration(motion.timing.medium)}>
-              <Text style={styles.overline}>MILHAS EXTRAS · v1.0</Text>
-            </Animated.View>
-
-            {/* ─── Hero editorial tipográfico ─── */}
-            <View style={styles.heroBlock}>
-              <Animated.View
-                entering={FadeInDown.delay(80).duration(motion.timing.long).springify().damping(22)}
-              >
-                <Text style={styles.heroLine1}>De</Text>
-              </Animated.View>
-
-              <Animated.View
-                entering={FadeInDown.delay(180).duration(motion.timing.long).springify().damping(22)}
-                style={styles.heroLine2Row}
-              >
-                <Text style={styles.heroLine1}>volta ao </Text>
-                <SerifItalic style={styles.heroItalic}>cofre</SerifItalic>
-                <Text style={styles.heroLine1}>.</Text>
-              </Animated.View>
-
-              <Animated.View
-                entering={FadeIn.delay(340).duration(motion.timing.medium)}
-                style={styles.heroSubRow}
-              >
-                <Text style={styles.heroSub}>
-                  Onde suas milhas dormem e{' '}
-                  <SerifItalic style={styles.heroSubItalic}>acordam maiores</SerifItalic>.
-                </Text>
-              </Animated.View>
-            </View>
-
-            {/* ─── Form (inputs underline) ─── */}
+            {/* Card central — GlassCard (web Aurora UI padding 48/40) */}
             <Animated.View
-              entering={FadeInUp.delay(440).duration(motion.timing.medium)}
-              style={styles.form}
+              entering={ZoomIn.duration(1000).easing(Easing.bezier(0.16, 1, 0.3, 1) as any)}
+              style={styles.cardWrap}
             >
-              <UnderlineInput
-                ref={emailRef}
-                label="E-mail"
-                icon="mail-outline"
-                value={email}
-                onChangeText={(v) => {
-                  setEmail(v);
-                  if (emailError) setEmailError(undefined);
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect={false}
-                errorText={emailError}
-                returnKeyType="next"
-                onSubmitEditing={() => passwordRef.current?.focus()}
-              />
-
-              <UnderlineInput
-                ref={passwordRef}
-                label="Senha"
-                icon="lock-closed-outline"
-                iconRight={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                onRightIconPress={() => {
-                  haptics.select();
-                  setShowPassword(!showPassword);
-                }}
-                value={password}
-                onChangeText={(v) => {
-                  setPassword(v);
-                  if (passwordError) setPasswordError(undefined);
-                }}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoComplete="password"
-                errorText={passwordError}
-                returnKeyType="go"
-                onSubmitEditing={handleLogin}
-              />
-
-              <PressableScale
-                style={styles.forgotRow}
-                haptic="tap"
-                onPress={soonAlert('Recuperação de senha')}
+              <GlassCard
+                radiusSize="xl"
+                padding={32}
+                glassIntensity="strong"
+                elevated
               >
-                <Text style={styles.forgotText}>Esqueci minha senha</Text>
-              </PressableScale>
+                {/* ─── Cabeçalho: lock icon + heading + subtitle ─── */}
+                <View style={styles.header}>
+                  {/* Lock icon quadrado gradient 64x64 (spring entrance scale+rotate) */}
+                  <Animated.View
+                    entering={ZoomIn.delay(300).duration(700).springify().damping(14)}
+                    style={styles.lockWrap}
+                  >
+                    <Animated.View style={[styles.lockGlow, iconGlowStyle]} />
+                    <LinearGradient
+                      colors={[aurora.cyan, aurora.iris]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.lockSquare}
+                    >
+                      <Ionicons name="lock-closed" size={28} color="#fff" />
+                    </LinearGradient>
+                  </Animated.View>
 
-              {/* ─── CTA principal com breath glow ambiente ─── */}
-              <View style={styles.ctaWrap}>
-                <Animated.View style={[styles.ctaBreath, ctaBreathStyle]} />
-                <AuroraButton
-                  label="Entrar"
-                  onPress={handleLogin}
-                  loading={isLoading}
-                  variant="gradient"
-                  size="lg"
-                  icon="arrow-forward"
-                  iconPosition="right"
-                  fullWidth
-                  haptic="medium"
-                />
-              </View>
+                  {/* Heading: "Bem-vindo de *volta*" */}
+                  <Animated.View
+                    entering={FadeIn.delay(500).duration(motion.timing.medium)}
+                  >
+                    <View style={styles.headingRow}>
+                      <Text style={styles.heading}>Bem-vindo de </Text>
+                      <GradientText
+                        italic
+                        fontSize={28}
+                        fontWeight="400"
+                        letterSpacing={-0.85}
+                        fontFamily={Platform.select({
+                          ios: 'Georgia-Italic',
+                          android: 'serif',
+                          default: 'Georgia',
+                        })}
+                      >
+                        volta
+                      </GradientText>
+                    </View>
+                    <Text style={styles.subtitle}>
+                      Entre para continuar onde parou
+                    </Text>
+                  </Animated.View>
+                </View>
+
+                {/* ─── Social buttons ─── */}
+                <Animated.View
+                  entering={FadeIn.delay(620).duration(motion.timing.medium)}
+                  style={styles.socialGroup}
+                >
+                  <SocialButton
+                    icon={<Ionicons name="logo-apple" size={20} color="#000" />}
+                    label="Continuar com Apple"
+                    primary
+                    onPress={soonAlert('Login com Apple')}
+                  />
+                  <SocialButton
+                    icon={<Ionicons name="logo-google" size={18} color={textTokens.primary} />}
+                    label="Continuar com Google"
+                    onPress={soonAlert('Login com Google')}
+                  />
+                </Animated.View>
+
+                {/* ─── Divisor "ou com email" ─── */}
+                <Animated.View
+                  entering={FadeIn.delay(720).duration(motion.timing.medium)}
+                  style={styles.divider}
+                >
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>ou com email</Text>
+                  <View style={styles.dividerLine} />
+                </Animated.View>
+
+                {/* ─── Formulário ─── */}
+                <Animated.View
+                  entering={FadeIn.delay(780).duration(motion.timing.medium)}
+                  style={{ gap: 14 }}
+                >
+                  <AuroraInput
+                    ref={emailRef}
+                    label="Email"
+                    icon="mail-outline"
+                    placeholder="voce@exemplo.com"
+                    value={email}
+                    onChangeText={(v) => {
+                      setEmail(v);
+                      if (emailError) setEmailError(undefined);
+                    }}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect={false}
+                    errorText={emailError}
+                    returnKeyType="next"
+                    onSubmitEditing={() => passwordRef.current?.focus()}
+                  />
+
+                  <AuroraInput
+                    ref={passwordRef}
+                    label="Senha"
+                    icon="lock-closed-outline"
+                    placeholder="••••••••"
+                    value={password}
+                    onChangeText={(v) => {
+                      setPassword(v);
+                      if (passwordError) setPasswordError(undefined);
+                    }}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                    autoComplete="password"
+                    errorText={passwordError}
+                    returnKeyType="go"
+                    onSubmitEditing={handleLogin}
+                    suffix={
+                      <Pressable
+                        onPress={() => {
+                          haptics.select();
+                          setShowPassword((s) => !s);
+                        }}
+                        hitSlop={10}
+                        style={styles.eyeBtn}
+                      >
+                        <Ionicons
+                          name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                          size={18}
+                          color={textTokens.tertiary}
+                        />
+                      </Pressable>
+                    }
+                  />
+
+                  {/* Lembrar + Esqueceu */}
+                  <View style={styles.rememberRow}>
+                    <PressableScale
+                      onPress={() => {
+                        haptics.select();
+                        setRemember(!remember);
+                      }}
+                      haptic="none"
+                      style={styles.checkRow}
+                    >
+                      <View
+                        style={[
+                          styles.checkbox,
+                          remember && styles.checkboxActive,
+                        ]}
+                      >
+                        {remember && (
+                          <Ionicons name="checkmark" size={12} color="#000" />
+                        )}
+                      </View>
+                      <Text style={styles.rememberText}>Lembrar de mim</Text>
+                    </PressableScale>
+
+                    <PressableScale
+                      haptic="tap"
+                      onPress={soonAlert('Recuperação de senha')}
+                    >
+                      <Text style={styles.forgotText}>Esqueceu a senha?</Text>
+                    </PressableScale>
+                  </View>
+
+                  {/* CTA Entrar (MagneticButton web → PressableScale forte) */}
+                  <View style={{ marginTop: 8 }}>
+                    <AuroraButton
+                      label="Entrar"
+                      onPress={handleLogin}
+                      loading={isLoading}
+                      variant="gradient"
+                      size="lg"
+                      icon="arrow-forward"
+                      iconPosition="right"
+                      fullWidth
+                      haptic="medium"
+                    />
+                  </View>
+                </Animated.View>
+
+                {/* ─── Toggle signin/signup ─── */}
+                <Animated.View
+                  entering={FadeIn.delay(900).duration(motion.timing.medium)}
+                  style={styles.toggleRow}
+                >
+                  <Text style={styles.toggleText}>Ainda não tem conta? </Text>
+                  <PressableScale
+                    onPress={() => {
+                      haptics.select();
+                      router.push('/(auth)/register');
+                    }}
+                    haptic="none"
+                  >
+                    <Text style={styles.toggleLink}>Criar conta</Text>
+                  </PressableScale>
+                </Animated.View>
+              </GlassCard>
             </Animated.View>
 
-            {/* ─── Divider hairline + "ou" ─── */}
+            {/* ─── Rodapé: Termos + Política ─── */}
             <Animated.View
-              entering={FadeIn.delay(600).duration(motion.timing.medium)}
-              style={styles.divider}
-            >
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OU</Text>
-              <View style={styles.dividerLine} />
-            </Animated.View>
-
-            {/* ─── Social login (ghost pills inline) ─── */}
-            <Animated.View
-              entering={FadeIn.delay(680).duration(motion.timing.medium)}
-              style={styles.socialRow}
-            >
-              <PressableScale
-                style={styles.socialBtn}
-                haptic="tap"
-                onPress={soonAlert('Login com Apple')}
-              >
-                <Ionicons name="logo-apple" size={22} color={textTokens.primary} />
-                <Text style={styles.socialText}>Apple</Text>
-              </PressableScale>
-
-              <PressableScale
-                style={styles.socialBtn}
-                haptic="tap"
-                onPress={soonAlert('Login com Google')}
-              >
-                <Ionicons name="logo-google" size={20} color={textTokens.primary} />
-                <Text style={styles.socialText}>Google</Text>
-              </PressableScale>
-            </Animated.View>
-
-            {/* ─── Footer: "primeira vez" + tagline editorial ─── */}
-            <Animated.View
-              entering={FadeIn.delay(780).duration(motion.timing.medium)}
+              entering={FadeIn.delay(1100).duration(motion.timing.medium)}
               style={styles.footer}
             >
-              <View style={styles.registerRow}>
-                <Text style={styles.registerText}>Primeira vez? </Text>
-                <PressableScale
-                  onPress={() => {
-                    haptics.select();
-                    router.push('/(auth)/register');
-                  }}
-                  haptic="none"
+              <Text style={styles.footerText}>
+                Ao continuar, você concorda com os{' '}
+                <Text
+                  style={styles.footerLink}
+                  onPress={soonAlert('Termos de uso')}
                 >
-                  <GradientText
-                    fontSize={14}
-                    fontWeight="700"
-                    fontFamily="Inter_700Bold"
-                  >
-                    Criar conta
-                  </GradientText>
-                </PressableScale>
-              </View>
-
-              <Text style={styles.tagline}>
-                Milhas, não só{' '}
-                <SerifItalic style={styles.taglineItalic}>voos</SerifItalic>.
+                  Termos
+                </Text>
+                {' '}e a{' '}
+                <Text
+                  style={styles.footerLink}
+                  onPress={soonAlert('Política de privacidade')}
+                >
+                  Política de privacidade
+                </Text>
+                .
               </Text>
             </Animated.View>
           </ScrollView>
@@ -351,111 +428,154 @@ export default function LoginScreen() {
   );
 }
 
+// ─── SocialButton (Apple/Google) ───────────────────────────────────────
+
+function SocialButton({
+  icon,
+  label,
+  primary = false,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  primary?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <PressableScale
+      onPress={onPress}
+      haptic="tap"
+      pressedScale={0.97}
+      style={[
+        styles.socialBtn,
+        primary ? styles.socialBtnPrimary : styles.socialBtnGhost,
+      ]}
+    >
+      {icon}
+      <Text
+        style={[
+          styles.socialLabel,
+          { color: primary ? '#000' : textTokens.primary },
+        ]}
+      >
+        {label}
+      </Text>
+    </PressableScale>
+  );
+}
+
 // ─── Styles ─────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
+  // Logo no canto
+  logoCorner: {
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
   },
+
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: space.xl,
-    paddingTop: space.lg,
-    paddingBottom: space.xxl,
+    paddingHorizontal: space.md,
+    paddingTop: space.md,
+    paddingBottom: space.xl,
+    justifyContent: 'center',
   },
 
-  // Overline
-  overline: {
-    color: textTokens.tertiary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 11,
-    letterSpacing: 2.4,
-    textTransform: 'uppercase',
-    marginBottom: space.xl,
+  // Card central
+  cardWrap: {
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
   },
 
-  // Hero editorial
-  heroBlock: {
-    marginBottom: space.xxl,
+  // Header (lock icon + heading + subtitle)
+  header: {
+    alignItems: 'center',
+    marginBottom: 28,
   },
-  heroLine1: {
-    color: textTokens.primary,
-    fontFamily: 'Inter_900Black',
-    fontSize: 56,
-    lineHeight: 60,
-    letterSpacing: -2.2,
+  lockWrap: {
+    width: 64,
+    height: 64,
+    marginBottom: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  heroLine2Row: {
+  lockGlow: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    shadowColor: aurora.cyan,
+    shadowOffset: { width: 0, height: 15 },
+    shadowRadius: 28,
+    shadowOpacity: 0.55,
+    elevation: 12,
+    backgroundColor: aurora.cyan,
+    opacity: 0.001, // shadow sem tinta visível
+  },
+  lockSquare: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headingRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     flexWrap: 'wrap',
+    justifyContent: 'center',
   },
-  heroItalic: {
-    fontSize: 56,
+  heading: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 28,
     color: textTokens.primary,
-    letterSpacing: -2.2,
-    lineHeight: 60,
-    fontWeight: '400',
+    letterSpacing: -0.85,
+    lineHeight: 32,
   },
-  heroSubRow: {
-    marginTop: 18,
-    maxWidth: '90%',
-  },
-  heroSub: {
+  subtitle: {
+    marginTop: 8,
     color: textTokens.secondary,
     fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 14,
+    textAlign: 'center',
+    letterSpacing: -0.05,
+  },
+
+  // Social buttons
+  socialGroup: {
+    gap: 10,
+    marginBottom: 4,
+  },
+  socialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+  },
+  socialBtnPrimary: {
+    backgroundColor: '#ffffff',
+  },
+  socialBtnGhost: {
+    backgroundColor: surface.glass,
+    borderWidth: 1,
+    borderColor: surface.glassBorderActive,
+  },
+  socialLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
     letterSpacing: -0.1,
   },
-  heroSubItalic: {
-    fontSize: 17,
-    color: textTokens.primary,
-  },
 
-  // Form
-  form: {
-    marginBottom: space.lg,
-  },
-  forgotRow: {
-    alignSelf: 'flex-end',
-    marginTop: 4,
-    marginBottom: space.lg,
-    padding: 6,
-  },
-  forgotText: {
-    color: aurora.cyan,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
-    letterSpacing: -0.1,
-  },
-
-  // CTA wrapper (breath glow atrás)
-  ctaWrap: {
-    position: 'relative',
-  },
-  ctaBreath: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 100,
-    backgroundColor: aurora.cyan,
-    shadowColor: aurora.cyan,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 32,
-    elevation: 0,
-  },
-
-  // Divider
+  // Divisor "ou com email"
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: space.xl,
-    marginBottom: space.lg,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
@@ -464,60 +584,93 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     color: textTokens.tertiary,
-    fontFamily: 'Inter_700Bold',
-    fontSize: 11,
-    letterSpacing: 2,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    letterSpacing: 0.1,
   },
 
-  // Social row
-  socialRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: space.xxl,
+  // Eye button dentro do input suffix
+  eyeBtn: {
+    padding: 4,
   },
-  socialBtn: {
-    flex: 1,
+
+  // Lembrar + Esqueceu
+  rememberRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  checkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: 100,
+    padding: 4,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     borderWidth: 1,
     borderColor: surface.glassBorderActive,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: surface.glass,
   },
-  socialText: {
-    color: textTokens.primary,
+  checkboxActive: {
+    backgroundColor: aurora.cyan,
+    borderColor: aurora.cyan,
+  },
+  rememberText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    letterSpacing: -0.05,
+  },
+  forgotText: {
+    color: aurora.cyan,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    letterSpacing: -0.05,
+  },
+
+  // Toggle signin/signup
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+  },
+  toggleText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+  },
+  toggleLink: {
+    color: aurora.cyan,
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-    letterSpacing: -0.1,
+    fontSize: 13,
+    letterSpacing: -0.05,
   },
 
   // Footer
   footer: {
     alignItems: 'center',
-    gap: space.md,
-    marginTop: 'auto',
-    paddingTop: space.lg,
+    marginTop: 16,
+    maxWidth: 440,
+    alignSelf: 'center',
+    paddingHorizontal: space.md,
   },
-  registerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  registerText: {
-    color: textTokens.secondary,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-  },
-  tagline: {
+  footerText: {
     color: textTokens.tertiary,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    letterSpacing: 0.2,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
+    letterSpacing: 0.1,
   },
-  taglineItalic: {
+  footerLink: {
     color: textTokens.secondary,
-    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });
