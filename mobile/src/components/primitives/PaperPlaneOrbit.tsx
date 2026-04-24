@@ -1,5 +1,5 @@
 /**
- * PaperPlaneOrbit — avião de papel branco orbitando fluidamente.
+ * PaperPlaneOrbit — avião de papel branco (perfil lateral) orbitando.
  *
  * Movimento: curva Lissajous (figura-8 horizontal) com parametrização:
  *   x(t) = Rx · sin(2π·t)
@@ -9,15 +9,17 @@
  * meditativo. O avião aponta pra direção do movimento calculando a derivada
  * do path: θ = atan2(dy/dt, dx/dt).
  *
- * Trail: 10 círculos brancos seguem o path com lag progressivo e opacity
+ * Trail: 12 círculos brancos seguem o path com lag progressivo e opacity
  * decrescente — forma contrail elegante.
  *
- * Design do avião de papel:
- *   - 2 triângulos SVG (metade superior + metade inferior) com fills
- *     diferentes (#fff vs rgba(255,255,255,0.55)) → efeito 3D de dobra
- *   - Halo glow radial ao redor (sutil brilho Apple)
+ * Design do avião de papel (SIDE VIEW — perfil lateral icônico):
+ *   - Asa superior: triângulo branco da cauda ao nariz (top half)
+ *   - Barriga inferior: triângulo fold-color da cauda ao nariz (bottom)
+ *   - Tail fin (estabilizador vertical): pequeno triângulo na cauda topo
+ *   - Crista central: linha sutil dividindo asa/barriga (dobra do papel)
+ *   - Halo glow radial ao redor (brilho Apple)
  *
- * Performance: 1 sharedValue global + worklet pure; trails = 10 views
+ * Performance: 1 sharedValue global + worklet pure; trails = N views
  * animados por useAnimatedStyle — tudo no UI thread.
  *
  * Uso:
@@ -265,14 +267,36 @@ function PaperPlane({
     };
   });
 
-  // Path do avião de papel (apontando pra direita, 0deg = +X)
-  // Metade superior: from (0,0) → nariz (size, size/2) → fold (size*0.35, size*0.5)
-  // Metade inferior: from (0,size) → nariz (size, size/2) → fold (size*0.35, size*0.5)
+  // Paper plane SIDE VIEW (perfil lateral icônico, apontando pra direita)
+  //
+  // Dimensões:
+  //   - Altura total ocupa ~80% de `size` (y 0.15 → 0.85) pra deixar margem
+  //     de voo ao redor sem cortar
+  //   - Nose direita (100%, meio-baixo = 0.58)
+  //   - Cauda alongada (0%, topo = 0.22 e base = 0.72)
+  //   - Dobra central (fold) em ~40% x
+  //   - Tail fin (estabilizador vertical) pequeno triângulo topo-trás
+  //
+  // Coordenadas (s = size):
   const s = size;
-  const topHalf = `M 0 0 L ${s} ${s / 2} L ${s * 0.35} ${s / 2} Z`;
-  const bottomHalf = `M 0 ${s} L ${s} ${s / 2} L ${s * 0.35} ${s / 2} Z`;
-  // Linha central da dobra — highlight fino
-  const foldLine = `M ${s * 0.35} ${s / 2} L ${s} ${s / 2}`;
+
+  // Asa superior (top wing silhouette) — triângulo da cauda-top ao nariz
+  //   cauda-top (0, 0.22) → nariz (1.00, 0.58) → fold (0.38, 0.58) → close
+  const wingTop = `M 0 ${s * 0.22} L ${s} ${s * 0.58} L ${s * 0.38} ${s * 0.58} Z`;
+
+  // Barriga inferior (fuselage bottom) — triângulo da cauda-base ao nariz
+  //   cauda-base (0, 0.72) → nariz (1.00, 0.58) → fold (0.38, 0.58) → close
+  const bellyBottom = `M 0 ${s * 0.72} L ${s} ${s * 0.58} L ${s * 0.38} ${s * 0.58} Z`;
+
+  // Tail fin (estabilizador vertical, cauda-topo) — triângulo pequeno
+  //   cauda-top (0, 0.22) → meio (0.12, 0.35) → cauda base fin (0, 0.40) → close
+  const tailFin = `M 0 ${s * 0.22} L ${s * 0.12} ${s * 0.36} L 0 ${s * 0.42} Z`;
+
+  // Crista central (dobra do papel) — linha sutil no eixo do avião
+  const crease = `M ${s * 0.38} ${s * 0.58} L ${s} ${s * 0.58}`;
+
+  // Cockpit highlight subtle — risco próximo ao nariz
+  const noseHighlight = `M ${s * 0.80} ${s * 0.55} L ${s * 0.95} ${s * 0.57}`;
 
   return (
     <Animated.View
@@ -285,7 +309,7 @@ function PaperPlane({
         planeStyle,
       ]}
     >
-      {/* Halo glow — círculo atrás do avião */}
+      {/* Halo glow — círculo branco difuso atrás do avião */}
       {glow && (
         <View
           style={[
@@ -304,18 +328,29 @@ function PaperPlane({
 
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <G>
-          {/* Metade superior — branco pleno (asa de cima) */}
-          <Path d={topHalf} fill={color} />
-          {/* Metade inferior — fold color (sombra de dobra) */}
-          <Path d={bottomHalf} fill={foldColor} />
-          {/* Dobra central — linha branca fina pra definir crista */}
+          {/* 1. Barriga inferior (fold-color — papel dobra) */}
+          <Path d={bellyBottom} fill={foldColor} />
+          {/* 2. Asa superior (branco pleno) */}
+          <Path d={wingTop} fill={color} />
+          {/* 3. Tail fin (estabilizador vertical — branco pleno) */}
+          <Path d={tailFin} fill={color} />
+          {/* 4. Crista central (linha de dobra — branco forte) */}
           <Path
-            d={foldLine}
+            d={crease}
             stroke={color}
             strokeWidth={0.8}
             strokeLinecap="round"
             fill="none"
-            opacity={0.9}
+            opacity={0.95}
+          />
+          {/* 5. Nose highlight (reflexo no bico) */}
+          <Path
+            d={noseHighlight}
+            stroke={color}
+            strokeWidth={0.6}
+            strokeLinecap="round"
+            fill="none"
+            opacity={0.7}
           />
         </G>
       </Svg>
