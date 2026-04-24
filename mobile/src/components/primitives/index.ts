@@ -38,6 +38,11 @@ export {
   default as UnderlineInputDefault,
 } from './UnderlineInput';
 export { AuroraInput, default as AuroraInputDefault } from './AuroraInput';
+export {
+  OTPInput,
+  type OTPInputHandle,
+  default as OTPInputDefault,
+} from './OTPInput';
 export { PaperPlaneOrbit, default as PaperPlaneOrbitDefault } from './PaperPlaneOrbit';
 
 // Jobs-level innovative components
