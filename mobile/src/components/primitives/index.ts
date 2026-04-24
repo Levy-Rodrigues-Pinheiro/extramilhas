@@ -37,6 +37,7 @@ export {
   type UnderlineInputHandle,
   default as UnderlineInputDefault,
 } from './UnderlineInput';
+export { PaperPlaneOrbit, default as PaperPlaneOrbitDefault } from './PaperPlaneOrbit';
 
 // Jobs-level innovative components
 export { SymbolEffect, default as SymbolEffectDefault } from './SymbolEffect';

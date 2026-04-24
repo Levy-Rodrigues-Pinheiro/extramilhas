@@ -55,7 +55,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -79,7 +78,7 @@ import {
   UnderlineInput,
   type UnderlineInputHandle,
   PressableScale,
-  FlyingPlaneScene,
+  PaperPlaneOrbit,
   SerifItalic,
   GradientText,
   aurora,
@@ -90,8 +89,6 @@ import {
   motion,
   haptics,
 } from '../../src/components/primitives';
-
-const { height: SCREEN_H } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -160,19 +157,21 @@ export default function LoginScreen() {
 
   return (
     <AuroraBackground intensity="hero" style={{ flex: 1 }}>
+      {/* ─── Avião de papel branco orbitando em figura-8 (fullscreen) ─── */}
+      <PaperPlaneOrbit
+        planeSize={44}
+        duration={24000}
+        pathAmplitudeX={0.36}
+        pathAmplitudeY={0.28}
+        showTrail
+        trailCount={12}
+      />
+
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          {/* ─── Avião como ornamento no canto superior direito ─── */}
-          <View pointerEvents="none" style={styles.cornerPlane}>
-            <FlyingPlaneScene
-              size={110}
-              intensity="cruising"
-              haloColor={aurora.magenta}
-            />
-          </View>
 
           <ScrollView
             contentContainerStyle={styles.scroll}
@@ -363,15 +362,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     paddingTop: space.lg,
     paddingBottom: space.xxl,
-  },
-
-  // Ornamento avião no canto
-  cornerPlane: {
-    position: 'absolute',
-    right: -10,
-    top: SCREEN_H * 0.06,
-    opacity: 0.9,
-    zIndex: 0,
   },
 
   // Overline
