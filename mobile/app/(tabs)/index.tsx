@@ -45,6 +45,8 @@ import {
   LiveActivityBanner,
   TiltCard3D,
   SymbolEffect,
+  GradientText,
+  SerifItalic,
   type ConfettiBurstHandle,
   aurora,
   premium,
@@ -290,6 +292,18 @@ export default function HomeScreen() {
               </View>
               </PressableScale>
             </TiltCard3D>
+          </Animated.View>
+
+          {/* ─── Aurora UI editorial hairline ─────────────── */}
+          <Animated.View
+            entering={FadeIn.delay(180).duration(motion.timing.medium)}
+            style={styles.editorialLine}
+          >
+            <Text style={styles.editorialText}>
+              Suas milhas,{' '}
+              <SerifItalic style={styles.editorialItalic}>evoluindo</SerifItalic>
+              .
+            </Text>
           </Animated.View>
 
           {/* ─── Quick actions ───────────────────────────── */}
@@ -786,6 +800,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     marginTop: 6,
+  },
+
+  // Aurora UI editorial (hairline under hero)
+  editorialLine: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: space.sm,
+  },
+  editorialText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    letterSpacing: -0.1,
+    textAlign: 'center',
+  },
+  editorialItalic: {
+    color: textTokens.primary,
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
 
   // Quick actions

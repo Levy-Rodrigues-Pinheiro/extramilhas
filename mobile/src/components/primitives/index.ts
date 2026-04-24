@@ -29,6 +29,10 @@ export { AuroraButton, default as AuroraButtonDefault } from './AuroraButton';
 export { FloatingTabBar, default as FloatingTabBarDefault } from './FloatingTabBar';
 export { FloatingLabelInput, default as FloatingLabelInputDefault } from './FloatingLabelInput';
 
+// Aurora UI editorial primitives
+export { GradientText, default as GradientTextDefault } from './GradientText';
+export { SerifItalic, default as SerifItalicDefault } from './SerifItalic';
+
 // Jobs-level innovative components
 export { SymbolEffect, default as SymbolEffectDefault } from './SymbolEffect';
 export { TiltCard3D, default as TiltCard3DDefault } from './TiltCard3D';
@@ -78,6 +82,8 @@ export {
   space,
   type,
   shadow,
+  easingParams,
+  fontFamily,
 } from '../../design/tokens';
 export { default as motion, timing, curve, timingConfig, springConfig } from '../../design/motion';
 export { default as haptics } from '../../design/haptics';

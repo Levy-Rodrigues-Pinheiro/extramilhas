@@ -1,195 +1,175 @@
 /**
- * Milhas Extras — Design tokens v3 ("Aurora + Apple HIG").
+ * Milhas Extras — Design tokens v4 "AURORA UI"
  *
- * Base: palette oficial da Apple (iOS 17 / macOS Sonoma Human Interface Guidelines)
- * — adotamos os systemColors dark mode, label hierarchy com alpha, e fill scale
- * (primary/secondary/tertiary/quaternary) que dão aquele feeling iOS nativo.
+ * Adaptação React Native do Aurora UI web (Next.js) — mesma linguagem,
+ * mesmos tokens, mesmo feel.
  *
- * Nossa assinatura (Aurora): cyan→iris→magenta permanece — mas refinada
- * (menos saturada que v2), usada APENAS como accent em hero/celebration.
- * Apple HIG chama de "restraint" — não seja chamativo por default.
+ * Design philosophy:
+ *  - Apple HIG exato (pure black bg, system color accents)
+ *  - Glass surfaces com borders sutis
+ *  - Mesh background floating + noise texture (atmosfera Apple)
+ *  - Typography: SF Pro / Inter display + New York / Georgia italic serif
+ *  - Large rounded (22/32/48) — mais generoso que v3
+ *  - Pill CTAs (radius 100)
+ *  - Easing curves Apple: (0.16, 1, 0.3, 1) e (0.25, 0.1, 0.25, 1)
  *
- * Material/Glass: fills Apple são alpha sobre bg preto, não branco.
- *
- * Principles:
- *  - Clarity (typography > chrome)
- *  - Deference (content first, UI sutil)
- *  - Depth (blur layers, springs realistas)
+ * Fonte: aurora-ui/styles/globals.css + Apple HIG 2024.
  */
 
-// ─── BACKGROUNDS (hierarquia iOS dark mode) ────────────────────────────
+// ─── BACKGROUNDS (dark theme — Aurora UI spec) ─────────────────────────
 
 /**
- * iOS dark mode usa 4 níveis sistêmicos:
- *   systemBackground            #000000   — tela base
- *   secondarySystemBackground   #1C1C1E   — cards/sheets level 1
- *   tertiarySystemBackground    #2C2C2E   — nested cards
- *   quaternarySystemBackground  #3A3A3C   — elevated elements
- *
- * Nossa adaptação: primary é levemente "warm navy" (#050810) pra aurora
- * ter mais contraste, mas as elevadas seguem a escala Apple.
+ * Aurora UI usa:
+ *   --bg:      #000000  (pure black)
+ *   --bg-elev: #0a0a0a
+ *   --bg-soft: #141414
  */
 export const bg = {
-  /** Base — quase preto (Apple: #000000 puro em OLED; nós usamos um navy imperceptível pro aurora respirar) */
-  base: '#050810',
-  /** Mesmo que base — alias */
-  space: '#050810',
-  deep: '#050810',
-  /** Level 1 — cards, sheets principais (equiv. secondarySystemBackground) */
-  layer1: '#1C1C1E',
-  /** Level 2 — cards nested, grouped (equiv. tertiarySystemBackground) */
-  layer2: '#2C2C2E',
-  /** Level 3 — elevated (menus, floating) */
-  layer3: '#3A3A3C',
-  /** Backdrop translúcido pra modals */
-  fog: 'rgba(0, 0, 0, 0.56)',
+  base: '#000000', // pure black — signature Aurora UI
+  space: '#000000', // alias
+  deep: '#000000',
+  layer1: '#0a0a0a', // bg-elev
+  layer2: '#141414', // bg-soft
+  layer3: '#1c1c1e',
+  fog: 'rgba(0, 0, 0, 0.6)',
 } as const;
 
-// ─── LABELS (hierarquia de texto iOS) ───────────────────────────────────
+// ─── LABELS / TEXT (Aurora UI spec) ────────────────────────────────────
 
 /**
- * iOS usa `#EBEBF5` como base com alphas decrescentes:
- *   label (primary):      #FFFFFF     (100%)
- *   secondaryLabel:       #EBEBF599   (60%)
- *   tertiaryLabel:        #EBEBF54C   (30%)
- *   quaternaryLabel:      #EBEBF52E   (18%)
- *
- * Toda hierarquia de texto deve usar esses 4 níveis. Não inventar.
+ * Aurora UI:
+ *   --text:       #f5f5f7  (Apple almost-white)
+ *   --text-dim:   #a1a1a6
+ *   --text-muted: #6e6e73
  */
 export const text = {
-  primary: '#FFFFFF',
-  secondary: 'rgba(235, 235, 245, 0.60)',
-  tertiary: 'rgba(235, 235, 245, 0.30)',
-  quaternary: 'rgba(235, 235, 245, 0.18)',
-  /** Aliases legíveis */
-  muted: 'rgba(235, 235, 245, 0.60)',
-  dim: 'rgba(235, 235, 245, 0.30)',
-  /** Texto sobre cores aurora/gold (legibilidade em gradiente claro) */
+  primary: '#f5f5f7',
+  secondary: '#a1a1a6',
+  tertiary: '#6e6e73',
+  quaternary: 'rgba(245, 245, 247, 0.22)',
+  // Aliases legíveis
+  muted: '#a1a1a6',
+  dim: '#6e6e73',
+  // Texto sobre aurora gradient / gold (legibilidade)
   onAurora: '#000000',
-  onGold: '#1A0F00',
-  /** Azul sistema (iOS adoption pra CTAs e links) */
-  link: '#0A84FF',
+  onGold: '#1a0f00',
+  // Link / system blue
+  link: '#0a84ff',
 } as const;
 
-// ─── FILLS (glass/material sistema iOS) ─────────────────────────────────
+// ─── FILLS (Aurora UI surface scale) ───────────────────────────────────
 
 /**
- * iOS fill scale — alpha sobre white. Usado em:
- *  - Pressable backgrounds (Material iOS)
- *  - Dividers, controls, chips
- *  - Glass effect acima de BlurView
- *
- *  Primary fill     #78788033   (20% opacity) — grouped backgrounds
- *  Secondary        #78788028   (16%)         — card hover
- *  Tertiary         #7676801E   (12%)         — inactive
- *  Quaternary       #74748014   (8%)          — subtle dividers
+ * Aurora UI:
+ *   --surface:       rgba(255,255,255,0.05)
+ *   --surface-strong: rgba(255,255,255,0.10)
+ *   --surface-hover:  rgba(255,255,255,0.14)
  */
 export const fill = {
-  primary: 'rgba(120, 120, 128, 0.20)',
-  secondary: 'rgba(120, 120, 128, 0.16)',
-  tertiary: 'rgba(118, 118, 128, 0.12)',
-  quaternary: 'rgba(116, 116, 128, 0.08)',
+  primary: 'rgba(255, 255, 255, 0.10)',
+  secondary: 'rgba(255, 255, 255, 0.07)',
+  tertiary: 'rgba(255, 255, 255, 0.05)',
+  quaternary: 'rgba(255, 255, 255, 0.03)',
 } as const;
 
-// ─── SURFACE (glassmorphism layers) ─────────────────────────────────────
+// ─── SURFACE (glass) ────────────────────────────────────────────────────
 
-/**
- * Glass surfaces são aplicadas sobre bg.base ou gradient backgrounds.
- * No iOS real, usar <BlurView> do expo-blur atrás — aqui só as cores base.
- */
 export const surface = {
-  /** Card glass level 1 — alpha bem baixo, para sentar sobre bg */
+  /** --surface */
   glass: 'rgba(255, 255, 255, 0.05)',
-  glassHover: 'rgba(255, 255, 255, 0.08)',
-  glassActive: 'rgba(255, 255, 255, 0.12)',
-  /** Borders — Apple usa separatorColor alpha */
-  glassBorder: 'rgba(84, 84, 88, 0.65)', // Apple: opaqueSeparator 1C1C1E + 65%
-  glassBorderSubtle: 'rgba(84, 84, 88, 0.35)',
-  glassBorderActive: 'rgba(255, 255, 255, 0.20)',
-  /** Separator puro iOS */
-  separator: 'rgba(84, 84, 88, 0.35)', // Apple: nonOpaqueSeparator
+  /** --surface-strong */
+  glassHover: 'rgba(255, 255, 255, 0.10)',
+  /** --surface-hover */
+  glassActive: 'rgba(255, 255, 255, 0.14)',
+  /** --border */
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  glassBorderSubtle: 'rgba(255, 255, 255, 0.05)',
+  /** --border-strong */
+  glassBorderActive: 'rgba(255, 255, 255, 0.16)',
+  /** separator sutil */
+  separator: 'rgba(255, 255, 255, 0.08)',
+  /** nav background (blur fallback) */
+  navBg: 'rgba(22, 22, 23, 0.72)',
 } as const;
 
-// ─── SYSTEM COLORS (Apple iOS 17 dark mode variants) ────────────────────
+// ─── SYSTEM COLORS (Aurora UI accents = Apple iOS) ─────────────────────
 
 /**
- * Apple systemColors — dark mode variants (mais luminosos que light).
- * Fonte: HIG 2023 / SF Symbols reference.
- *
- * Regra: use systemColor pras ações universais (destrutivo = red, sucesso
- * = green). Aurora/gold SÓ pra accent/brand.
+ * Aurora UI accents — mapeados 1:1 com Apple iOS 17 system colors.
+ *   --accent:   #0a84ff (system blue)
+ *   --accent-2: #bf5af2 (system purple)
+ *   --accent-3: #ff375f (system pink)
+ *   --accent-4: #30d158 (system green)
+ *   --accent-5: #ff9f0a (system orange)
  */
 export const system = {
-  blue: '#0A84FF', // primary actions, links
-  green: '#30D158', // success
-  indigo: '#5E5CE6',
-  orange: '#FF9F0A', // warning
-  pink: '#FF375F',
-  purple: '#BF5AF2',
-  red: '#FF453A', // destructive
-  teal: '#64D2FF', // info
-  yellow: '#FFD60A',
-  mint: '#66D4CF',
-  cyan: '#64D2FF',
-  brown: '#AC8E68',
-  gray: '#8E8E93',
+  blue: '#0a84ff',
+  purple: '#bf5af2',
+  pink: '#ff375f',
+  green: '#30d158',
+  orange: '#ff9f0a',
+  // Estendido (usado em outras partes do app)
+  red: '#ff453a',
+  yellow: '#ffd60a',
+  indigo: '#5e5ce6',
+  teal: '#64d2ff',
+  cyan: '#64d2ff',
+  mint: '#66d4cf',
+  brown: '#ac8e68',
+  gray: '#8e8e93',
   gray2: '#636366',
-  gray3: '#48484A',
-  gray4: '#3A3A3C',
-  gray5: '#2C2C2E',
-  gray6: '#1C1C1E',
+  gray3: '#48484a',
+  gray4: '#3a3a3c',
+  gray5: '#2c2c2e',
+  gray6: '#1c1c1e',
 } as const;
 
-// ─── SEMANTIC (aliases Apple → role-based) ─────────────────────────────
+// ─── SEMANTIC (aliases) ────────────────────────────────────────────────
 
 export const semantic = {
-  success: system.green,
+  success: system.green, // #30d158
   successBg: 'rgba(48, 209, 88, 0.14)',
   successGlow: 'rgba(48, 209, 88, 0.40)',
-  warning: system.orange,
+  warning: system.orange, // #ff9f0a
   warningBg: 'rgba(255, 159, 10, 0.14)',
-  danger: system.red,
+  danger: system.red, // #ff453a
   dangerBg: 'rgba(255, 69, 58, 0.14)',
   info: system.teal,
   infoBg: 'rgba(100, 210, 255, 0.14)',
-  primary: system.blue,
+  primary: system.blue, // #0a84ff
   primaryBg: 'rgba(10, 132, 255, 0.14)',
 } as const;
 
-// ─── AURORA (brand accent — refined) ───────────────────────────────────
+// ─── AURORA BRAND (3-color gradient = Aurora UI gradient-text) ─────────
 
 /**
- * Nossa assinatura, alinhada com system.teal + system.purple da Apple.
- * Mais refinada que v2 (menos neon, mais HIG).
+ * Aurora UI gradient:
+ *   linear-gradient(135deg, var(--accent), var(--accent-2), var(--accent-3))
+ *   = blue → purple → pink
  *
- * Uso: APENAS em hero/celebration/brand moments. NÃO usar em CTAs
- * genéricos — pra isso tem system.blue.
+ * Essa é A assinatura visual.
  */
 export const aurora = {
-  cyan: '#64D2FF', // = system.teal (Apple reference)
-  iris: '#5E5CE6', // = system.indigo
-  magenta: '#BF5AF2', // = system.purple
-  cyanSoft: 'rgba(100, 210, 255, 0.18)',
-  magentaSoft: 'rgba(191, 90, 242, 0.18)',
-  cyanGlow: 'rgba(100, 210, 255, 0.42)',
-  magentaGlow: 'rgba(191, 90, 242, 0.42)',
+  cyan: '#0a84ff', // = system.blue
+  iris: '#bf5af2', // = system.purple
+  magenta: '#ff375f', // = system.pink (Aurora UI final gradient stop)
+  cyanSoft: 'rgba(10, 132, 255, 0.18)',
+  magentaSoft: 'rgba(255, 55, 95, 0.18)',
+  cyanGlow: 'rgba(10, 132, 255, 0.50)', // = --glow
+  magentaGlow: 'rgba(255, 55, 95, 0.42)',
 } as const;
 
-// ─── PREMIUM (gold — Apple-inspired, elegant) ──────────────────────────
+// ─── PREMIUM (gold) ────────────────────────────────────────────────────
 
-/**
- * Gold gradient refinado — mais próximo do Apple Watch titanium-gold
- * que do "néon amarelo". Uso: PRO badge, streak rewards, leaderboard top-3.
- */
 export const premium = {
-  gold: '#FFD60A', // = system.yellow (refinement)
-  goldLight: '#FFE066',
-  goldDark: '#CC9E00',
-  goldSoft: 'rgba(255, 214, 10, 0.14)',
-  goldGlow: 'rgba(255, 224, 102, 0.36)',
+  gold: system.orange, // #ff9f0a
+  goldLight: '#ffb84d',
+  goldDark: '#cc7f00',
+  goldSoft: 'rgba(255, 159, 10, 0.14)',
+  goldGlow: 'rgba(255, 184, 77, 0.36)',
 } as const;
 
-// ─── PROGRAM COLORS ─────────────────────────────────────────────────────
+// ─── PROGRAM COLORS ────────────────────────────────────────────────────
 
 export const program = {
   smiles: '#FF6B00',
@@ -200,11 +180,8 @@ export const program = {
   multiplus: '#1A5CA8',
 } as const;
 
-// ─── SPACING (4-base) ───────────────────────────────────────────────────
+// ─── SPACING ────────────────────────────────────────────────────────────
 
-/**
- * Apple HIG: baseline grid 4pt/8pt. Layouts grandes em multiples de 8.
- */
 export const space = {
   xxs: 4,
   xs: 8,
@@ -217,51 +194,59 @@ export const space = {
   hero: 64,
 } as const;
 
-// ─── RADIUS (Apple continuous curve inspired) ──────────────────────────
+// ─── RADIUS (Aurora UI spec: generoso, Apple-like) ─────────────────────
 
 /**
- * iOS adota "continuous rounding" (Apple squircle). Aqui usamos borderRadius
- * tradicional, mas com a cadência Apple:
- *  small control (buttons):  10-12
- *  card default:             14-18
- *  modal/sheet:              20-28 (grande no topo)
- *  full pill:                9999
+ * Aurora UI:
+ *   --radius-sm: 12px
+ *   --radius:    22px  (base)
+ *   --radius-lg: 32px
+ *   --radius-xl: 48px
+ *
+ * Mais generoso que v3 (10/14/18/24). Dá aquele feel Apple.
+ * Pill CTAs: 100.
  */
 export const radius = {
   none: 0,
-  xs: 6,
-  sm: 10,
-  md: 14,
-  lg: 18,
-  xl: 24,
-  xxl: 32,
-  pill: 999,
+  xs: 8,
+  sm: 12, // Aurora UI --radius-sm
+  md: 18,
+  lg: 22, // Aurora UI --radius
+  xl: 32, // Aurora UI --radius-lg
+  xxl: 48, // Aurora UI --radius-xl
+  pill: 100, // Aurora UI pill buttons
 } as const;
 
 // ─── TYPOGRAPHY ────────────────────────────────────────────────────────
 
 /**
- * Inter tem métricas quase idênticas a SF Pro — substituto perfeito.
- * Apple HIG escala typography (iOS 17):
- *   LargeTitle      34pt bold    -0.41 tracking
- *   Title 1         28pt bold    -0.36
- *   Title 2         22pt bold    -0.28
- *   Title 3         20pt semibold
- *   Headline        17pt semibold
- *   Body            17pt regular
- *   Callout         16pt regular
- *   Subheadline     15pt regular
- *   Footnote        13pt regular
- *   Caption 1       12pt regular
- *   Caption 2       11pt regular
+ * Aurora UI:
+ *   --font-display: SF Pro Display / Inter (primary)
+ *   --font-serif:   New York / Georgia (italic accent - "futuro")
+ *   --font-mono:    SF Mono
+ *
+ * No mobile, Inter já está carregado. Para serif italic accent, usamos
+ * Georgia (disponível em iOS + Android nativamente).
  */
+export const fontFamily = {
+  display: 'Inter_700Bold', // SF Pro substitute
+  displayBlack: 'Inter_900Black',
+  displayRegular: 'Inter_400Regular',
+  displaySemiBold: 'Inter_600SemiBold',
+  displayMedium: 'Inter_500Medium',
+  serifItalic: 'Georgia-Italic', // fallback nativo
+  mono: 'Menlo',
+} as const;
+
 export const type = {
+  // Hero display (hero numbers, wallet value)
   largeTitle: {
     fontFamily: 'Inter_700Bold',
     fontSize: 34,
     lineHeight: 41,
     letterSpacing: -0.41,
   },
+  // H1 — screen titles
   title1: {
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
@@ -322,14 +307,20 @@ export const type = {
     lineHeight: 13,
     letterSpacing: 0.06,
   },
-  /** Display enorme (para hero numbers, wallet value) — não-standard iOS */
+  // Display huge (Aurora UI hero — clamp(3rem, 9vw, 7rem))
   display: {
     fontFamily: 'Inter_700Bold',
-    fontSize: 48,
-    lineHeight: 52,
-    letterSpacing: -1.2,
+    fontSize: 56,
+    lineHeight: 58,
+    letterSpacing: -2.3,
   },
-  /** Alias legados (compat com v2) */
+  // Serif italic accent (Aurora UI "serif-italic" class)
+  serifItalic: {
+    fontFamily: Platform_isIOS() ? 'Georgia-Italic' : 'serif',
+    fontStyle: 'italic' as const,
+    fontWeight: '400' as const,
+  },
+  // Legacy aliases (compat com screens já migradas)
   h1: {
     fontFamily: 'Inter_700Bold',
     fontSize: 28,
@@ -367,11 +358,21 @@ export const type = {
   },
 } as const;
 
-// ─── SHADOWS ───────────────────────────────────────────────────────────
+function Platform_isIOS() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('react-native').Platform.OS === 'ios';
+  } catch {
+    return false;
+  }
+}
+
+// ─── SHADOWS (Aurora UI --shadow-lg spec) ──────────────────────────────
 
 /**
- * iOS shadow: spread pequeno, offset Y específico, opacity baixa.
- * Aqui calibrado pra dark mode (shadows têm que aparecer em bg preto).
+ * Aurora UI:
+ *   --shadow-lg: 0 30px 60px -20px rgba(0, 0, 0, 0.7)
+ *   --glow:      rgba(10, 132, 255, 0.5) — accent blue glow
  */
 export const shadow = {
   none: {
@@ -383,71 +384,80 @@ export const shadow = {
   },
   sm: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 2,
   },
   md: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 8,
   },
   lg: {
     shadowColor: '#000',
+    shadowOffset: { width: 0, height: 30 },
+    shadowOpacity: 0.7,
+    shadowRadius: 40,
+    elevation: 18,
+  },
+  // Glows (Aurora UI --glow accent)
+  glowBlue: {
+    shadowColor: '#0a84ff',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.38,
-    shadowRadius: 24,
-    elevation: 14,
+    shadowOpacity: 0.5,
+    shadowRadius: 28,
+    elevation: 12,
   },
   glowCyan: {
     shadowColor: aurora.cyan,
-    shadowOffset: { width: 0, height: 0 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowRadius: 28,
+    elevation: 12,
   },
   glowMagenta: {
     shadowColor: aurora.magenta,
-    shadowOffset: { width: 0, height: 0 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowRadius: 28,
+    elevation: 12,
   },
   glowGold: {
     shadowColor: premium.goldLight,
-    shadowOffset: { width: 0, height: 0 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.55,
-    shadowRadius: 22,
-    elevation: 12,
-  },
-  glowBlue: {
-    shadowColor: system.blue,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 28,
+    elevation: 14,
   },
 } as const;
 
-// ─── GRADIENTS ─────────────────────────────────────────────────────────
+// ─── GRADIENTS (Aurora UI signature) ───────────────────────────────────
 
+/**
+ * Signature: linear-gradient(135deg, --accent, --accent-2, --accent-3)
+ *         = #0a84ff → #bf5af2 → #ff375f
+ */
 export const gradients = {
-  /** Aurora full — para heros (usa mais em `hero` que em CTAs) */
+  /** Aurora signature — 3 stops (blue → purple → pink) */
   aurora: [aurora.cyan, aurora.iris, aurora.magenta] as [string, string, string],
+  /** Aurora 2-stop (text/button) */
   auroraCyanMagenta: [aurora.cyan, aurora.magenta] as [string, string],
-  /** CTA Apple-ish (blue) — uso primário pra ações */
-  primaryApple: [system.blue, '#0060DF'] as [string, string],
-  /** Hero bg escuro */
-  heroBg: [bg.space, '#0B0E20', '#050810'] as [string, string, string],
-  /** Muted aurora pra bg */
-  hero: ['#0A1F42', '#2A0B4D', '#4D1A3A'] as [string, string, string],
+  /** Primary Apple button gradient (Aurora UI --accent → --accent-2) */
+  primaryApple: [system.blue, system.purple] as [string, string],
+  /** Hero bg (pure black depth) */
+  heroBg: ['#000000', '#0a0a0a', '#000000'] as [string, string, string],
+  /** Muted aurora pra bg ambient */
+  hero: ['#0a0a0a', '#14051a', '#0a0a0a'] as [string, string, string],
+  /** Premium gold */
   premium: [premium.goldDark, premium.gold, premium.goldLight] as [string, string, string],
-  success: ['#0F8A3C', system.green, '#66E88A'] as [string, string, string],
-  danger: ['#A30014', system.red, '#FF7A73'] as [string, string, string],
-  /** Vertical glass sheen (top highlight) */
+  /** Success green */
+  success: ['#0f8a3c', system.green, '#66e88a'] as [string, string, string],
+  /** Danger red */
+  danger: ['#a30014', system.red, '#ff7a73'] as [string, string, string],
+  /** Glass sheen */
   glassSheenTop: [
     'rgba(255,255,255,0.14)',
     'rgba(255,255,255,0.00)',
@@ -461,7 +471,7 @@ export const gradients = {
 // ─── OPACITY / Z-INDEX ──────────────────────────────────────────────────
 
 export const opacity = {
-  disabled: 0.4, // Apple: opaque disabled
+  disabled: 0.4,
   pressed: 0.7,
   hover: 0.85,
   full: 1.0,
@@ -476,6 +486,22 @@ export const zIndex = {
   modal: 50,
   toast: 60,
   tooltip: 70,
+} as const;
+
+// ─── AURORA UI EASING (compat com motion.ts) ────────────────────────────
+
+/**
+ * Aurora UI:
+ *   --ease-out:    cubic-bezier(0.16, 1, 0.3, 1)
+ *   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1)
+ *   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1)
+ *   --ease-apple:  cubic-bezier(0.25, 0.1, 0.25, 1)
+ */
+export const easingParams = {
+  out: [0.16, 1, 0.3, 1] as [number, number, number, number],
+  smooth: [0.4, 0, 0.2, 1] as [number, number, number, number],
+  spring: [0.34, 1.56, 0.64, 1] as [number, number, number, number],
+  apple: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
 } as const;
 
 // ─── EXPORT ────────────────────────────────────────────────────────────
@@ -493,10 +519,12 @@ export const tokens = {
   space,
   radius,
   type,
+  fontFamily,
   shadow,
   gradients,
   opacity,
   zIndex,
+  easingParams,
 } as const;
 
 export type Tokens = typeof tokens;

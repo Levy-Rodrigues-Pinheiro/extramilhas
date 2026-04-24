@@ -20,6 +20,8 @@ import {
   GlassCard,
   PressableScale,
   FlyingPlaneScene,
+  GradientText,
+  SerifItalic,
   aurora,
   text as textTokens,
   space,
@@ -72,8 +74,19 @@ export default function LoginScreen() {
               style={styles.logoContainer}
             >
               <FlyingPlaneScene size={140} intensity="cruising" haloColor={aurora.magenta} />
-              <Text style={styles.logoText}>Milhas Extras</Text>
-              <Text style={styles.logoSubtitle}>Onde suas milhas viram mais</Text>
+              <GradientText
+                fontSize={34}
+                fontWeight="900"
+                fontFamily="Inter_900Black"
+                letterSpacing={-1}
+                style={styles.logoGradientWrap}
+              >
+                Milhas Extras
+              </GradientText>
+              <Text style={styles.logoSubtitle}>
+                Onde suas milhas{' '}
+                <SerifItalic style={styles.logoSubtitleItalic}>valem mais</SerifItalic>.
+              </Text>
             </Animated.View>
 
             {/* Form card */}
@@ -126,7 +139,7 @@ export default function LoginScreen() {
                   label="Entrar"
                   onPress={handleLogin}
                   loading={isLoading}
-                  variant="primary"
+                  variant="gradient"
                   size="lg"
                   icon="arrow-forward"
                   iconPosition="right"
@@ -205,11 +218,19 @@ const styles = StyleSheet.create({
     color: textTokens.primary,
     marginTop: 4,
   },
+  logoGradientWrap: {
+    marginTop: 4,
+  },
   logoSubtitle: {
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
     color: textTokens.muted,
-    marginTop: 4,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  logoSubtitleItalic: {
+    color: textTokens.primary,
+    fontSize: 16,
   },
   formTitle: {
     fontFamily: 'Inter_700Bold',

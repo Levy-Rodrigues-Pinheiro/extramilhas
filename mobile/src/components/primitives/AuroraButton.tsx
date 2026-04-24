@@ -1,18 +1,23 @@
 /**
- * AuroraButton — CTA premium com gradient cyan→magenta + glow + haptic.
+ * AuroraButton — CTA com 3 variants Aurora UI + gold/danger/success.
+ *
+ * Aurora UI spec (Button.tsx web):
+ *  - 'solid'    = btn-primary  — white bg, black text, pill — high-contrast neutral
+ *  - 'ghost'    = btn-ghost    — glass surface + border-strong
+ *  - 'gradient' = btn-gradient — accent → accent-2 + glow shadow (primary aurora CTA)
+ *
+ * Nosso app também mantém:
+ *  - 'apple'  (system blue solid)
+ *  - 'gold'   (premium)
+ *  - 'danger' (red)
+ *  - 'success'(green)
  *
  * Estados:
- *  - idle: gradient estático
+ *  - idle: gradient/solid estático
  *  - pressed: scale 0.97 + glow intensifica
- *  - loading: shimmer sweep sobre o gradient
+ *  - loading: shimmer sweep sobre o fundo
  *
- * Variants:
- *  - 'primary' (aurora cyan→magenta)
- *  - 'gold'    (premium)
- *  - 'ghost'   (outline glass)
- *  - 'danger'
- *
- * Sempre com min-height 48 (touch target WCAG).
+ * Pill radius = 100 (Aurora UI pill). Min height 48 (WCAG touch target).
  */
 
 import React, { useEffect } from 'react';
@@ -48,7 +53,15 @@ import { useReduceMotion } from '../../design/hooks';
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-type Variant = 'primary' | 'apple' | 'gold' | 'ghost' | 'danger' | 'success';
+type Variant =
+  | 'primary'   // Legacy alias → maps to 'gradient' (aurora cyan→magenta)
+  | 'gradient'  // Aurora UI btn-gradient: accent → accent-2 + glow
+  | 'solid'     // Aurora UI btn-primary: white bg + black text
+  | 'apple'     // Apple HIG blue
+  | 'gold'      // Premium gold
+  | 'ghost'     // Aurora UI btn-ghost: glass surface
+  | 'danger'
+  | 'success';
 type Size = 'sm' | 'md' | 'lg';
 
 type Props = {
@@ -72,8 +85,9 @@ const SIZE_CONFIG: Record<Size, { height: number; padHorizontal: number; fontSiz
 };
 
 const VARIANT_GRADIENTS: Record<Variant, [string, string] | [string, string, string] | null> = {
-  primary: gradients.auroraCyanMagenta,
-  // Apple HIG blue — padrão iOS pra actions
+  primary: gradients.auroraCyanMagenta,   // alias → gradient
+  gradient: [aurora.cyan, aurora.iris],   // Aurora UI btn-gradient (blue→purple)
+  solid: null,                             // Aurora UI btn-primary (white, no gradient)
   apple: [system.blue, '#0060DF'],
   gold: [premium.goldLight, premium.goldDark],
   ghost: null,
@@ -82,7 +96,9 @@ const VARIANT_GRADIENTS: Record<Variant, [string, string] | [string, string, str
 };
 
 const VARIANT_TEXT_COLOR: Record<Variant, string> = {
-  primary: textTokens.onAurora,
+  primary: '#FFFFFF',          // legibilidade máxima sobre aurora
+  gradient: '#FFFFFF',
+  solid: '#000000',            // Aurora UI btn-primary: texto preto sobre branco
   apple: '#FFFFFF',
   gold: textTokens.onGold,
   ghost: textTokens.primary,
@@ -159,7 +175,7 @@ export function AuroraButton({
     </View>
   );
 
-  // Ghost variant = transparent with glass border
+  // Ghost variant = transparent with glass border (Aurora UI btn-ghost)
   if (variant === 'ghost') {
     return (
       <PressableScale
@@ -177,6 +193,28 @@ export function AuroraButton({
     );
   }
 
+  // Solid variant = white bg + black text (Aurora UI btn-primary)
+  if (variant === 'solid') {
+    return (
+      <PressableScale
+        disabled={disabled || loading}
+        onPress={onPress}
+        haptic={haptic}
+        style={[baseStyle, styles.solid, style]}
+      >
+        {loading && (
+          <AnimatedGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.08)', 'rgba(0,0,0,0)']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[styles.shimmerTrack, shimmerStyle]}
+          />
+        )}
+        {content}
+      </PressableScale>
+    );
+  }
+
   return (
     <PressableScale
       disabled={disabled || loading}
@@ -184,7 +222,7 @@ export function AuroraButton({
       haptic={haptic}
       style={[
         baseStyle,
-        variant === 'primary' && styles.primaryGlow,
+        (variant === 'primary' || variant === 'gradient') && styles.gradientGlow,
         variant === 'apple' && styles.appleGlow,
         variant === 'gold' && styles.goldGlow,
         variant === 'danger' && styles.dangerGlow,
@@ -230,12 +268,22 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     letterSpacing: 0.2,
   },
-  primaryGlow: {
-    shadowColor: aurora.magenta,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
+  gradientGlow: {
+    // Aurora UI btn-gradient: box-shadow: 0 0 40px var(--glow) = rgba(10,132,255,0.5)
+    shadowColor: aurora.cyan,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  solid: {
+    // Aurora UI btn-primary: bg white + text black (no shadow, minimal)
+    backgroundColor: '#ffffff',
+    shadowColor: '#ffffff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
   },
   appleGlow: {
     shadowColor: system.blue,
