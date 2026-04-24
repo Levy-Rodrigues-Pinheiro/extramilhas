@@ -56,6 +56,11 @@ export {
   SettingsGroup,
   default as SettingsRowDefault,
 } from './SettingsRow';
+export { RouteArc, default as RouteArcDefault } from './RouteArc';
+export {
+  FamilyAvatarStack,
+  default as FamilyAvatarStackDefault,
+} from './FamilyAvatarStack';
 
 // Design tokens re-export
 export {

@@ -2,17 +2,24 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
   FlatList,
   StyleSheet,
-  ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  SlideInDown,
+  SlideOutDown,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import {
   useFamily,
@@ -22,13 +29,31 @@ import {
   useDeleteFamilyBalance,
 } from '../src/hooks/useFamily';
 import { usePrograms } from '../src/hooks/usePrograms';
-import { ProgramLogo } from '../src/components/ProgramLogo';
-import { EmptyState } from '../src/components/EmptyState';
-import { Colors, Gradients } from '../src/lib/theme';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  FamilyAvatarStack,
+  AnimatedNumber,
+  StaggerItem,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  FloatingLabelInput,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../src/components/primitives';
 
 export default function FamilyScreen() {
   const { t } = useTranslation();
-  const { data: members, isLoading, isError } = useFamily();
+  const { data: members, isLoading } = useFamily();
   const addMember = useAddFamilyMember();
   const deleteMember = useDeleteFamilyMember();
   const updateBalance = useUpdateFamilyBalance();
@@ -39,779 +64,519 @@ export default function FamilyScreen() {
   const [newName, setNewName] = useState('');
   const [newRelationship, setNewRelationship] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editingBalance, setEditingBalance] = useState<{ memberId: string; programId: string } | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [addingBalanceFor, setAddingBalanceFor] = useState<string | null>(null);
-  const [newBalanceProgramId, setNewBalanceProgramId] = useState<string>('');
-  const [newBalanceValue, setNewBalanceValue] = useState('');
-
-  const startEditBalance = (memberId: string, programId: string, currentBalance: number) => {
-    setEditingBalance({ memberId, programId });
-    setEditValue(String(currentBalance ?? 0));
-  };
-
-  const cancelEditBalance = () => {
-    setEditingBalance(null);
-    setEditValue('');
-  };
-
-  const saveEditBalance = async () => {
-    if (!editingBalance) return;
-    const parsed = parseInt(editValue.replace(/\D/g, ''), 10);
-    if (isNaN(parsed) || parsed < 0) {
-      Alert.alert(t('common.error'), t('errors.invalid_value'));
-      return;
-    }
-    try {
-      await updateBalance.mutateAsync({
-        memberId: editingBalance.memberId,
-        programId: editingBalance.programId,
-        balance: parsed,
-      });
-      cancelEditBalance();
-    } catch {
-      Alert.alert(t('common.error'), t('family.error_update'));
-    }
-  };
-
-  const handleDeleteBalance = (memberId: string, programId: string, programName: string) => {
-    Alert.alert(
-      t('family.remove_balance_title'),
-      t('family.remove_balance_text', { program: programName }),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('common.remove'),
-          style: 'destructive',
-          onPress: () => deleteBalance.mutate({ memberId, programId }),
-        },
-      ],
-    );
-  };
-
-  const startAddBalance = (memberId: string, existingProgramIds: string[]) => {
-    const available = (programs ?? []).filter((p: any) => !existingProgramIds.includes(p.id));
-    if (available.length === 0) {
-      Alert.alert(t('common.error'), t('family.no_programs_available'));
-      return;
-    }
-    setAddingBalanceFor(memberId);
-    setNewBalanceProgramId(available[0].id);
-    setNewBalanceValue('');
-  };
-
-  const cancelAddBalance = () => {
-    setAddingBalanceFor(null);
-    setNewBalanceProgramId('');
-    setNewBalanceValue('');
-  };
-
-  const saveAddBalance = async () => {
-    if (!addingBalanceFor || !newBalanceProgramId) return;
-    const parsed = parseInt(newBalanceValue.replace(/\D/g, ''), 10);
-    if (isNaN(parsed) || parsed < 0) {
-      Alert.alert(t('common.error'), t('errors.invalid_value'));
-      return;
-    }
-    try {
-      await updateBalance.mutateAsync({
-        memberId: addingBalanceFor,
-        programId: newBalanceProgramId,
-        balance: parsed,
-      });
-      cancelAddBalance();
-    } catch {
-      Alert.alert(t('common.error'), t('family.error_add'));
-    }
-  };
 
   const handleAdd = async () => {
     if (!newName.trim() || !newRelationship.trim()) {
+      haptics.error();
       Alert.alert(t('common.error'), t('family.required_name_rel'));
       return;
     }
     try {
-      await addMember.mutateAsync({ name: newName.trim(), relationship: newRelationship.trim() });
+      haptics.medium();
+      await addMember.mutateAsync({
+        name: newName.trim(),
+        relationship: newRelationship.trim(),
+      });
+      haptics.success();
       setNewName('');
       setNewRelationship('');
       setShowAddForm(false);
     } catch {
+      haptics.error();
       Alert.alert(t('common.error'), t('family.error_add_member'));
     }
   };
 
   const handleDelete = (id: string, name: string) => {
+    haptics.warning();
     Alert.alert(t('family.remove_member_title'), t('family.remove_member_text', { name }), [
       { text: t('common.cancel'), style: 'cancel' },
       {
         text: t('common.remove'),
         style: 'destructive',
-        onPress: () => deleteMember.mutate(id),
+        onPress: () => {
+          haptics.heavy();
+          deleteMember.mutate(id);
+        },
       },
     ]);
   };
 
-  const getInitials = (name: string) =>
-    name
-      .split(' ')
-      .map((n) => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-
   const getTotalMiles = (balances: any[]) =>
     (balances ?? []).reduce((sum: number, b: any) => sum + (b.balance ?? 0), 0);
 
-  const renderMember = ({ item }: { item: any }) => {
-    const isExpanded = expandedId === item.id;
-    const totalMiles = getTotalMiles(item.balances);
-
-    return (
-      <View style={styles.memberCard}>
-        <TouchableOpacity
-          style={styles.memberHeader}
-          onPress={() => setExpandedId(isExpanded ? null : item.id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.memberLeft}>
-            <LinearGradient
-              colors={Gradients.primary as unknown as string[]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatar}
-            >
-              <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
-            </LinearGradient>
-            <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{item.name}</Text>
-              <Text style={styles.memberRelationship}>{item.relationship}</Text>
-            </View>
-          </View>
-          <View style={styles.memberRight}>
-            <Text style={styles.memberMiles}>
-              {totalMiles.toLocaleString('pt-BR')} mi
-            </Text>
-            <Ionicons
-              name={isExpanded ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={Colors.text.muted}
-            />
-          </View>
-        </TouchableOpacity>
-
-        {isExpanded && (
-          <View style={styles.memberBalances}>
-            {(item.balances ?? []).length > 0 ? (
-              (item.balances ?? []).map((bal: any, idx: number) => {
-                const isEditing =
-                  editingBalance?.memberId === item.id &&
-                  editingBalance?.programId === bal.program?.id;
-                return (
-                  <View key={idx} style={styles.balanceRow}>
-                    <View style={styles.balanceLeft}>
-                      <ProgramLogo slug={bal.program?.slug ?? ''} size={24} />
-                      <Text style={styles.balanceProgramName}>
-                        {bal.program?.name ?? 'Programa'}
-                      </Text>
-                    </View>
-                    {isEditing ? (
-                      <View style={styles.editRow}>
-                        <TextInput
-                          style={styles.editInput}
-                          value={editValue}
-                          onChangeText={setEditValue}
-                          keyboardType="numeric"
-                          placeholder="0"
-                          placeholderTextColor={Colors.text.muted}
-                          autoFocus
-                          accessibilityLabel="Saldo em milhas"
-                        />
-                        <TouchableOpacity
-                          onPress={saveEditBalance}
-                          disabled={updateBalance.isPending}
-                          style={styles.editIconButton}
-                          accessibilityRole="button"
-                          accessibilityLabel="Salvar saldo"
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          {updateBalance.isPending ? (
-                            <ActivityIndicator size="small" color={Colors.primary.light} />
-                          ) : (
-                            <Ionicons name="checkmark" size={18} color={Colors.green.primary} />
-                          )}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={cancelEditBalance}
-                          style={styles.editIconButton}
-                          accessibilityRole="button"
-                          accessibilityLabel="Cancelar edição"
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="close" size={18} color={Colors.red.primary} />
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={() =>
-                          startEditBalance(item.id, bal.program?.id ?? '', bal.balance ?? 0)
-                        }
-                        onLongPress={() =>
-                          bal.program?.id &&
-                          handleDeleteBalance(
-                            item.id,
-                            bal.program.id,
-                            bal.program.name ?? 'Programa',
-                          )
-                        }
-                        disabled={!bal.program?.id}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Editar saldo de ${bal.program?.name ?? 'programa'}: ${(bal.balance ?? 0).toLocaleString('pt-BR')} milhas. Segure para remover.`}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <View style={styles.balanceValueRow}>
-                          <Text style={styles.balanceValue}>
-                            {(bal.balance ?? 0).toLocaleString('pt-BR')} mi
-                          </Text>
-                          <Ionicons name="pencil" size={12} color={Colors.text.muted} />
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                );
-              })
-            ) : (
-              <Text style={styles.noBalances}>{t('family.no_balances')}</Text>
-            )}
-
-            {/* Add new program balance */}
-            {addingBalanceFor === item.id ? (
-              <View style={styles.addBalanceBlock}>
-                <Text style={styles.addBalanceTitle}>{t('family.add_balance_title')}</Text>
-                <View style={styles.programsPicker}>
-                  {(programs ?? [])
-                    .filter(
-                      (p: any) =>
-                        !(item.balances ?? []).some((b: any) => b.program?.id === p.id),
-                    )
-                    .map((p: any) => {
-                      const selected = newBalanceProgramId === p.id;
-                      return (
-                        <TouchableOpacity
-                          key={p.id}
-                          onPress={() => setNewBalanceProgramId(p.id)}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={`Programa ${p.name}${selected ? ' (selecionado)' : ''}`}
-                          style={[
-                            styles.programChip,
-                            selected && styles.programChipSelected,
-                          ]}
-                        >
-                          <ProgramLogo slug={p.slug ?? ''} size={18} />
-                          <Text
-                            style={[
-                              styles.programChipText,
-                              selected && styles.programChipTextSelected,
-                            ]}
-                          >
-                            {p.name}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                </View>
-                <TextInput
-                  style={styles.addBalanceInput}
-                  value={newBalanceValue}
-                  onChangeText={setNewBalanceValue}
-                  keyboardType="numeric"
-                  placeholder={t('wallet.placeholder_miles')}
-                  placeholderTextColor={Colors.text.muted}
-                  accessibilityLabel="Saldo em milhas"
-                />
-                <View style={styles.addBalanceActions}>
-                  <TouchableOpacity
-                    onPress={cancelAddBalance}
-                    style={styles.addBalanceCancel}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancelar adição de saldo"
-                  >
-                    <Text style={styles.addBalanceCancelText}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={saveAddBalance}
-                    disabled={updateBalance.isPending}
-                    style={styles.addBalanceSave}
-                    accessibilityRole="button"
-                    accessibilityLabel="Salvar novo saldo"
-                  >
-                    {updateBalance.isPending ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.addBalanceSaveText}>Salvar</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.addBalanceButton}
-                onPress={() =>
-                  startAddBalance(
-                    item.id,
-                    (item.balances ?? [])
-                      .map((b: any) => b.program?.id)
-                      .filter(Boolean),
-                  )
-                }
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={t('family.add_balance_cta') + ': ' + item.name}
-              >
-                <Ionicons name="add-circle-outline" size={16} color={Colors.primary.light} />
-                <Text style={styles.addBalanceButtonText}>{t('family.add_balance_cta')}</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleDelete(item.id, item.name)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={`Remover ${item.name} da família`}
-            >
-              <Ionicons name="trash-outline" size={14} color={Colors.red.primary} />
-              <Text style={styles.deleteText}>{t('family.remove_member_button')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+  const totalFamilyMiles = React.useMemo(() => {
+    return (members ?? []).reduce(
+      (sum: number, m: any) => sum + getTotalMiles(m.balances),
+      0,
     );
-  };
+  }, [members]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('family.title')}</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowAddForm(!showAddForm)}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name={showAddForm ? 'close' : 'add'}
-            size={22}
-            color={Colors.text.primary}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Add form */}
-      {showAddForm && (
-        <View style={styles.addForm}>
-          <Text style={styles.addFormTitle}>{t('family.add_member')}</Text>
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder={t('family.name_placeholder')}
-              placeholderTextColor={Colors.text.muted}
-              value={newName}
-              onChangeText={setNewName}
-            />
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Família</Text>
+            <Text style={styles.subtitle}>Milhas compartilhadas</Text>
           </View>
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder={t('family.relationship_placeholder')}
-              placeholderTextColor={Colors.text.muted}
-              value={newRelationship}
-              onChangeText={setNewRelationship}
-            />
-          </View>
-          <TouchableOpacity
-            style={styles.addMemberButton}
-            onPress={handleAdd}
-            activeOpacity={0.85}
-            disabled={addMember.isPending}
+          <PressableScale
+            onPress={() => {
+              haptics.medium();
+              setShowAddForm(true);
+            }}
+            haptic="none"
+            style={styles.addBtn}
           >
             <LinearGradient
-              colors={Gradients.primary as unknown as string[]}
+              colors={gradients.auroraCyanMagenta}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.addMemberGradient}
-            >
-              {addMember.isPending ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.addMemberText}>{t('family.add_member_cta')}</Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary.start} />
-        </View>
-      ) : isError ? (
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Erro ao carregar"
-          description="Não foi possível carregar os membros da família."
-        />
-      ) : (
-        <FlatList
-          data={members ?? []}
-          keyExtractor={(item: any) => item.id}
-          renderItem={renderMember}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          ListEmptyComponent={
-            <EmptyState
-              icon="people-outline"
-              title={t('family.empty_title')}
-              description={t('family.empty_subtitle')}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
             />
-          }
-        />
-      )}
-    </SafeAreaView>
+            <Ionicons name="person-add" size={18} color="#041220" />
+          </PressableScale>
+        </View>
+
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 12 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        ) : !members || members.length === 0 ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0}>
+              <EmptyStateIllustrated
+                variant="wallet"
+                title="Adicione familiares"
+                description="Acompanhe saldos de esposa, filhos, pais — ajuda planejar viagens juntos."
+                ctaLabel="Adicionar primeiro membro"
+                onCtaPress={() => setShowAddForm(true)}
+              />
+            </GlassCard>
+          </View>
+        ) : (
+          <FlatList
+            data={members}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={
+              <View style={{ marginBottom: space.md }}>
+                {/* Family hero card */}
+                <Animated.View
+                  entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+                >
+                  <View style={heroStyles.card}>
+                    <LinearGradient
+                      colors={gradients.aurora as any}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <LinearGradient
+                      colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.5)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 0, y: 1 }}
+                      style={[StyleSheet.absoluteFill, { height: '45%' }]}
+                    />
+
+                    <View style={heroStyles.content}>
+                      {/* Avatar stack */}
+                      <FamilyAvatarStack
+                        members={members.map((m: any) => ({
+                          id: m.id,
+                          name: m.name,
+                        }))}
+                        size={52}
+                        max={5}
+                      />
+
+                      <Text style={heroStyles.label}>TOTAL DA FAMÍLIA</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                        <AnimatedNumber
+                          value={totalFamilyMiles}
+                          format="integer"
+                          style={heroStyles.value}
+                        />
+                        <Text style={heroStyles.unit}> mi</Text>
+                      </View>
+                      <Text style={heroStyles.subtext}>
+                        {members.length} {members.length === 1 ? 'membro' : 'membros'}
+                      </Text>
+                    </View>
+                  </View>
+                </Animated.View>
+              </View>
+            }
+            renderItem={({ item, index }) => (
+              <StaggerItem index={index} baseDelay={100}>
+                <MemberCard
+                  member={item}
+                  expanded={expandedId === item.id}
+                  onToggleExpand={() =>
+                    setExpandedId(expandedId === item.id ? null : item.id)
+                  }
+                  onDelete={() => handleDelete(item.id, item.name)}
+                  totalMiles={getTotalMiles(item.balances)}
+                />
+              </StaggerItem>
+            )}
+            contentContainerStyle={styles.content}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        {/* Add modal */}
+        {showAddForm && (
+          <Modal visible animationType="none" transparent>
+            <Pressable style={styles.modalBackdrop} onPress={() => setShowAddForm(false)}>
+              <Pressable>
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                  <Animated.View
+                    entering={SlideInDown.duration(motion.timing.base)
+                      .springify()
+                      .damping(28)
+                      .stiffness(180)}
+                    exiting={SlideOutDown.duration(motion.timing.base)}
+                    style={styles.modalCard}
+                  >
+                    <View style={styles.modalHandle} />
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Adicionar familiar</Text>
+                      <PressableScale
+                        onPress={() => setShowAddForm(false)}
+                        haptic="tap"
+                        style={styles.modalClose}
+                      >
+                        <Ionicons name="close" size={20} color={textTokens.secondary} />
+                      </PressableScale>
+                    </View>
+
+                    <FloatingLabelInput
+                      label="Nome"
+                      iconLeft="person-outline"
+                      value={newName}
+                      onChangeText={setNewName}
+                    />
+
+                    <FloatingLabelInput
+                      label="Relação (esposa, filho, pai…)"
+                      iconLeft="people-outline"
+                      value={newRelationship}
+                      onChangeText={setNewRelationship}
+                    />
+
+                    <AuroraButton
+                      label="Adicionar"
+                      onPress={handleAdd}
+                      loading={addMember.isPending}
+                      disabled={!newName.trim() || !newRelationship.trim()}
+                      variant="primary"
+                      size="lg"
+                      icon="checkmark"
+                      fullWidth
+                      haptic="medium"
+                    />
+                  </Animated.View>
+                </KeyboardAvoidingView>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        )}
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors.bg.primary,
+function MemberCard({
+  member,
+  expanded,
+  onToggleExpand,
+  onDelete,
+  totalMiles,
+}: {
+  member: any;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onDelete: () => void;
+  totalMiles: number;
+}) {
+  return (
+    <GlassCard radiusSize="lg" padding={14}>
+      <PressableScale onPress={onToggleExpand} haptic="tap">
+        <View style={memStyles.row}>
+          <FamilyAvatarStack members={[{ id: member.id, name: member.name }]} size={44} max={1} />
+          <View style={{ flex: 1 }}>
+            <Text style={memStyles.name}>{member.name}</Text>
+            <Text style={memStyles.relationship}>{member.relationship}</Text>
+          </View>
+          <View style={memStyles.milesCol}>
+            <AnimatedNumber
+              value={totalMiles}
+              format="integer"
+              style={memStyles.miles}
+            />
+            <Text style={memStyles.milesLabel}>mi total</Text>
+          </View>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={textTokens.muted}
+          />
+        </View>
+      </PressableScale>
+
+      {expanded && (
+        <Animated.View
+          entering={FadeIn.duration(motion.timing.short)}
+          style={memStyles.expanded}
+        >
+          {member.balances?.length ? (
+            member.balances.map((b: any) => (
+              <View key={b.programId} style={memStyles.balanceRow}>
+                <View style={memStyles.programDot} />
+                <Text style={memStyles.programName}>{b.program?.name ?? b.programId}</Text>
+                <Text style={memStyles.balanceVal}>
+                  {b.balance.toLocaleString('pt-BR')}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={memStyles.empty}>Sem saldos cadastrados</Text>
+          )}
+          <PressableScale onPress={onDelete} haptic="none" style={memStyles.deleteBtn}>
+            <Ionicons name="trash-outline" size={13} color={semantic.danger} />
+            <Text style={memStyles.deleteText}>Remover {member.name}</Text>
+          </PressableScale>
+        </Animated.View>
+      )}
+    </GlassCard>
+  );
+}
+
+const heroStyles = StyleSheet.create({
+  card: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    minHeight: 180,
+    shadowColor: aurora.magenta,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 20,
+    elevation: 12,
   },
-  header: {
-    flexDirection: 'row',
+  content: {
+    padding: space.xl,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.bg.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginHorizontal: 8,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.bg.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-  },
-  addForm: {
-    backgroundColor: Colors.bg.card,
-    margin: 16,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
+    zIndex: 1,
     gap: 10,
   },
-  addFormTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 4,
+  label: {
+    color: 'rgba(255,255,255,0.82)',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    marginTop: 6,
   },
-  inputContainer: {
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
+  value: {
+    color: '#FFF',
+    fontFamily: 'Inter_900Black',
+    fontSize: 48,
+    lineHeight: 52,
+    letterSpacing: -1.8,
   },
-  input: {
-    height: 44,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: Colors.text.primary,
+  unit: {
+    color: 'rgba(255,255,255,0.82)',
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
   },
-  addMemberButton: {
-    marginTop: 4,
+  subtext: {
+    color: 'rgba(255,255,255,0.78)',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
   },
-  addMemberGradient: {
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addMemberText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  memberCard: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-    overflow: 'hidden',
-  },
-  memberHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-  },
-  memberLeft: {
+});
+
+const memStyles = StyleSheet.create({
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flex: 1,
   },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#fff',
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
+  name: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
     fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 2,
+    letterSpacing: -0.2,
   },
-  memberRelationship: {
-    fontSize: 12,
-    color: Colors.text.secondary,
+  relationship: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 2,
   },
-  memberRight: {
+  milesCol: {
     alignItems: 'flex-end',
-    gap: 4,
   },
-  memberMiles: {
+  miles: {
+    color: aurora.cyan,
+    fontFamily: 'Inter_900Black',
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary.light,
   },
-  memberBalances: {
+  milesLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 9,
+    marginTop: 1,
+  },
+  expanded: {
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: Colors.border.default,
-    padding: 14,
-    gap: 10,
+    borderTopColor: surface.glassBorder,
+    gap: 8,
   },
   balanceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  balanceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
   },
-  balanceProgramName: {
+  programDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: aurora.cyan,
+  },
+  programName: {
+    flex: 1,
+    color: textTokens.primary,
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
-    color: Colors.text.secondary,
   },
-  balanceValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text.primary,
+  balanceVal: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
   },
-  balanceValueRow: {
+  empty: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingVertical: 6,
   },
-  editRow: {
+  deleteText: {
+    color: semantic.danger,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+});
+
+const styles = StyleSheet.create({
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  editInput: {
-    minWidth: 90,
-    height: 36,
-    paddingHorizontal: 10,
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 8,
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border.default,
-    textAlign: 'right',
+    borderColor: surface.glassBorder,
   },
-  editIconButton: {
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7,11,24,0.72)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#0A1020',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: space.xl,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  modalHandle: {
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: space.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  modalTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  modalClose: {
     width: 32,
     height: 32,
     borderRadius: 16,
+    backgroundColor: surface.glass,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.bg.surface,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-  },
-  addBalanceButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    marginTop: 2,
-    borderRadius: 8,
-    backgroundColor: Colors.bg.surface,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: Colors.border.default,
-  },
-  addBalanceButtonText: {
-    fontSize: 13,
-    color: Colors.primary.light,
-    fontWeight: '600',
-  },
-  addBalanceBlock: {
-    marginTop: 4,
-    padding: 12,
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-    gap: 10,
-  },
-  addBalanceTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.text.primary,
-  },
-  programsPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  programChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    backgroundColor: Colors.bg.card,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
-  },
-  programChipSelected: {
-    backgroundColor: Colors.primary.start,
-    borderColor: Colors.primary.start,
-  },
-  programChipText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    fontWeight: '600',
-  },
-  programChipTextSelected: {
-    color: '#fff',
-  },
-  addBalanceInput: {
-    height: 40,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: Colors.text.primary,
-    backgroundColor: Colors.bg.card,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
-  },
-  addBalanceActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  addBalanceCancel: {
-    flex: 1,
-    height: 38,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border.default,
-  },
-  addBalanceCancelText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-  },
-  addBalanceSave: {
-    flex: 1,
-    height: 38,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary.start,
-  },
-  addBalanceSaveText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  noBalances: {
-    fontSize: 13,
-    color: Colors.text.muted,
-    textAlign: 'center',
-    paddingVertical: 8,
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    marginTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border.default,
-  },
-  deleteText: {
-    fontSize: 13,
-    color: Colors.red.primary,
-    fontWeight: '600',
   },
 });

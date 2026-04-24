@@ -4,12 +4,11 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   TextInput,
   Modal,
-  ActivityIndicator,
   Alert,
   ScrollView,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -17,28 +16,50 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeInDown,
+  SlideInDown,
+  SlideOutDown,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import {
   useMyTickets,
   useCreateTicket,
   SupportTicket,
 } from '../../src/hooks/useSupport';
-import { EmptyState } from '../../src/components/EmptyState';
-import { Colors, Gradients } from '../../src/lib/theme';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  StaggerItem,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  FloatingLabelInput,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../../src/components/primitives';
 
 const CATEGORIES = [
-  { key: 'GENERAL', label: 'Geral' },
-  { key: 'BILLING', label: 'Pagamento' },
-  { key: 'BUG', label: 'Bug' },
-  { key: 'FEATURE', label: 'Sugestão' },
-  { key: 'ACCOUNT', label: 'Conta' },
+  { key: 'GENERAL', label: 'Geral', icon: 'help-circle-outline' as const },
+  { key: 'BILLING', label: 'Pagamento', icon: 'card-outline' as const },
+  { key: 'BUG', label: 'Bug', icon: 'bug-outline' as const },
+  { key: 'FEATURE', label: 'Sugestão', icon: 'bulb-outline' as const },
+  { key: 'ACCOUNT', label: 'Conta', icon: 'person-circle-outline' as const },
 ];
 
 const STATUS_META: Record<string, { label: string; color: string; bg: string }> = {
-  OPEN: { label: 'Aberto', color: Colors.primary.light, bg: Colors.primary.muted },
-  AWAITING_USER: { label: 'Aguardando você', color: '#F59E0B', bg: '#F59E0B18' },
-  RESOLVED: { label: 'Resolvido', color: Colors.green.primary, bg: Colors.green.bg },
-  CLOSED: { label: 'Fechado', color: Colors.text.muted, bg: Colors.bg.surface },
+  OPEN: { label: 'Aberto', color: aurora.cyan, bg: aurora.cyanSoft },
+  AWAITING_USER: { label: 'Aguardando você', color: premium.goldLight, bg: premium.goldSoft },
+  RESOLVED: { label: 'Resolvido', color: semantic.success, bg: semantic.successBg },
+  CLOSED: { label: 'Fechado', color: textTokens.muted, bg: surface.glass },
 };
 
 export default function SupportListScreen() {
@@ -52,267 +73,447 @@ export default function SupportListScreen() {
 
   const handleCreate = async () => {
     if (subject.length < 5 || body.length < 10) {
-      Alert.alert('Dados inválidos', 'Assunto mín 5 chars, mensagem mín 10 chars.');
+      haptics.error();
+      Alert.alert('Dados inválidos', 'Assunto min 5 chars, mensagem min 10 chars.');
       return;
     }
     try {
-      const res = await create.mutateAsync({ subject: subject.trim(), category, body: body.trim() });
+      haptics.medium();
+      const res = await create.mutateAsync({
+        subject: subject.trim(),
+        category,
+        body: body.trim(),
+      });
+      haptics.success();
       setModalOpen(false);
       setSubject('');
       setBody('');
       setCategory('GENERAL');
       router.push(`/support/${res.ticket.id}` as any);
     } catch {
+      haptics.error();
       Alert.alert(t('common.error'), t('errors.generic'));
     }
   };
 
-  const renderTicket = ({ item }: { item: SupportTicket }) => {
-    const meta = STATUS_META[item.status] ?? STATUS_META.OPEN;
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push(`/support/${item.id}` as any)}
-        activeOpacity={0.75}
-        accessibilityRole="button"
-        accessibilityLabel={`Ticket ${item.subject}, status ${meta.label}`}
-      >
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardSubject} numberOfLines={2}>
-            {item.subject}
-          </Text>
-          <View style={[styles.statusChip, { backgroundColor: meta.bg }]}>
-            <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
-          </View>
-        </View>
-        <View style={styles.cardMeta}>
-          <Text style={styles.cat}>#{item.category}</Text>
-          <Text style={styles.time}>{timeAgo(item.lastActivityAt)}</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Meus tickets</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setModalOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Novo ticket"
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {isLoading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={Colors.primary.light} />
-        </View>
-      ) : !data || data.length === 0 ? (
-        <EmptyState
-          icon="help-buoy-outline"
-          title="Nenhum ticket"
-          description="Precisa de ajuda? Abra um ticket e nossa equipe responde em até 48h."
-        />
-      ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(i) => i.id}
-          renderItem={renderTicket}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        />
-      )}
-
-      <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalBackdrop}
-        >
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Abrir ticket</Text>
-              <TouchableOpacity onPress={() => setModalOpen(false)} accessibilityLabel={t('common.close')}>
-                <Ionicons name="close" size={22} color={Colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView>
-              <Text style={styles.label}>Categoria</Text>
-              <View style={styles.catRow}>
-                {CATEGORIES.map((c) => (
-                  <TouchableOpacity
-                    key={c.key}
-                    onPress={() => setCategory(c.key)}
-                    style={[styles.catChip, category === c.key && styles.catChipActive]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: category === c.key }}
-                  >
-                    <Text style={[styles.catText, category === c.key && styles.catTextActive]}>
-                      {c.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.label}>Assunto</Text>
-              <TextInput
-                style={styles.input}
-                value={subject}
-                onChangeText={setSubject}
-                placeholder="Resumo curto do problema"
-                placeholderTextColor={Colors.text.muted}
-                maxLength={200}
-                accessibilityLabel="Assunto"
-              />
-
-              <Text style={styles.label}>Mensagem</Text>
-              <TextInput
-                style={[styles.input, styles.inputMulti]}
-                value={body}
-                onChangeText={setBody}
-                placeholder="Descreva em detalhe. Se for bug, passos pra reproduzir ajudam muito."
-                placeholderTextColor={Colors.text.muted}
-                multiline
-                maxLength={5000}
-                accessibilityLabel="Mensagem"
-              />
-
-              <TouchableOpacity
-                onPress={handleCreate}
-                disabled={create.isPending}
-                style={styles.submit}
-                accessibilityRole="button"
-                accessibilityLabel="Enviar ticket"
-              >
-                <LinearGradient
-                  colors={Gradients.primary as unknown as readonly [string, string]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.submitGradient}
-                >
-                  {create.isPending ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.submitText}>Enviar</Text>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-            </ScrollView>
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Suporte</Text>
+            <Text style={styles.subtitle}>Central de ajuda</Text>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
+          <PressableScale
+            onPress={() => {
+              haptics.medium();
+              setModalOpen(true);
+            }}
+            haptic="none"
+            style={styles.addBtn}
+          >
+            <LinearGradient
+              colors={gradients.auroraCyanMagenta}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Ionicons name="add" size={22} color="#041220" />
+          </PressableScale>
+        </View>
+
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 12 }}>
+            <SkeletonCard />
+          </View>
+        ) : !data || data.length === 0 ? (
+          <View style={{ padding: space.md }}>
+            <GlassCard radiusSize="xl" padding={0}>
+              <EmptyStateIllustrated
+                variant="search"
+                title="Nenhum ticket aberto"
+                description="Tem dúvida, problema ou sugestão? Abra um ticket que a gente responde."
+                ctaLabel="Abrir ticket"
+                onCtaPress={() => setModalOpen(true)}
+              />
+            </GlassCard>
+          </View>
+        ) : (
+          <FlatList
+            data={data}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <StaggerItem index={index} baseDelay={80}>
+                <TicketCard ticket={item} />
+              </StaggerItem>
+            )}
+            contentContainerStyle={styles.content}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        {modalOpen && (
+          <Modal visible animationType="none" transparent>
+            <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
+              <Pressable>
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                  <Animated.View
+                    entering={SlideInDown.duration(motion.timing.base)
+                      .springify()
+                      .damping(28)
+                      .stiffness(180)}
+                    exiting={SlideOutDown.duration(motion.timing.base)}
+                    style={styles.modalCard}
+                  >
+                    <View style={styles.modalHandle} />
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Novo ticket</Text>
+                      <PressableScale
+                        onPress={() => setModalOpen(false)}
+                        haptic="tap"
+                        style={styles.modalClose}
+                      >
+                        <Ionicons name="close" size={20} color={textTokens.secondary} />
+                      </PressableScale>
+                    </View>
+
+                    <Text style={styles.fieldLabel}>CATEGORIA</Text>
+                    <View style={styles.catRow}>
+                      {CATEGORIES.map((c) => (
+                        <PressableScale
+                          key={c.key}
+                          onPress={() => {
+                            haptics.select();
+                            setCategory(c.key);
+                          }}
+                          haptic="none"
+                        >
+                          <View
+                            style={[
+                              styles.catChip,
+                              category === c.key && {
+                                borderColor: aurora.cyan,
+                                backgroundColor: aurora.cyanSoft,
+                              },
+                            ]}
+                          >
+                            <Ionicons
+                              name={c.icon}
+                              size={13}
+                              color={category === c.key ? aurora.cyan : textTokens.muted}
+                            />
+                            <Text
+                              style={[
+                                styles.catText,
+                                category === c.key && { color: aurora.cyan, fontFamily: 'Inter_700Bold' },
+                              ]}
+                            >
+                              {c.label}
+                            </Text>
+                          </View>
+                        </PressableScale>
+                      ))}
+                    </View>
+
+                    <FloatingLabelInput
+                      label="Assunto"
+                      iconLeft="text-outline"
+                      value={subject}
+                      onChangeText={setSubject}
+                      maxLength={100}
+                    />
+
+                    <Text style={styles.fieldLabel}>MENSAGEM</Text>
+                    <View style={styles.bodyWrap}>
+                      <TextInput
+                        value={body}
+                        onChangeText={setBody}
+                        placeholder="Descreva com detalhes..."
+                        placeholderTextColor={textTokens.muted}
+                        multiline
+                        maxLength={5000}
+                        style={styles.bodyInput}
+                        selectionColor={aurora.cyan}
+                      />
+                    </View>
+
+                    <AuroraButton
+                      label="Enviar ticket"
+                      onPress={handleCreate}
+                      loading={create.isPending}
+                      disabled={subject.length < 5 || body.length < 10}
+                      variant="primary"
+                      size="lg"
+                      icon="send"
+                      iconPosition="right"
+                      fullWidth
+                      haptic="medium"
+                    />
+                  </Animated.View>
+                </KeyboardAvoidingView>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        )}
+      </SafeAreaView>
+    </AuroraBackground>
   );
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'agora';
-  if (min < 60) return `${min}min`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const d = Math.floor(hr / 24);
-  return `${d}d`;
+function TicketCard({ ticket }: { ticket: SupportTicket }) {
+  const meta = STATUS_META[ticket.status] ?? STATUS_META.OPEN;
+
+  return (
+    <PressableScale
+      onPress={() => {
+        haptics.tap();
+        router.push(`/support/${ticket.id}` as any);
+      }}
+      haptic="none"
+    >
+      <GlassCard
+        radiusSize="lg"
+        padding={14}
+        glow={ticket.status === 'AWAITING_USER' ? 'gold' : 'none'}
+      >
+        <View style={cardStyles.headerRow}>
+          <View
+            style={[
+              cardStyles.statusChip,
+              { backgroundColor: meta.bg, borderColor: `${meta.color}55` },
+            ]}
+          >
+            <View style={[cardStyles.statusDot, { backgroundColor: meta.color }]} />
+            <Text style={[cardStyles.statusText, { color: meta.color }]}>
+              {meta.label}
+            </Text>
+          </View>
+          <Text style={cardStyles.date}>
+            {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
+          </Text>
+        </View>
+
+        <Text style={cardStyles.subject} numberOfLines={2}>
+          {ticket.subject}
+        </Text>
+
+        <View style={cardStyles.footer}>
+          <View style={cardStyles.footerItem}>
+            <Ionicons name="chatbubbles-outline" size={12} color={textTokens.muted} />
+            <Text style={cardStyles.footerText}>{(ticket as any).messageCount ?? 0}</Text>
+          </View>
+          <Text style={cardStyles.category}>#{ticket.category}</Text>
+        </View>
+      </GlassCard>
+    </PressableScale>
+  );
 }
 
+const cardStyles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.4,
+  },
+  date: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+  },
+  subject: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: surface.glassBorder,
+  },
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  footerText: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  category: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.6,
+  },
+});
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg.primary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
   },
-  backBtn: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.bg.card,
+    backgroundColor: surface.glass,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
   },
-  title: { fontSize: 17, fontWeight: '700', color: Colors.text.primary },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.primary.start,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  centerBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  list: { padding: 16, paddingBottom: 40 },
-  card: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  cardSubject: { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.text.primary },
-  statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  statusText: { fontSize: 10, fontWeight: '700' },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  cat: { fontSize: 11, color: Colors.primary.light, fontWeight: '600' },
-  time: { fontSize: 11, color: Colors.text.muted },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7,11,24,0.72)',
+    justifyContent: 'flex-end',
+  },
   modalCard: {
-    backgroundColor: Colors.bg.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
+    backgroundColor: '#0A1020',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: space.xl,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  modalHandle: {
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: space.md,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: space.md,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.text.primary },
-  label: { fontSize: 12, color: Colors.text.secondary, fontWeight: '600', marginTop: 12, marginBottom: 6 },
-  catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  modalTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  modalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fieldLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  catRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: space.md,
+  },
   catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+  },
+  catText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  bodyWrap: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border.default,
-    backgroundColor: Colors.bg.surface,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    padding: 12,
+    marginBottom: 16,
+    minHeight: 100,
   },
-  catChipActive: { borderColor: Colors.primary.start, backgroundColor: Colors.primary.muted },
-  catText: { fontSize: 11, fontWeight: '600', color: Colors.text.secondary },
-  catTextActive: { color: Colors.primary.light },
-  input: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  bodyInput: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: Colors.text.primary,
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
+    lineHeight: 20,
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
-  inputMulti: { minHeight: 120, textAlignVertical: 'top' },
-  submit: { marginTop: 20 },
-  submitGradient: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  submitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

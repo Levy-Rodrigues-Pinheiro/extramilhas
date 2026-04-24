@@ -4,16 +4,24 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
-  TextInput,
   Modal,
-  ActivityIndicator,
   Alert,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  SlideInDown,
+  SlideOutDown,
+} from 'react-native-reanimated';
 import { useTranslation } from 'react-i18next';
 import {
   useForumThreads,
@@ -22,10 +30,34 @@ import {
   usePolls,
   useVotePoll,
 } from '../../src/hooks/useCommunity';
-import { EmptyState } from '../../src/components/EmptyState';
-import { Colors, Gradients } from '../../src/lib/theme';
+import {
+  AuroraBackground,
+  AuroraButton,
+  GlassCard,
+  PressableScale,
+  StaggerItem,
+  SkeletonCard,
+  EmptyStateIllustrated,
+  FloatingLabelInput,
+  aurora,
+  premium,
+  semantic,
+  surface,
+  text as textTokens,
+  space,
+  gradients,
+  motion,
+  haptics,
+} from '../../src/components/primitives';
 
 const TAGS = ['GERAL', 'ROTA', 'PROGRAMA', 'DUVIDA', 'BONUS'];
+const TAG_COLORS: Record<string, string> = {
+  GERAL: aurora.cyan,
+  ROTA: semantic.success,
+  PROGRAMA: aurora.magenta,
+  DUVIDA: premium.goldLight,
+  BONUS: aurora.iris,
+};
 
 export default function ForumScreen() {
   const { t } = useTranslation();
@@ -42,370 +74,635 @@ export default function ForumScreen() {
 
   const handleCreate = async () => {
     if (!title.trim() || title.length < 3 || !body.trim() || body.length < 10) {
+      haptics.error();
       Alert.alert('Dados inválidos', 'Título min 3 chars, corpo min 10 chars.');
       return;
     }
     try {
+      haptics.medium();
       await create.mutateAsync({ title: title.trim(), body: body.trim(), tag: newTag });
+      haptics.success();
       setModalOpen(false);
       setTitle('');
       setBody('');
       setNewTag('GERAL');
     } catch {
+      haptics.error();
       Alert.alert(t('common.error'), t('errors.generic'));
     }
   };
 
-  const renderPoll = (p: any) => (
-    <View key={p.id} style={styles.pollCard}>
-      <Text style={styles.pollQ}>📊 {p.question}</Text>
-      {p.options.map((o: any) => {
-        const pct = p.totalVotes > 0 ? Math.round((o.votes / p.totalVotes) * 100) : 0;
-        return (
-          <TouchableOpacity
-            key={o.id}
-            onPress={() => vote.mutate({ pollId: p.id, optionId: o.id })}
-            style={styles.pollOption}
-            accessibilityRole="button"
-            accessibilityLabel={`Votar ${o.label} — atualmente ${pct}%`}
+  return (
+    <AuroraBackground intensity="subtle" style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <PressableScale onPress={() => router.back()} haptic="tap" style={styles.iconBtn}>
+            <Ionicons name="chevron-back" size={22} color={textTokens.primary} />
+          </PressableScale>
+          <View style={styles.titleBox}>
+            <Text style={styles.title}>Fórum</Text>
+            <Text style={styles.subtitle}>Discussões da comunidade</Text>
+          </View>
+          <PressableScale
+            onPress={() => {
+              haptics.medium();
+              setModalOpen(true);
+            }}
+            haptic="none"
+            style={styles.addBtn}
           >
-            <View style={[styles.pollFill, { width: `${pct}%` }]} />
-            <Text style={styles.pollLabel}>{o.label}</Text>
-            <Text style={styles.pollPct}>{pct}% ({o.votes})</Text>
-          </TouchableOpacity>
-        );
-      })}
-      <Text style={styles.pollTotal}>{p.totalVotes} votos</Text>
-    </View>
-  );
+            <LinearGradient
+              colors={gradients.auroraCyanMagenta}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Ionicons name="create" size={20} color="#041220" />
+          </PressableScale>
+        </View>
 
-  const renderThread = ({ item }: { item: ForumThread }) => (
-    <TouchableOpacity
-      style={styles.threadCard}
-      onPress={() => router.push(`/forum/${item.id}` as any)}
-      activeOpacity={0.75}
-      accessibilityRole="button"
-      accessibilityLabel={`${item.title} por ${item.authorName}, ${item.replyCount} respostas`}
-    >
-      <View style={styles.threadMeta}>
-        <View style={styles.tagChip}>
-          <Text style={styles.tagText}>#{item.tag}</Text>
-        </View>
-        <Text style={styles.author}>{item.authorName}</Text>
-      </View>
-      <Text style={styles.threadTitle} numberOfLines={2}>
-        {item.title}
-      </Text>
-      <Text style={styles.threadBody} numberOfLines={2}>
-        {item.body}
-      </Text>
-      <View style={styles.threadStats}>
-        <View style={styles.stat}>
-          <Ionicons name="chatbubbles-outline" size={12} color={Colors.text.muted} />
-          <Text style={styles.statText}>{item.replyCount}</Text>
-        </View>
-        <Text style={styles.time}>{timeAgo(item.updatedAt || item.createdAt)}</Text>
-      </View>
-    </TouchableOpacity>
+        {isLoading ? (
+          <View style={{ padding: space.md, gap: 12 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        ) : (
+          <FlatList
+            data={data?.items ?? []}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={
+              <View>
+                {/* Tag filter */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.tagsScroll}
+                >
+                  <TagChip
+                    label="Todos"
+                    active={!selectedTag}
+                    onPress={() => setSelectedTag(undefined)}
+                  />
+                  {TAGS.map((tag) => (
+                    <TagChip
+                      key={tag}
+                      label={tag}
+                      color={TAG_COLORS[tag]}
+                      active={selectedTag === tag}
+                      onPress={() => setSelectedTag(tag)}
+                    />
+                  ))}
+                </ScrollView>
+
+                {/* Polls */}
+                {polls && polls.length > 0 && (
+                  <Animated.View
+                    entering={FadeInDown.duration(motion.timing.medium).springify().damping(22)}
+                    style={{ marginBottom: space.md }}
+                  >
+                    <Text style={styles.sectionLabel}>ENQUETE ATIVA</Text>
+                    {polls.slice(0, 1).map((p: any) => (
+                      <PollCard
+                        key={p.id}
+                        poll={p}
+                        onVote={(opId) => {
+                          haptics.medium();
+                          vote.mutate({ pollId: p.id, optionId: opId });
+                        }}
+                      />
+                    ))}
+                  </Animated.View>
+                )}
+
+                <Text style={styles.sectionLabel}>THREADS</Text>
+              </View>
+            }
+            renderItem={({ item, index }) => (
+              <StaggerItem index={index} baseDelay={80}>
+                <ThreadCard thread={item} />
+              </StaggerItem>
+            )}
+            ListEmptyComponent={
+              <GlassCard radiusSize="xl" padding={0}>
+                <EmptyStateIllustrated
+                  variant="search"
+                  title={selectedTag ? `Nenhuma thread em #${selectedTag}` : 'Nenhuma thread'}
+                  description="Seja o primeiro a começar uma discussão."
+                  ctaLabel="Nova thread"
+                  onCtaPress={() => setModalOpen(true)}
+                />
+              </GlassCard>
+            }
+            contentContainerStyle={styles.content}
+            ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+
+        {/* New thread modal */}
+        {modalOpen && (
+          <Modal visible animationType="none" transparent>
+            <Pressable style={styles.modalBackdrop} onPress={() => setModalOpen(false)}>
+              <Pressable>
+                <KeyboardAvoidingView
+                  behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                >
+                  <Animated.View
+                    entering={SlideInDown.duration(motion.timing.base)
+                      .springify()
+                      .damping(28)
+                      .stiffness(180)}
+                    exiting={SlideOutDown.duration(motion.timing.base)}
+                    style={styles.modalCard}
+                  >
+                    <View style={styles.modalHandle} />
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.modalTitle}>Nova thread</Text>
+                      <PressableScale
+                        onPress={() => setModalOpen(false)}
+                        haptic="tap"
+                        style={styles.modalClose}
+                      >
+                        <Ionicons name="close" size={20} color={textTokens.secondary} />
+                      </PressableScale>
+                    </View>
+
+                    <FloatingLabelInput
+                      label="Título"
+                      iconLeft="text-outline"
+                      value={title}
+                      onChangeText={setTitle}
+                      maxLength={120}
+                    />
+
+                    <Text style={styles.fieldLabel}>Conteúdo</Text>
+                    <View style={styles.bodyWrap}>
+                      <TextInput
+                        value={body}
+                        onChangeText={setBody}
+                        placeholder="Compartilhe sua experiência, dúvida ou dica..."
+                        placeholderTextColor={textTokens.muted}
+                        multiline
+                        maxLength={2000}
+                        style={styles.bodyInput}
+                        selectionColor={aurora.cyan}
+                      />
+                    </View>
+
+                    <Text style={styles.fieldLabel}>Tag</Text>
+                    <View style={styles.tagRow}>
+                      {TAGS.map((tag) => (
+                        <TagChip
+                          key={tag}
+                          label={tag}
+                          color={TAG_COLORS[tag]}
+                          active={newTag === tag}
+                          onPress={() => setNewTag(tag)}
+                        />
+                      ))}
+                    </View>
+
+                    <AuroraButton
+                      label="Publicar"
+                      onPress={handleCreate}
+                      loading={create.isPending}
+                      disabled={title.length < 3 || body.length < 10}
+                      variant="primary"
+                      size="lg"
+                      icon="send"
+                      iconPosition="right"
+                      fullWidth
+                      haptic="medium"
+                    />
+                  </Animated.View>
+                </KeyboardAvoidingView>
+              </Pressable>
+            </Pressable>
+          </Modal>
+        )}
+      </SafeAreaView>
+    </AuroraBackground>
   );
+}
+
+function TagChip({
+  label,
+  color,
+  active,
+  onPress,
+}: {
+  label: string;
+  color?: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const c = color ?? aurora.cyan;
+  return (
+    <PressableScale
+      onPress={() => {
+        haptics.select();
+        onPress();
+      }}
+      haptic="none"
+    >
+      <View
+        style={[
+          styles.tagChip,
+          active && {
+            borderColor: c,
+            backgroundColor: `${c}1F`,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.tagText,
+            active && { color: c, fontFamily: 'Inter_700Bold' },
+          ]}
+        >
+          #{label}
+        </Text>
+      </View>
+    </PressableScale>
+  );
+}
+
+function PollCard({ poll, onVote }: { poll: any; onVote: (id: string) => void }) {
+  return (
+    <GlassCard radiusSize="lg" padding={16} glow="magenta">
+      <View style={pollStyles.header}>
+        <Ionicons name="bar-chart" size={16} color={aurora.magenta} />
+        <Text style={pollStyles.question}>{poll.question}</Text>
+      </View>
+      <View style={{ gap: 6, marginTop: 12 }}>
+        {poll.options.map((o: any) => {
+          const pct = poll.totalVotes > 0 ? Math.round((o.votes / poll.totalVotes) * 100) : 0;
+          return (
+            <PressableScale
+              key={o.id}
+              onPress={() => onVote(o.id)}
+              haptic="none"
+            >
+              <View style={pollStyles.option}>
+                <View style={[pollStyles.fill, { width: `${pct}%` }]}>
+                  <LinearGradient
+                    colors={[`${aurora.cyan}CC`, aurora.magenta]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                </View>
+                <Text style={pollStyles.label}>{o.label}</Text>
+                <Text style={pollStyles.pct}>{pct}%</Text>
+              </View>
+            </PressableScale>
+          );
+        })}
+      </View>
+      <Text style={pollStyles.total}>{poll.totalVotes} votos</Text>
+    </GlassCard>
+  );
+}
+
+function ThreadCard({ thread }: { thread: ForumThread }) {
+  const tagColor = TAG_COLORS[thread.tag] ?? textTokens.muted;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Fórum</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setModalOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Nova thread"
-          hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        ListHeaderComponent={
-          <>
-            {/* Polls ativas */}
-            {polls && polls.length > 0 && (
-              <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
-                {polls.slice(0, 2).map(renderPoll)}
-              </View>
-            )}
-
-            {/* Tag filter */}
-            <View style={styles.tagRow}>
-              <TouchableOpacity
-                onPress={() => setSelectedTag(undefined)}
-                style={[styles.filterChip, !selectedTag && styles.filterChipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: !selectedTag }}
-              >
-                <Text style={[styles.filterText, !selectedTag && styles.filterTextActive]}>
-                  Tudo
-                </Text>
-              </TouchableOpacity>
-              {TAGS.map((tag) => (
-                <TouchableOpacity
-                  key={tag}
-                  onPress={() => setSelectedTag(tag)}
-                  style={[styles.filterChip, selectedTag === tag && styles.filterChipActive]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: selectedTag === tag }}
-                >
-                  <Text
-                    style={[styles.filterText, selectedTag === tag && styles.filterTextActive]}
-                  >
-                    #{tag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+    <PressableScale
+      onPress={() => {
+        haptics.tap();
+        router.push(`/forum/${thread.id}` as any);
+      }}
+      haptic="none"
+    >
+      <GlassCard radiusSize="lg" padding={14}>
+        <View style={threadStyles.metaRow}>
+          <View
+            style={[
+              threadStyles.tagChip,
+              { backgroundColor: `${tagColor}1F`, borderColor: `${tagColor}55` },
+            ]}
+          >
+            <Text style={[threadStyles.tagText, { color: tagColor }]}>
+              #{thread.tag}
+            </Text>
+          </View>
+          <View style={threadStyles.authorRow}>
+            <View style={threadStyles.avatar}>
+              <Text style={threadStyles.avatarText}>
+                {thread.authorName.charAt(0).toUpperCase()}
+              </Text>
             </View>
-          </>
-        }
-        data={data?.items ?? []}
-        keyExtractor={(i) => i.id}
-        renderItem={renderThread}
-        contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        ListEmptyComponent={
-          isLoading ? (
-            <View style={{ padding: 40, alignItems: 'center' }}>
-              <ActivityIndicator color={Colors.primary.light} />
-            </View>
-          ) : (
-            <EmptyState
-              icon="chatbubbles-outline"
-              title="Nenhuma thread"
-              description="Seja o primeiro a abrir um tópico."
-            />
-          )
-        }
-      />
-
-      <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova thread</Text>
-              <TouchableOpacity onPress={() => setModalOpen(false)} accessibilityLabel={t('common.close')}>
-                <Ionicons name="close" size={22} color={Colors.text.secondary} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.label}>Título</Text>
-            <TextInput
-              style={styles.input}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="ex: Bônus Livelo→Smiles 150% tá pagando?"
-              placeholderTextColor={Colors.text.muted}
-              maxLength={200}
-              accessibilityLabel="Título da thread"
-            />
-            <Text style={styles.label}>Corpo</Text>
-            <TextInput
-              style={[styles.input, styles.inputMulti]}
-              value={body}
-              onChangeText={setBody}
-              placeholder="Conte o contexto, sua dúvida ou experiência..."
-              placeholderTextColor={Colors.text.muted}
-              multiline
-              numberOfLines={5}
-              maxLength={5000}
-              accessibilityLabel="Corpo da thread"
-            />
-            <Text style={styles.label}>Tag</Text>
-            <View style={styles.tagRow}>
-              {TAGS.map((tag) => (
-                <TouchableOpacity
-                  key={tag}
-                  onPress={() => setNewTag(tag)}
-                  style={[styles.filterChip, newTag === tag && styles.filterChipActive]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: newTag === tag }}
-                >
-                  <Text style={[styles.filterText, newTag === tag && styles.filterTextActive]}>
-                    #{tag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={styles.submit}
-              onPress={handleCreate}
-              disabled={create.isPending}
-              accessibilityRole="button"
-              accessibilityLabel="Postar"
-            >
-              <LinearGradient
-                colors={Gradients.primary as unknown as readonly [string, string]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.submitGradient}
-              >
-                {create.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.submitText}>Postar</Text>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+            <Text style={threadStyles.author}>{thread.authorName}</Text>
           </View>
         </View>
-      </Modal>
-    </SafeAreaView>
+        <Text style={threadStyles.title} numberOfLines={2}>
+          {thread.title}
+        </Text>
+        <Text style={threadStyles.body} numberOfLines={2}>
+          {thread.body}
+        </Text>
+        <View style={threadStyles.footer}>
+          <View style={threadStyles.footerItem}>
+            <Ionicons name="chatbubble-outline" size={12} color={textTokens.muted} />
+            <Text style={threadStyles.footerText}>{thread.replyCount}</Text>
+          </View>
+          <View style={threadStyles.footerItem}>
+            <Ionicons name="time-outline" size={12} color={textTokens.muted} />
+            <Text style={threadStyles.footerText}>
+              {formatRelative(thread.createdAt)}
+            </Text>
+          </View>
+        </View>
+      </GlassCard>
+    </PressableScale>
   );
 }
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'agora';
-  if (min < 60) return `${min}min`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const d = Math.floor(hr / 24);
-  return `${d}d`;
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  const diffMin = Math.floor((Date.now() - then) / 60000);
+  if (diffMin < 1) return 'agora';
+  if (diffMin < 60) return `${diffMin}m`;
+  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h`;
+  return `${Math.floor(diffMin / 1440)}d`;
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg.primary },
+const pollStyles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.bg.card,
+    gap: 8,
   },
-  backBtn: {
-    width: 40,
+  question: {
+    flex: 1,
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 14,
+    letterSpacing: -0.1,
+  },
+  option: {
     height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.bg.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 17, fontWeight: '700', color: Colors.text.primary },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary.start,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  list: { paddingBottom: 40 },
-  tagRow: {
+    borderRadius: 10,
+    backgroundColor: surface.glass,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.default,
-    backgroundColor: Colors.bg.card,
-  },
-  filterChipActive: {
-    borderColor: Colors.primary.start,
-    backgroundColor: Colors.primary.muted,
-  },
-  filterText: { fontSize: 11, fontWeight: '600', color: Colors.text.secondary },
-  filterTextActive: { color: Colors.primary.light },
-  threadCard: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-    marginHorizontal: 16,
-  },
-  threadMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  tagChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: Colors.primary.muted,
-  },
-  tagText: { fontSize: 10, fontWeight: '700', color: Colors.primary.light },
-  author: { fontSize: 11, color: Colors.text.muted },
-  threadTitle: { fontSize: 14, fontWeight: '700', color: Colors.text.primary, marginBottom: 4 },
-  threadBody: { fontSize: 12, color: Colors.text.secondary, lineHeight: 16 },
-  threadStats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statText: { fontSize: 11, color: Colors.text.muted, fontWeight: '600' },
-  time: { fontSize: 11, color: Colors.text.muted },
-  pollCard: {
-    backgroundColor: Colors.bg.card,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: Colors.border.subtle,
-    marginBottom: 10,
-  },
-  pollQ: { fontSize: 13, fontWeight: '700', color: Colors.text.primary, marginBottom: 8 },
-  pollOption: {
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 6,
-    position: 'relative',
+    alignItems: 'center',
+    paddingHorizontal: 12,
     overflow: 'hidden',
+    position: 'relative',
   },
-  pollFill: {
+  fill: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: Colors.primary.muted,
+    opacity: 0.26,
   },
-  pollLabel: { fontSize: 12, color: Colors.text.primary, fontWeight: '600' },
-  pollPct: { fontSize: 10, color: Colors.text.muted, marginTop: 2 },
-  pollTotal: { fontSize: 10, color: Colors.text.muted, marginTop: 4, textAlign: 'right' },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalCard: {
-    backgroundColor: Colors.bg.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
+  label: {
+    flex: 1,
+    color: textTokens.primary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 13,
+    zIndex: 1,
   },
-  modalHeader: {
+  pct: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 12,
+    zIndex: 1,
+  },
+  total: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 10,
+    textAlign: 'right',
+  },
+});
+
+const threadStyles = StyleSheet.create({
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: Colors.text.primary },
-  label: { fontSize: 12, color: Colors.text.secondary, fontWeight: '600', marginTop: 12, marginBottom: 6 },
-  input: {
-    height: 44,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: Colors.text.primary,
-    backgroundColor: Colors.bg.surface,
-    borderRadius: 10,
+  tagChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: Colors.border.default,
   },
-  inputMulti: { height: 120, paddingTop: 12, textAlignVertical: 'top' },
-  submit: { marginTop: 20 },
-  submitGradient: { height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  submitText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  tagText: {
+    fontFamily: 'Inter_900Black',
+    fontSize: 9,
+    letterSpacing: 0.8,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  avatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: aurora.cyanSoft,
+    borderWidth: 1,
+    borderColor: `${aurora.cyan}44`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: aurora.cyan,
+    fontFamily: 'Inter_900Black',
+    fontSize: 10,
+  },
+  author: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
+    lineHeight: 20,
+    letterSpacing: -0.2,
+  },
+  body: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 5,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: surface.glassBorder,
+  },
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  footerText: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 11,
+  },
+});
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  titleBox: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  title: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  content: {
+    padding: space.md,
+    paddingBottom: 120,
+  },
+  tagsScroll: {
+    gap: 8,
+    paddingVertical: 4,
+    marginBottom: space.md,
+  },
+  tagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+  },
+  tagText: {
+    color: textTokens.secondary,
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 12,
+  },
+  sectionLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(7,11,24,0.72)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#0A1020',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: space.xl,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: surface.glassBorder,
+  },
+  modalHandle: {
+    width: 48,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: space.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  modalTitle: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 20,
+    letterSpacing: -0.3,
+  },
+  modalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: surface.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fieldLabel: {
+    color: textTokens.muted,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  bodyWrap: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: surface.glassBorder,
+    backgroundColor: surface.glass,
+    padding: 12,
+    marginBottom: 16,
+    minHeight: 100,
+  },
+  bodyInput: {
+    color: textTokens.primary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  tagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 18,
+  },
 });
