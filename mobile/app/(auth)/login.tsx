@@ -157,14 +157,14 @@ export default function LoginScreen() {
 
   return (
     <AuroraBackground intensity="hero" style={{ flex: 1 }}>
-      {/* ─── Avião de papel branco orbitando em figura-8 (fullscreen) ─── */}
+      {/* ─── Avião de papel branco (3/4 perspective) orbitando em figura-8 ─── */}
       <PaperPlaneOrbit
-        planeSize={44}
-        duration={24000}
-        pathAmplitudeX={0.36}
+        planeSize={56}
+        duration={26000}
+        pathAmplitudeX={0.38}
         pathAmplitudeY={0.28}
         showTrail
-        trailCount={12}
+        trailCount={14}
       />
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
