@@ -32,6 +32,11 @@ export { FloatingLabelInput, default as FloatingLabelInputDefault } from './Floa
 // Aurora UI editorial primitives
 export { GradientText, default as GradientTextDefault } from './GradientText';
 export { SerifItalic, default as SerifItalicDefault } from './SerifItalic';
+export {
+  UnderlineInput,
+  type UnderlineInputHandle,
+  default as UnderlineInputDefault,
+} from './UnderlineInput';
 
 // Jobs-level innovative components
 export { SymbolEffect, default as SymbolEffectDefault } from './SymbolEffect';
