@@ -45,6 +45,11 @@ export {
 } from './OTPInput';
 export { PaperPlaneOrbit, default as PaperPlaneOrbitDefault } from './PaperPlaneOrbit';
 
+// Apple HIG dataviz + composições
+export { Sparkline, default as SparklineDefault } from './Sparkline';
+export { DeltaChip, default as DeltaChipDefault } from './DeltaChip';
+export { SectionHeader, default as SectionHeaderDefault } from './SectionHeader';
+
 // Jobs-level innovative components
 export { SymbolEffect, default as SymbolEffectDefault } from './SymbolEffect';
 export { TiltCard3D, default as TiltCard3DDefault } from './TiltCard3D';
