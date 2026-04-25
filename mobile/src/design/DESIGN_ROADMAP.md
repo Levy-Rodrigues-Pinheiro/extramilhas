@@ -4,6 +4,28 @@
 
 ---
 
+## 📚 Skill canônica de design
+
+A partir de **abril/2026**, o projeto adota a skill **`apple-style-app-design`**
+como **fonte canônica de verdade** pra toda decisão visual.
+
+- **Local:** `~/.claude/skills/apple-style-app-design/` (instalada)
+- **Pointer no projeto:** [`SKILL_REFERENCE.md`](./SKILL_REFERENCE.md)
+- **Conteúdo:** SKILL.md (hub) + 27 references markdown + 7 assets de código
+
+Antes de criar/refatorar qualquer tela, **consulte o reference relevante** da skill
+(ex: para um login → `references/16-forms-and-auth.md`; para data viz →
+`references/21-data-visualization.md`).
+
+A skill cobre Apple HIG ortodoxo. O sabor visual **Aurora UI** que adotamos
+(mesh-bg, gradient-text cyan→iris→magenta, serif italic, pill buttons) é uma
+**camada de identidade de marca** sobre o Apple HIG, não substituto.
+
+**Política:** Aurora UI vence em telas de marca/hero (login, onboarding, home);
+Apple HIG vence em telas funcionais (settings, lists, data dense).
+
+---
+
 ## 🎯 Princípios não-negociáveis
 
 1. **Nothing generic.** Se parece com outro app, refaz. Milhas Extras não é Shadcn Next SaaS #7832.
