@@ -84,6 +84,7 @@ import {
   space,
   motion,
   haptics,
+  premium,
 } from '../../src/components/primitives';
 
 type Step =
@@ -938,7 +939,10 @@ function TwoFactorStep({
           <View style={styles.resendInline}>
             <Text style={styles.resendText}>Não recebeu o código? </Text>
             {resent ? (
-              <Text style={styles.resentOk}>✓ Reenviado</Text>
+              <View style={styles.resentRow}>
+                <Ionicons name="checkmark-circle" size={14} color={semantic.success} />
+                <Text style={styles.resentOk}>Reenviado</Text>
+              </View>
             ) : (
               <PressableScale onPress={handleResend} haptic="none">
                 <Text style={styles.cyanLink}>Reenviar</Text>
@@ -1004,7 +1008,9 @@ function MagicSentStep({ email, onBack }: { email: string; onBack: () => void })
         >
           <Ionicons name="mail" size={48} color="#fff" />
         </LinearGradient>
-        <Animated.Text style={[styles.sparkle, sparkleStyle]}>✨</Animated.Text>
+        <Animated.View style={[styles.sparkle, sparkleStyle]}>
+          <Ionicons name="sparkles" size={22} color={premium.goldLight} />
+        </Animated.View>
       </Animated.View>
 
       <View style={[styles.headerCenter, { marginBottom: 8 }]}>
@@ -1031,8 +1037,9 @@ function MagicSentStep({ email, onBack }: { email: string; onBack: () => void })
         Clique no link no email para entrar. Você pode fechar esta janela.
       </Text>
 
-      <PressableScale onPress={onBack} haptic="tap" style={{ padding: 10 }}>
-        <Text style={styles.cyanLink}>← Tentar outra forma</Text>
+      <PressableScale onPress={onBack} haptic="tap" style={styles.tryOtherBtn}>
+        <Ionicons name="chevron-back" size={14} color={aurora.cyan} />
+        <Text style={styles.cyanLink}>Tentar outra forma</Text>
       </PressableScale>
     </Animated.View>
   );
@@ -1348,6 +1355,17 @@ const styles = StyleSheet.create({
     color: semantic.success,
     fontFamily: 'Inter_600SemiBold',
     fontSize: 13,
+  },
+  resentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tryOtherBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 10,
   },
 
   // ── Big gradient icons (magic / success) ──

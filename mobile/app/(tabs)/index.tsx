@@ -30,11 +30,11 @@
  *  │   └────────────────────────────────────┘    │
  *  │                                              │
  *  │   ┌─────── Bento 2x2 Stats ──────────┐     │  ← BentoGrid
- *  │   │ 🔥 Streak │ ✦ Tier               │     │
+ *  │   │ Streak    │ Tier                 │     │
  *  │   │   7 dias  │   Gold #12           │     │
  *  │   │ ──────────┼──────────             │     │
- *  │   │ 💎 Missões│ 🎯 Hoje               │     │
- *  │   │   3/7     │   2 ofertas           │     │
+ *  │   │ Missões   │ Hoje                 │     │
+ *  │   │   3/7     │   2 ofertas          │     │
  *  │   └────────────────────────────────────┘    │
  *  │                                              │
  *  │   Hoje    Ver todas →                       │  ← SectionHeader
@@ -157,7 +157,7 @@ export default function HomeScreen() {
           const r = data.reward;
           confettiRef.current?.burst();
           Alert.alert(
-            `🏆 Streak de ${r.daysReached} dias!`,
+            `Streak de ${r.daysReached} dias`,
             `Parabéns! Você ganhou ${r.premiumDaysGranted} dia${r.premiumDaysGranted > 1 ? 's' : ''} de Premium grátis.`,
             [{ text: 'Show!', style: 'default' }],
           );
@@ -563,7 +563,7 @@ export default function HomeScreen() {
               title="Sua semana"
               subtitle={
                 weekActivity === 7
-                  ? 'Você completou todos os dias 🎉'
+                  ? 'Você completou todos os dias.'
                   : `${weekActivity}/7 dias ativos`
               }
               marginTop={space.md}
@@ -666,7 +666,7 @@ function BentoCard({
     >
       <GlassCard
         radiusSize="lg"
-        padding={16}
+        padding={18}
         glassIntensity="medium"
         style={styles.bentoCard}
       >
@@ -682,12 +682,14 @@ function BentoCard({
           <Text style={styles.bentoEyebrow}>{eyebrow}</Text>
         </View>
 
-        <Text style={styles.bentoValue} numberOfLines={1}>
-          {value}
-        </Text>
-        <Text style={styles.bentoLabel} numberOfLines={1}>
-          {label}
-        </Text>
+        <View style={styles.bentoValueGroup}>
+          <Text style={styles.bentoValue} numberOfLines={1}>
+            {value}
+          </Text>
+          <Text style={styles.bentoLabel} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
       </GlassCard>
     </PressableScale>
   );
@@ -831,19 +833,20 @@ const styles = StyleSheet.create({
   navBadgeText: {
     color: '#fff',
     fontFamily: 'Inter_700Bold',
-    fontSize: 9,
+    fontSize: 10,
+    fontVariant: ['tabular-nums'],
   },
 
-  // Large title (Apple HIG)
+  // Large title (Apple HIG) — escala 32-36pt mobile, weight 700, tracking -0.04em
   largeTitle: {
-    marginBottom: space.lg,
+    marginBottom: space.xl,
     paddingTop: space.xs,
   },
   greetingLine: {
     color: textTokens.primary,
     fontFamily: 'Inter_700Bold',
     fontSize: 34,
-    letterSpacing: -1.2,
+    letterSpacing: -1.4,
     lineHeight: 40,
   },
   nameRow: {
@@ -854,56 +857,58 @@ const styles = StyleSheet.create({
     color: textTokens.primary,
     fontSize: 34,
     fontWeight: '400',
-    letterSpacing: -1.2,
+    letterSpacing: -1.4,
     lineHeight: 40,
   },
   subtitle: {
     color: textTokens.secondary,
     fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+    fontSize: 16,
     letterSpacing: -0.1,
-    marginTop: 6,
+    lineHeight: 22,
+    marginTop: 10,
   },
   subtitleItalic: {
     color: textTokens.primary,
-    fontSize: 16,
+    fontSize: 17,
   },
 
-  // Hero wallet
+  // Hero wallet — value 44pt 700 + tabular-nums (Apple não usa 900)
   heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   heroLabel: {
     color: textTokens.tertiary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
-    letterSpacing: 1.2,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 11,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
   heroValueRow: {
     marginTop: 2,
-    marginBottom: 6,
+    marginBottom: 14,
   },
   heroValue: {
     color: textTokens.primary,
-    fontFamily: 'Inter_900Black',
-    fontSize: 40,
-    letterSpacing: -1.6,
-    lineHeight: 44,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 44,
+    letterSpacing: -1.8,
+    lineHeight: 48,
+    fontVariant: ['tabular-nums'],
   },
   sparkRow: {
     marginTop: 4,
-    marginBottom: 12,
+    marginBottom: 18,
     alignItems: 'flex-start',
   },
   heroFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: surface.glassBorder,
   },
@@ -919,17 +924,17 @@ const styles = StyleSheet.create({
     letterSpacing: -0.05,
   },
 
-  // Bento 2x2
+  // Bento 2x2 — aspectRatio menor pra ter mais altura, gap entre value e label
   bento: {
     marginTop: space.md,
-    gap: 10,
+    gap: 12,
   },
   bentoRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   bentoCard: {
-    aspectRatio: 1.2,
+    aspectRatio: 1.15,
     justifyContent: 'space-between',
   },
   bentoIconRow: {
@@ -951,23 +956,28 @@ const styles = StyleSheet.create({
   },
   bentoEyebrow: {
     color: textTokens.tertiary,
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_700Bold',
     fontSize: 10,
-    letterSpacing: 1,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
   bentoValue: {
     color: textTokens.primary,
     fontFamily: 'Inter_700Bold',
-    fontSize: 22,
-    letterSpacing: -0.5,
-    lineHeight: 26,
+    fontSize: 24,
+    letterSpacing: -0.6,
+    lineHeight: 28,
+    fontVariant: ['tabular-nums'],
   },
   bentoLabel: {
     color: textTokens.secondary,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
     letterSpacing: -0.05,
+    marginTop: 4,
+  },
+  bentoValueGroup: {
+    // wrapper pra agrupar value + label como uma unidade na base do card
   },
 
   // Mission ready (gold gradient)
@@ -1019,7 +1029,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 18,
   },
   oppBonusBadge: {
     flexDirection: 'row',
@@ -1031,30 +1041,31 @@ const styles = StyleSheet.create({
   },
   oppBonusText: {
     color: '#fff',
-    fontFamily: 'Inter_900Black',
+    fontFamily: 'Inter_700Bold',
     fontSize: 13,
     letterSpacing: -0.1,
+    fontVariant: ['tabular-nums'],
   },
   imperdivelLabel: {
     color: premium.goldLight,
     fontFamily: 'Inter_700Bold',
-    fontSize: 9,
-    letterSpacing: 1.2,
+    fontSize: 10,
+    letterSpacing: 1.4,
   },
   oppFrom: {
-    color: textTokens.primary,
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
-    letterSpacing: -0.2,
+    color: textTokens.secondary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    letterSpacing: -0.1,
   },
   oppArrowRow: {
-    paddingVertical: 4,
+    paddingVertical: 8,
   },
   oppTo: {
     color: textTokens.primary,
     fontFamily: 'Inter_700Bold',
-    fontSize: 15,
-    letterSpacing: -0.2,
+    fontSize: 18,
+    letterSpacing: -0.3,
   },
   emptyOpp: {
     alignItems: 'center',
@@ -1069,34 +1080,36 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Sua semana (Activity Ring)
+  // Sua semana (Activity Ring) — value 36pt 700, gap 28 entre ring e text
   weekRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: 28,
   },
   weekText: {
     flex: 1,
   },
   weekValue: {
     color: textTokens.primary,
-    fontFamily: 'Inter_900Black',
-    fontSize: 48,
-    letterSpacing: -2,
-    lineHeight: 52,
+    fontFamily: 'Inter_700Bold',
+    fontSize: 40,
+    letterSpacing: -1.6,
+    lineHeight: 44,
+    fontVariant: ['tabular-nums'],
   },
   weekValueLabel: {
     color: textTokens.secondary,
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    marginTop: -4,
+    marginTop: 0,
+    letterSpacing: -0.05,
   },
   weekTagline: {
     color: textTokens.secondary,
     fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    marginTop: 8,
+    fontSize: 14,
+    marginTop: 14,
     letterSpacing: -0.05,
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });
